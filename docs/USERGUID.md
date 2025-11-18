@@ -339,7 +339,7 @@ bq mk --dataset --location=us-central1 YOUR_PROJECT:rls_manager
 ```bash
 # Clone repository
 cd $HOME
-git clone https://github.com/lucascarvalhal/RLS_CLS_Manager_Integrated.git
+git clone https://github.com/SysManagerInformatica/GenAI4Data_Sec_Manager.git
 cd RLS_CLS_Manager_Integrated
 
 # Edit config.py (update PROJECT_ID and LOCATION)
