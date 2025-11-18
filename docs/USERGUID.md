@@ -192,7 +192,7 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 * **CSV Export:** Click `Export to CSV` and select date range
 * **BigQuery Query:** Access directly from `rls_manager.audit_logs` table
 
-## **Best Practices**
+* ## **Part 4: Best Practices**
 
 ### **For RLS:**
 * **Test policies** in development environment first
@@ -215,7 +215,7 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 * **Document incidents** when they occur
 * **Retain logs** according to compliance requirements
 
-## **Troubleshooting**
+* ## **Part 5: Troubleshooting**
 
 ### **RLS Issues:**
 
@@ -256,7 +256,7 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 **Problem:** Export failing  
 **Solution:** Ensure sufficient BigQuery quota
 
-## **Quick Reference**
+* ## **Part 6: Quick Reference**
 
 ### **Required IAM Roles for Service Account:**
 * **`bigquery.admin`** - For RLS operations
@@ -283,9 +283,7 @@ SELECT * FROM `project.rls_manager.audit_logs`
 WHERE DATE(timestamp) = CURRENT_DATE()
 ORDER BY timestamp DESC;
 ```
-
-
-## **Architecture Overview**
+* ## **Part 7: Architecture Overview**
 
 ### **Components**
 ```
@@ -309,7 +307,8 @@ ORDER BY timestamp DESC;
     └──────────────┘    └──────────────┘  └──────────────┘
 ```
 
-## **Appendix A: Complete Command Reference**
+
+* ## **Part 8: Complete Command Reference**
 
 ### **Service Account Setup**
 ```bash
@@ -335,7 +334,8 @@ bq mk --dataset --location=us-central1 YOUR_PROJECT:rls_manager
 # Create tables (run SQL commands from section 3.4)
 ```
 
-### **Deployment**
+* ## **Part 9: Deployment**
+
 ```bash
 # Clone repository
 cd $HOME
