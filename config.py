@@ -29,7 +29,7 @@ Configuration for RLS/CLS Manager
 
 class Config:
     # Google Cloud Project Configuration
-    PROJECT_ID = 'sys-googl-cortex-security'
+    PROJECT_ID = 'YOUR PROJECT ID HERE'
     LOCATION = 'us-central1'
     
     # RLS Manager Configuration
