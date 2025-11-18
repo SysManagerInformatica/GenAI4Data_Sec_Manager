@@ -353,13 +353,13 @@ gcloud run deploy rls-cls-manager --region=us-central1 --source . --platform man
 ## **Version History**
 
 ### **v2.0 - November 2025**
-- ✅ Added Column-Level Security (CLS) module
-- ✅ Added Audit Logging system
-- ✅ Integrated RLS and CLS in single application
-- ✅ Fixed policy tag removal issue
-- ✅ Enhanced logging with Python logging module
+- Added Column-Level Security (CLS) module
+- Added Audit Logging system
+- Integrated RLS and CLS in single application
+- Fixed policy tag removal issue
+- Enhanced logging with Python logging module
 
 ### **v1.0 - March 2025**
-- ✅ Initial release with RLS functionality
+- Initial release with RLS functionality
 
 **End of User Guide**
