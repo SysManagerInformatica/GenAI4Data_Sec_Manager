@@ -1,0 +1,7 @@
+wonderwords
+google-cloud-core
+bigquery
+nicegui
+db-dtypes
+google-cloud-datacatalog==3.17.0
+google-cloud-bigquery==3.14.1
