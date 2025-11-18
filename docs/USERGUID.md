@@ -179,6 +179,13 @@ PII_DATA (Taxonomy)
 * **By Status:** `SUCCESS` or `FAILED`
 * **By Date Range:** Select start and end dates
 
+* **Viewing Logs**
+
+To view application logs in Cloud Shell:
+```bash
+gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=rls-cls-manager" --limit 50 --format="value(textPayload)"
+```
+
 ### **Export Logs**
 
 **Export Options:**
@@ -277,22 +284,82 @@ WHERE DATE(timestamp) = CURRENT_DATE()
 ORDER BY timestamp DESC;
 ```
 
-## **Version History**
 
-### **v2.0 - November 2025**
-* **Added Column-Level Security (CLS)** module
-* **Added comprehensive Audit Logging** system
-* **Integrated RLS and CLS** in single interface
-* **Fixed tag removal** issues
-* **Enhanced error handling** and validation
+## **Architecture Overview**
 
-### **v1.0 - March 2025**
-* **Initial release** with RLS functionality
-* **User and group-based** policies
-* **Basic policy** management
+### **Components**
+```
+┌─────────────────────────────────────────────────────────┐
+│                     Cloud Run                           │
+│  ┌───────────────────────────────────────────────────┐ │
+│  │         RLS & CLS Security Manager                │ │
+│  │                                                   │ │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────────┐  │ │
+│  │  │   RLS    │  │   CLS    │  │  Audit Logs  │  │ │
+│  │  │  Module  │  │  Module  │  │    Module    │  │ │
+│  │  └──────────┘  └──────────┘  └──────────────┘  │ │
+│  └───────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+           │                    │                │
+           ▼                    ▼                ▼
+    ┌──────────────┐    ┌──────────────┐  ┌──────────────┐
+    │   BigQuery   │    │ Data Catalog │  │   BigQuery   │
+    │ RLS Control  │    │  Taxonomies  │  │  Audit Logs  │
+    │    Tables    │    │  Policy Tags │  │    Table     │
+    └──────────────┘    └──────────────┘  └──────────────┘
+```
+
+## **Appendix A: Complete Command Reference**
+
+### **Service Account Setup**
+```bash
+# Create service account
+gcloud iam service-accounts create sa-rls-cls-manager --display-name="RLS CLS Manager"
+
+# Get email
+gcloud iam service-accounts list --project=YOUR_PROJECT --filter="displayName:sa-rls-cls-manager" --format="value(email)"
+
+# Grant roles
+gcloud projects add-iam-policy-binding YOUR_PROJECT --member="serviceAccount:SA_EMAIL" --role="roles/bigquery.admin"
+gcloud projects add-iam-policy-binding YOUR_PROJECT --member="serviceAccount:SA_EMAIL" --role="roles/datacatalog.admin"
+gcloud projects add-iam-policy-binding YOUR_PROJECT --member="serviceAccount:SA_EMAIL" --role="roles/bigquery.dataEditor"
+gcloud projects add-iam-policy-binding YOUR_PROJECT --member="serviceAccount:SA_EMAIL" --role="roles/run.invoker"
+gcloud projects add-iam-policy-binding YOUR_PROJECT --member="serviceAccount:SA_EMAIL" --role="roles/iam.serviceAccountTokenCreator"
+```
+
+### **Dataset and Tables Creation**
+```bash
+# Create dataset
+bq mk --dataset --location=us-central1 YOUR_PROJECT:rls_manager
+
+# Create tables (run SQL commands from section 3.4)
+```
+
+### **Deployment**
+```bash
+# Clone repository
+cd $HOME
+git clone https://github.com/lucascarvalhal/RLS_CLS_Manager_Integrated.git
+cd RLS_CLS_Manager_Integrated
+
+# Edit config.py (update PROJECT_ID and LOCATION)
+
+# Deploy
+gcloud run deploy rls-cls-manager --region=us-central1 --source . --platform managed --service-account="SA_EMAIL" --port=8080 --memory=1Gi --timeout=300 --allow-unauthenticated --project=YOUR_PROJECT
+```
 
 ---
 
+## **Version History**
+
+### **v2.0 - November 2025**
+- ✅ Added Column-Level Security (CLS) module
+- ✅ Added Audit Logging system
+- ✅ Integrated RLS and CLS in single application
+- ✅ Fixed policy tag removal issue
+- ✅ Enhanced logging with Python logging module
+
+### **v1.0 - March 2025**
+- ✅ Initial release with RLS functionality
+
 **End of User Guide**
-
-
