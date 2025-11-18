@@ -1,5 +1,0 @@
-wonderwords
-google-cloud-core
-bigquery
-nicegui
-db-dtypes
