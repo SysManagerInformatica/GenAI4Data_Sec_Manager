@@ -364,6 +364,6 @@ Track all security operations and changes.
 
 ## **5. User Guide**
 
-[User Guide](https://github.com/SysManagerInformatica/GenAI4Data_Sec_Manager/blob/main/docs/USERGUIDE.md)
+[User Guide](docs/USERGUID.md)
 
 
