@@ -5,9 +5,9 @@
 This guide outlines the steps required to deploy the **RLS & CLS Security Manager** application within your environment.
 
 This enhanced version includes:
-- ✅ **Row-Level Security (RLS)** - Control access at the row level
-- ✅ **Column-Level Security (CLS)** - Control access at the column level using Policy Tags
-- ✅ **Audit Logging** - Track all security operations and changes
+- **Row-Level Security (RLS)** - Control access at the row level
+- **Column-Level Security (CLS)** - Control access at the column level using Policy Tags
+- **Audit Logging** - Track all security operations and changes
 
 **Important Notice:**
 
@@ -292,10 +292,10 @@ https://rls-cls-manager-[hash]-[region].run.app
 Manage BigQuery Row-Level Security policies to control data access at the row level.
 
 **Features:**
-- ✅ Create RLS policies (User-based and Group-based)
-- ✅ Assign users to policies
-- ✅ Assign filter values to groups
-- ✅ View and manage existing policies
+- Create RLS policies (User-based and Group-based)
+- Assign users to policies
+- Assign filter values to groups
+- View and manage existing policies
 
 ![image](https://github.com/SysManagerInformatica/GenAI4Data_Sec_Manager/blob/d0092a826b0c52d144af35c0622113c9b2c1629e/docs/images/ViewRLS.png)
 
@@ -312,30 +312,30 @@ Manage BigQuery Column-Level Security using Data Catalog Policy Tags.
 Create and manage Data Catalog taxonomies.
 
 **Features:**
-- ✅ Create new taxonomies
-- ✅ View existing taxonomies
-- ✅ Delete taxonomies
+- Create new taxonomies
+- View existing taxonomies
+- Delete taxonomies
 
 #### **4.2.2 Manage Policy Tags**
 
 Create and organize policy tags within taxonomies.
 
 **Features:**
-- ✅ Create new policy tags
-- ✅ Create nested/hierarchical tags
-- ✅ View tag structure
-- ✅ Delete tags
+- Create new policy tags
+- Create nested/hierarchical tags
+- View tag structure
+- Delete tags
 
 #### **4.2.3 Apply Tags to Columns**
 
 Apply policy tags to BigQuery table columns.
 
 **Features:**
-- ✅ Browse datasets and tables
-- ✅ View column schemas
-- ✅ Apply tags to columns
-- ✅ Remove tags from columns
-- ✅ View tagging statistics
+- Browse datasets and tables
+- View column schemas
+- Apply tags to columns
+- Remove tags from columns
+- View tagging statistics
 ---
 
 ### **4.3 Audit Logging - NEW!**
@@ -343,10 +343,10 @@ Apply policy tags to BigQuery table columns.
 Track all security operations and changes.
 
 **Features:**
-- ✅ Real-time activity dashboard
-- ✅ Filter logs by action, user, status, date
-- ✅ View detailed operation information
-- ✅ Export logs for compliance
+- Real-time activity dashboard
+- Filter logs by action, user, status, date
+- View detailed operation information
+- Export logs for compliance
 
 **Logged Actions:**
 - RLS policy creation/deletion
@@ -360,8 +360,10 @@ Track all security operations and changes.
 
 ---
 
+**Setup Complete! Your RLS & CLS Security Manager is now ready to use!**
+
 ## **5. User Guide**
 
 [User Guide](https://github.com/SysManagerInformatica/GenAI4Data_Sec_Manager/blob/main/docs/USERGUIDE.md)
 
-**Setup Complete! Your RLS & CLS Security Manager is now ready to use!**
+
