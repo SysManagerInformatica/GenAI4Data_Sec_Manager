@@ -5,3 +5,8 @@ nicegui
 db-dtypes
 google-cloud-datacatalog==3.17.0
 google-cloud-bigquery==3.14.1
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+python-dotenv==1.0.0
+requests==2.31.0
+PyJWT==2.8.0
