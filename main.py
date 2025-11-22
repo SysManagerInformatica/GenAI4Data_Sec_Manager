@@ -42,13 +42,38 @@ create_login_page()
 @require_auth
 def index_page() -> None:
     user = get_current_user()
-    with theme.frame(f'Homepage - Welcome {user.get("name", "User")}'):
-        home.content()
+    
+    # Header com informações do usuário e logout
+    with ui.header().classes('items-center justify-between bg-primary'):
+        with ui.row().classes('w-full items-center'):
+            # Logo e título à esquerda
+            ui.label('GenAI4Data Security Manager').classes('text-xl font-bold text-white')
+            
+            # Espaçamento
+            ui.space()
+            
+            # Informações do usuário e logout à direita
+            with ui.row().classes('items-center gap-4'):
+                # Mostrar foto se disponível
+                picture = user.get('picture', '')
+                if picture:
+                    ui.image(picture).classes('w-8 h-8 rounded-full')
+                
+                # Nome e email do usuário
+                with ui.column().classes('gap-0'):
+                    ui.label(user.get("name", "User")).classes('text-white text-sm font-medium')
+                    ui.label(user.get("email", "")).classes('text-white text-xs opacity-80')
+                
+                # Botão de logout
+                ui.button('Logout', on_click=logout).props('flat color=white')
+    
+    # Conteúdo principal com o frame do tema
+    with theme.frame('Homepage'):
+        # Mensagem de boas-vindas personalizada
+        ui.label(f'Welcome back, {user.get("name", "User")}!').classes('text-2xl mb-4')
         
-        # Adicionar informação do usuário e botão de logout
-        with ui.row().classes('absolute top-4 right-4'):
-            ui.label(f'{user.get("email", "")}').classes('text-sm')
-            ui.button('Logout', on_click=logout).props('flat color=white size=sm')
+        # Conteúdo da home
+        home.content()
 
 # Criar todas as outras páginas com autenticação
 def create_protected_pages():
