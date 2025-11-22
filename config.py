@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 # "IMPORTANT: This application is a prototype and should be used for experimental purposes only.
 # It is not intended for production use. 
 # This software is provided 'as is' without warranty of any kind, express or implied, including but not limited to the warranties 
@@ -20,16 +19,15 @@
 # tort or otherwise, arising from, out of or in connection with the software or the use or other dealings in the software. 
 # Google is not responsible for the functionality, reliability, or security of this prototype. 
 # Use of this tool is at your own discretion and risk."
-
-
 # Use a configuration class or dictionary for better organization
 """
 Configuration for RLS/CLS Manager
 """
+import os
 
 class Config:
     # Google Cloud Project Configuration
-    PROJECT_ID = 'YOUR PROJECT ID HERE'
+    PROJECT_ID = os.getenv('PROJECT_ID', 'sys-googl-cortex-security')
     LOCATION = 'us-central1'
     
     # RLS Manager Configuration
@@ -40,3 +38,7 @@ class Config:
     # Application Configuration
     APP_TITLE = 'GenAI4Data - Security Manager'
     APP_VERSION = '1.0.0'
+    
+    # Additional tables (if needed)
+    USERS_TABLE = f'{PROJECT_ID}.{RLS_MANAGER_DATASET}.users'
+    AUDIT_LOGS_TABLE = f'{PROJECT_ID}.{RLS_MANAGER_DATASET}.audit_logs'
