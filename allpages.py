@@ -21,6 +21,7 @@
 # Use of this tool is at your own discretion and risk."
 
 from nicegui import ui
+from services.auth_service import require_auth, get_current_user, register_audit_log
 from pages.create_rls_users import RLSCreateforUsers
 from pages.create_rls_groups import RLSCreateforGroups
 from pages.assign_users_to_policy import RLSAssignUserstoPolicy
@@ -31,56 +32,90 @@ from pages.cls_apply_tags import CLSApplyTags
 from pages.cls_schema_browser import CLSSchemaBrowser
 from pages.audit_logs import AuditLogs
 
-
 def create() -> None:
-    # RLS Pages
+    # ==================== RLS Pages ====================
+    
+    @ui.page('/createrlsusers/')
+    @require_auth
     def create_rls_page_for_users():
+        user = get_current_user()
+        register_audit_log('ACCESS_RLS_USERS_PAGE', user.get('email', ''), 'Accessed RLS Create for Users page')
         rls_instance = RLSCreateforUsers()
         rls_instance.run()
-    ui.page('/createrlsusers/')(create_rls_page_for_users)
-
+    
+    @ui.page('/createrlsgroups/')
+    @require_auth
     def create_rls_page_for_groups():
+        user = get_current_user()
+        register_audit_log('ACCESS_RLS_GROUPS_PAGE', user.get('email', ''), 'Accessed RLS Create for Groups page')
         rls_instance = RLSCreateforGroups()
         rls_instance.run()
-    ui.page('/createrlsgroups/')(create_rls_page_for_groups)
-
+    
+    @ui.page('/assignuserstopolicy/')
+    @require_auth
     def assign_users_to_policy():
+        user = get_current_user()
+        register_audit_log('ACCESS_ASSIGN_USERS_PAGE', user.get('email', ''), 'Accessed Assign Users to Policy page')
         rls_instance = RLSAssignUserstoPolicy()
         rls_instance.run()
-    ui.page('/assignuserstopolicy/')(assign_users_to_policy) 
-
+    
+    @ui.page('/assignvaluestogroup/')
+    @require_auth
     def assign_values_to_group():
+        user = get_current_user()
+        register_audit_log('ACCESS_ASSIGN_VALUES_PAGE', user.get('email', ''), 'Accessed Assign Values to Group page')
         rls_instance = RLSAssignValuestoGroup()
         rls_instance.run()
-    ui.page('/assignvaluestogroup/')(assign_values_to_group) 
-
-    # CLS Pages
+    
+    # ==================== CLS Pages ====================
+    
+    @ui.page('/clstaxonomies/')
+    @require_auth
     def cls_taxonomies_page():
+        user = get_current_user()
+        register_audit_log('ACCESS_CLS_TAXONOMIES_PAGE', user.get('email', ''), 'Accessed CLS Taxonomies page')
         cls_instance = CLSTaxonomies()
         cls_instance.run()
-    ui.page('/clstaxonomies/')(cls_taxonomies_page)
-
+    
+    @ui.page('/clspolicytags/')
+    @require_auth
     def cls_policy_tags_page():
+        user = get_current_user()
+        register_audit_log('ACCESS_CLS_POLICY_TAGS_PAGE', user.get('email', ''), 'Accessed CLS Policy Tags page')
         cls_instance = CLSPolicyTags()
         cls_instance.run()
-    ui.page('/clspolicytags/')(cls_policy_tags_page)
-
+    
+    @ui.page('/clsapplytags/')
+    @require_auth
     def cls_apply_tags_page():
+        user = get_current_user()
+        register_audit_log('ACCESS_CLS_APPLY_TAGS_PAGE', user.get('email', ''), 'Accessed CLS Apply Tags page')
         cls_instance = CLSApplyTags()
         cls_instance.run()
-    ui.page('/clsapplytags/')(cls_apply_tags_page)
-
+    
+    @ui.page('/clsschemabrowser/')
+    @require_auth
     def cls_schema_browser_page():
+        user = get_current_user()
+        register_audit_log('ACCESS_CLS_SCHEMA_BROWSER_PAGE', user.get('email', ''), 'Accessed CLS Schema Browser page')
         cls_instance = CLSSchemaBrowser()
         cls_instance.run()
-    ui.page('/clsschemabrowser/')(cls_schema_browser_page)
-
-    # Audit Logs Page
+    
+    # ==================== Audit Logs Page ====================
+    
+    @ui.page('/auditlogs/')
+    @require_auth
     def audit_logs_page():
+        user = get_current_user()
+        # Verificar se usuário tem permissão para ver audit logs
+        if user.get('role') not in ['OWNER', 'ADMIN']:
+            ui.notify('Access denied. Only OWNER and ADMIN can view audit logs.', type='negative')
+            ui.button('Back to Home', on_click=lambda: ui.run_javascript('window.location.href = "/"'))
+            return
+        
+        register_audit_log('ACCESS_AUDIT_LOGS_PAGE', user.get('email', ''), 'Accessed Audit Logs page')
         audit_instance = AuditLogs()
         audit_instance.run()
-    ui.page('/auditlogs/')(audit_logs_page)
-
 
 if __name__ == '__main__':
     create()
