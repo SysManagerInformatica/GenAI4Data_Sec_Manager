@@ -28,13 +28,13 @@ def home():
     with frame('Home'):
         home_content()
 
-# Iniciar aplicação
-if __name__ == '__main__':
-    print(f"Starting NiceGUI on port {PORT}")
-    ui.run(
-        port=PORT,
-        host='0.0.0.0',
-        title='GenAI4Data Security Manager',
-        favicon='🔒',
-        storage_secret=STORAGE_SECRET
-    )
+# IMPORTANTE: Sempre executar, sem condição if __name__
+print(f"Starting NiceGUI on port {PORT}")
+ui.run(
+    port=PORT,
+    host='0.0.0.0',
+    title='GenAI4Data Security Manager',
+    favicon='🔒',
+    storage_secret=STORAGE_SECRET,
+    reload=False  # Importante para produção
+)
