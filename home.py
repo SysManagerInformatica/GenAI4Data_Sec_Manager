@@ -20,40 +20,84 @@
 # Google is not responsible for the functionality, reliability, or security of this prototype. 
 # Use of this tool is at your own discretion and risk."
 
-from nicegui import ui
+from nicegui import ui, app
+from services.auth_service import get_current_user
 
 def content() -> None:
-    # INJETAR BOTÃO DE LOGOUT VIA JAVASCRIPT PURO
-    ui.run_javascript('''
-        // Criar botão de logout flutuante
-        const logoutBtn = document.createElement('div');
-        logoutBtn.innerHTML = `
-            <button style="
-                position: fixed;
-                top: 70px;
-                right: 20px;
-                z-index: 999999;
-                background: linear-gradient(135deg, #ef4444, #dc2626);
-                color: white;
-                padding: 12px 24px;
-                border: none;
-                border-radius: 8px;
-                font-size: 16px;
-                font-weight: bold;
-                cursor: pointer;
-                box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
-                transition: all 0.3s;
-            " 
-            onmouseover="this.style.transform='scale(1.05)'"
-            onmouseout="this.style.transform='scale(1)'"
-            onclick="window.location.href='/login'">
-                🚪 LOGOUT
-            </button>
-        `;
-        document.body.appendChild(logoutBtn);
-    ''')
+    user = get_current_user()
     
-    # CONTEÚDO ORIGINAL DA PÁGINA - SEM MUDANÇAS
+    # CARD COM INFORMAÇÕES DO USUÁRIO E BADGE DO ROLE
+    with ui.card().classes('w-full mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-100 shadow-lg'):
+        with ui.row().classes('items-center justify-between w-full'):
+            # Lado esquerdo - Informações do usuário
+            with ui.row().classes('items-center gap-4'):
+                # Ícone ou foto do usuário
+                picture = user.get('picture', '')
+                if picture:
+                    ui.image(picture).classes('w-16 h-16 rounded-full')
+                else:
+                    ui.icon('account_circle', size='64px', color='primary')
+                
+                # Detalhes do usuário
+                with ui.column().classes('gap-0'):
+                    ui.label(f'Welcome back, {user.get("name", "User")}!').classes('text-2xl font-bold text-gray-800')
+                    ui.label(user.get('email', '')).classes('text-gray-600')
+                    if user.get('department'):
+                        ui.label(f'Department: {user.get("department")}').classes('text-sm text-gray-500')
+                    if user.get('company'):
+                        ui.label(f'Company: {user.get("company")}').classes('text-sm text-gray-500')
+            
+            # Lado direito - Badge do Role e Logout
+            with ui.column().classes('items-center gap-3'):
+                # BADGE DO ROLE GRANDE E VISÍVEL
+                role = user.get('role', 'VIEWER')
+                role_colors = {
+                    'OWNER': 'red-7',
+                    'ADMIN': 'orange-7', 
+                    'EDITOR': 'green-7',
+                    'VIEWER': 'blue-7'
+                }
+                role_descriptions = {
+                    'OWNER': 'Full System Access',
+                    'ADMIN': 'Administrative Access',
+                    'EDITOR': 'Edit Permissions',
+                    'VIEWER': 'Read-Only Access'
+                }
+                
+                ui.label('Your Role:').classes('text-xs text-gray-600')
+                ui.button(role, color=role_colors.get(role, 'gray')).props('push glossy no-caps').classes('text-lg font-bold px-6 py-2')
+                ui.label(role_descriptions.get(role, '')).classes('text-xs text-gray-500')
+                
+                # Botão de Logout
+                ui.button('🚪 LOGOUT', on_click=lambda: app.storage.user.clear() or ui.run_javascript('window.location.href="/login"')).props('color=red push').classes('mt-2')
+    
+    # Card de Permissões
+    with ui.expansion('View My Permissions', icon='security').classes('w-full mb-6'):
+        with ui.card().classes('w-full'):
+            role = user.get('role', 'VIEWER')
+            
+            if role == 'OWNER':
+                ui.label('✅ Create, Edit, Delete all RLS/CLS policies').classes('text-green-600')
+                ui.label('✅ Manage all users and permissions').classes('text-green-600')
+                ui.label('✅ View complete audit logs').classes('text-green-600')
+                ui.label('✅ Full administrative control').classes('text-green-600')
+            elif role == 'ADMIN':
+                ui.label('✅ Create, Edit, Delete RLS/CLS policies').classes('text-green-600')
+                ui.label('✅ Manage users (cannot delete)').classes('text-green-600')
+                ui.label('✅ View audit logs').classes('text-green-600')
+                ui.label('❌ Cannot modify OWNER users').classes('text-red-600')
+            elif role == 'EDITOR':
+                ui.label('✅ Create and Edit RLS/CLS policies').classes('text-green-600')
+                ui.label('✅ View existing policies').classes('text-green-600')
+                ui.label('❌ Cannot delete policies').classes('text-red-600')
+                ui.label('❌ Cannot view audit logs').classes('text-red-600')
+            else:  # VIEWER
+                ui.label('✅ View RLS/CLS policies').classes('text-blue-600')
+                ui.label('❌ Cannot create or modify policies').classes('text-red-600')
+                ui.label('❌ Cannot view audit logs').classes('text-red-600')
+                ui.label('❌ Read-only access').classes('text-red-600')
+    
+    # CONTEÚDO ORIGINAL DA PÁGINA
     with ui.row().classes('w-full justify-center'):
         with ui.column().classes('w-full max-w-5xl items-center'):
             ui.label('Welcome to GenAI4Data Security Manager').classes('text-4xl font-bold text-center my-4 text-primary')
