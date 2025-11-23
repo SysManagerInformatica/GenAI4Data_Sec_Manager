@@ -181,18 +181,17 @@ def create_login_page():
                 """
                 client.query(update_query, job_config=job_config).result()
                 
-                # Registrar login no audit log (SEM log_id)
+                # Registrar login no audit log (APENAS COLUNAS QUE EXISTEM)
                 audit_query = """
                     INSERT INTO `sys-googl-cortex-security.rls_manager.audit_logs`
-                    (timestamp, user_email, user_name, user_role, action, status, details)
+                    (timestamp, user_email, user_role, action, status, details)
                     VALUES
-                    (CURRENT_TIMESTAMP(), @email, @name, @role, 'USER_LOGIN', 'SUCCESS', 'Login via Google OAuth')
+                    (CURRENT_TIMESTAMP(), @email, @role, 'USER_LOGIN', 'SUCCESS', 'Login via Google OAuth')
                 """
                 
                 audit_job_config = bigquery.QueryJobConfig(
                     query_parameters=[
                         bigquery.ScalarQueryParameter("email", "STRING", email),
-                        bigquery.ScalarQueryParameter("name", "STRING", user_data.name or user_info.get('name', '')),
                         bigquery.ScalarQueryParameter("role", "STRING", user_data.role)
                     ]
                 )
