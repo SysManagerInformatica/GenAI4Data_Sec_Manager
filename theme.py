@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 # "IMPORTANT: This application is a prototype and should be used for experimental purposes only.
 # It is not intended for production use. 
 # This software is provided 'as is' without warranty of any kind, express or implied, including but not limited to the warranties 
@@ -29,18 +28,21 @@ from nicegui import ui
 def frame(navtitle: str):
     """Custom page frame to share the same styling and behavior across all pages"""
     ui.colors(primary='#4285F4', secondary='#AECBFA', accent='#1967D2', positive='#34A853', negative='#EA4335')
-
-    # with ui.layout() as layout:  # Use ui.layout as the top-level container
-
-    with ui.header(elevated=True).classes(replace='row items-center').classes('bg-blue-500') as header:
-        ui.button(on_click=lambda: left_drawer.toggle(), icon='menu').props('flat color=white')
-        ui.label('GenAI4Data - Security Manager').classes('font-bold text-white') #Added text-white
-
-    with ui.left_drawer().classes('bg-white') as left_drawer:  # Removed 'white' - use bg-white
-            menu()  # menu() should create its own ui elements.
-
+    
+    with ui.header(elevated=True).classes(replace='row items-center justify-between').classes('bg-blue-500') as header:
+        # Lado esquerdo - Menu e título
+        with ui.row().classes('items-center'):
+            ui.button(on_click=lambda: left_drawer.toggle(), icon='menu').props('flat color=white')
+            ui.label('GenAI4Data - Security Manager').classes('font-bold text-white')
+        
+        # Lado direito - Botão de Logout
+        ui.button('LOGOUT', on_click=lambda: ui.run_javascript('window.location.href="/login"')).props('color=red push').classes('font-bold')
+    
+    with ui.left_drawer().classes('bg-white') as left_drawer:
+        menu()
+    
     with ui.footer().classes('bg-blue-500 w-full') as footer:
         ui.label('Copyright 2024 CCW Latam - Concept Prototype').classes('font-bold text-white')
-
-    with ui.column().classes('w-full p-4'):  # Main content area.  Removed absolute positioning
-        yield  # Your stepper and other content will go HERE
+    
+    with ui.column().classes('w-full p-4'):
+        yield
