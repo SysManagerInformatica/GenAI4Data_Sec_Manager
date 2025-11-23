@@ -63,6 +63,52 @@ def check_user_in_db(email):
     
     return None
 
+def check_permission(role, resource, permission):
+    """
+    Verifica se um role tem permissão específica para um recurso
+    
+    Args:
+        role: Role do usuário (OWNER, ADMIN, EDITOR, VIEWER)
+        resource: Recurso a ser acessado (RLS_POLICIES, CLS_POLICIES, AUDIT_LOGS, USERS)
+        permission: Tipo de permissão (can_view, can_create, can_edit, can_delete)
+    
+    Returns:
+        bool: True se tem permissão, False caso contrário
+    """
+    # Buscar permissão no BigQuery
+    try:
+        query = f"""
+        SELECT {permission}
+        FROM `{PROJECT_ID}.rls_manager.role_permissions`
+        WHERE role = @role AND resource = @resource
+        LIMIT 1
+        """
+        
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("role", "STRING", role),
+                bigquery.ScalarQueryParameter("resource", "STRING", resource)
+            ]
+        )
+        
+        result = list(bq_client.query(query, job_config=job_config).result())
+        if result:
+            return result[0][0]  # Retorna o valor booleano da permissão
+    except Exception as e:
+        print(f"Erro ao verificar permissão: {e}")
+    
+    # Fallback - verificação básica por role
+    if role == 'OWNER':
+        return True
+    elif role == 'ADMIN':
+        return permission != 'can_delete' or resource != 'USERS'
+    elif role == 'EDITOR':
+        return permission in ['can_view', 'can_create', 'can_edit'] and resource != 'AUDIT_LOGS'
+    elif role == 'VIEWER':
+        return permission == 'can_view' and resource != 'AUDIT_LOGS'
+    
+    return False
+
 def get_current_user():
     """Retorna dados do usuário atual da sessão"""
     return app.storage.user.get('user_info', {})
@@ -72,21 +118,30 @@ def logout():
     app.storage.user.clear()
     ui.run_javascript('window.location.href = "/login"')
 
-def register_audit_log(action, user_email, details=""):
-    """Registra ação no audit log"""
+def register_audit_log(action, user_email, details="", status="SUCCESS"):
+    """
+    Registra ação no audit log
+    
+    Args:
+        action: Ação realizada
+        user_email: Email do usuário
+        details: Detalhes da ação
+        status: Status da ação (SUCCESS, FAILED, DENIED)
+    """
     try:
         query = f"""
         INSERT INTO `{PROJECT_ID}.rls_manager.audit_logs`
-        (log_id, action, user_email, details, timestamp)
+        (log_id, action, user_email, details, status, timestamp)
         VALUES
-        (GENERATE_UUID(), @action, @user_email, @details, CURRENT_TIMESTAMP())
+        (GENERATE_UUID(), @action, @user_email, @details, @status, CURRENT_TIMESTAMP())
         """
         
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
                 bigquery.ScalarQueryParameter("action", "STRING", action),
                 bigquery.ScalarQueryParameter("user_email", "STRING", user_email),
-                bigquery.ScalarQueryParameter("details", "STRING", details)
+                bigquery.ScalarQueryParameter("details", "STRING", details),
+                bigquery.ScalarQueryParameter("status", "STRING", status)
             ]
         )
         
