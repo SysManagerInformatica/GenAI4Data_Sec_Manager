@@ -4,10 +4,13 @@ Página de Login com Google OAuth Completo
 from nicegui import ui, app
 import os
 import requests
+from google.cloud import bigquery
+from datetime import datetime
 
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 REDIRECT_URI = os.getenv('REDIRECT_URI')
+PROJECT_ID = os.getenv('PROJECT_ID', 'sys-googl-cortex-security')
 
 # Domínios permitidos para acesso
 ALLOWED_DOMAINS = [
@@ -118,28 +121,97 @@ def create_login_page():
                         ui.button('Back to Login', on_click=lambda: ui.run_javascript('window.location.href = "/login"')).classes('mt-4')
                     return
                 
-                # OPCIONAL: Verificar usuário específico no BigQuery
-                # from google.cloud import bigquery
-                # client = bigquery.Client()
-                # query = f"SELECT role FROM `sys-googl-cortex-security.rls_manager.authorized_users` WHERE email = '{email}' AND is_active = TRUE"
-                # results = list(client.query(query).result())
-                # if not results:
-                #     # Mostrar erro de usuário não cadastrado
-                #     return
+                # BUSCAR USUÁRIO NO BIGQUERY E VERIFICAR ROLE
+                client = bigquery.Client(project=PROJECT_ID)
                 
-                # Se passou nas verificações, fazer login
+                # Query para buscar usuário
+                query = """
+                    SELECT user_id, name, role, department, company, is_active
+                    FROM `sys-googl-cortex-security.rls_manager.authorized_users`
+                    WHERE email = @email
+                    LIMIT 1
+                """
+                
+                job_config = bigquery.QueryJobConfig(
+                    query_parameters=[
+                        bigquery.ScalarQueryParameter("email", "STRING", email)
+                    ]
+                )
+                
+                results = list(client.query(query, job_config=job_config).result())
+                
+                if not results:
+                    # Usuário não cadastrado no sistema
+                    loading_container.clear()
+                    with loading_container:
+                        ui.icon('person_add_disabled', size='64px', color='orange')
+                        ui.label('User Not Registered').classes('text-2xl font-bold text-orange-600 mb-4')
+                        
+                        with ui.card().classes('p-6'):
+                            ui.label(f'Email: {email}').classes('text-lg mb-2')
+                            ui.label('Your email domain is authorized but you are not registered in the system.').classes('text-gray-600 mb-4')
+                            ui.label('Please contact the administrator to register your account.').classes('text-gray-600')
+                            ui.label('Admin contact: admin@sysmanager.com.br').classes('text-sm text-gray-500 mt-2')
+                        
+                        ui.button('Back to Login', on_click=lambda: ui.run_javascript('window.location.href = "/login"')).classes('mt-4')
+                    return
+                
+                user_data = results[0]
+                
+                # Verificar se o usuário está ativo
+                if not user_data.is_active:
+                    loading_container.clear()
+                    with loading_container:
+                        ui.icon('block', size='64px', color='red')
+                        ui.label('Account Inactive').classes('text-2xl font-bold text-red-600 mb-4')
+                        
+                        with ui.card().classes('p-6'):
+                            ui.label(f'Email: {email}').classes('text-lg mb-2')
+                            ui.label('Your account has been deactivated.').classes('text-gray-600 mb-4')
+                            ui.label('Please contact the administrator to reactivate your account.').classes('text-gray-600')
+                        
+                        ui.button('Back to Login', on_click=lambda: ui.run_javascript('window.location.href = "/login"')).classes('mt-4')
+                    return
+                
+                # Atualizar last_login
+                update_query = """
+                    UPDATE `sys-googl-cortex-security.rls_manager.authorized_users`
+                    SET last_login = CURRENT_TIMESTAMP()
+                    WHERE email = @email
+                """
+                client.query(update_query, job_config=job_config).result()
+                
+                # Registrar login no audit log
+                audit_query = """
+                    INSERT INTO `sys-googl-cortex-security.rls_manager.audit_logs`
+                    (log_id, timestamp, user_email, user_name, user_role, action, status, details)
+                    VALUES
+                    (GENERATE_UUID(), CURRENT_TIMESTAMP(), @email, @name, @role, 'USER_LOGIN', 'SUCCESS', 'Login via Google OAuth')
+                """
+                
+                audit_config = bigquery.QueryJobConfig(
+                    query_parameters=[
+                        bigquery.ScalarQueryParameter("email", "STRING", email),
+                        bigquery.ScalarQueryParameter("name", "STRING", user_data.name or user_info.get('name', '')),
+                        bigquery.ScalarQueryParameter("role", "STRING", user_data.role)
+                    ]
+                )
+                client.query(audit_query, audit_config=audit_config).result()
+                
+                # Salvar dados completos do usuário na sessão
                 app.storage.user['authenticated'] = True
                 app.storage.user['user_info'] = {
+                    'user_id': user_data.user_id,
                     'email': email,
-                    'name': user_info.get('name', email),
+                    'name': user_data.name or user_info.get('name', email),
+                    'role': user_data.role,  # ROLE REAL DO BANCO!
+                    'department': user_data.department,
+                    'company': user_data.company,
                     'picture': user_info.get('picture', ''),
-                    'role': 'OWNER'  # Ou buscar do BigQuery
+                    'login_time': datetime.now().isoformat()
                 }
                 
-                # Registrar login no audit log (opcional)
-                from services.auth_service import register_audit_log
-                register_audit_log('USER_LOGIN', email, f'Successful login via Google OAuth')
-                
+                # Redirecionar para home
                 ui.run_javascript('window.location.href = "/"')
                 
             except Exception as e:
