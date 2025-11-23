@@ -189,14 +189,14 @@ def create_login_page():
                     (GENERATE_UUID(), CURRENT_TIMESTAMP(), @email, @name, @role, 'USER_LOGIN', 'SUCCESS', 'Login via Google OAuth')
                 """
                 
-                audit_config = bigquery.QueryJobConfig(
+                audit_job_config = bigquery.QueryJobConfig(
                     query_parameters=[
                         bigquery.ScalarQueryParameter("email", "STRING", email),
                         bigquery.ScalarQueryParameter("name", "STRING", user_data.name or user_info.get('name', '')),
                         bigquery.ScalarQueryParameter("role", "STRING", user_data.role)
                     ]
                 )
-                client.query(audit_query, audit_config=audit_config).result()
+                client.query(audit_query, job_config=audit_job_config).result()  # CORREÇÃO AQUI!
                 
                 # Salvar dados completos do usuário na sessão
                 app.storage.user['authenticated'] = True
