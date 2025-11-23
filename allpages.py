@@ -31,6 +31,7 @@ from pages.cls_policy_tags import CLSPolicyTags
 from pages.cls_apply_tags import CLSApplyTags
 from pages.cls_schema_browser import CLSSchemaBrowser
 from pages.audit_logs import AuditLogs
+from pages.control_access import ControlAccess  # NOVO IMPORT
 
 def show_access_denied(resource_name: str, required_permission: str):
     """Mostra página de acesso negado"""
@@ -191,7 +192,39 @@ def create() -> None:
         cls_instance = CLSSchemaBrowser()
         cls_instance.run()
     
-    # ==================== Audit Logs Page ====================
+    # ==================== Admin Pages ====================
+    
+    @ui.page('/controlaccess/')
+    @require_auth
+    def control_access_page():
+        user = get_current_user()
+        
+        # Só OWNER e ADMIN podem gerenciar usuários
+        if user.get('role') not in ['OWNER', 'ADMIN']:
+            register_audit_log('ACCESS_DENIED', user.get('email', ''), 
+                             f'Tried to access Control Access - Role: {user.get("role")}', 'DENIED')
+            
+            with ui.column().classes('absolute-center items-center'):
+                ui.icon('admin_panel_settings', size='64px', color='red')
+                ui.label('Administrator Access Required').classes('text-2xl font-bold text-red-600 mb-4')
+                
+                with ui.card().classes('p-6'):
+                    ui.label('Control Access Management').classes('text-lg font-semibold mb-2')
+                    ui.label(f'Your Role: {user.get("role", "Unknown")}').classes('text-gray-600 mb-2')
+                    ui.label('Only OWNER and ADMIN roles can manage user access.').classes('text-gray-600 mb-4')
+                    
+                    if user.get('role') == 'EDITOR':
+                        ui.label('As an EDITOR, you can work with policies but cannot manage users.').classes('text-sm text-gray-500')
+                    elif user.get('role') == 'VIEWER':
+                        ui.label('As a VIEWER, you have read-only access and cannot manage users.').classes('text-sm text-gray-500')
+                
+                ui.button('Back to Home', on_click=lambda: ui.run_javascript('window.location.href = "/"')).classes('mt-4')
+            return
+        
+        register_audit_log('ACCESS_CONTROL_ACCESS_PAGE', user.get('email', ''), 
+                         f'Accessed Control Access page - Role: {user.get("role")}', 'SUCCESS')
+        control_instance = ControlAccess()
+        control_instance.run()
     
     @ui.page('/auditlogs/')
     @require_auth
