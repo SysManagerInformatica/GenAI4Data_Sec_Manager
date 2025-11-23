@@ -181,12 +181,12 @@ def create_login_page():
                 """
                 client.query(update_query, job_config=job_config).result()
                 
-                # Registrar login no audit log
+                # Registrar login no audit log (SEM log_id)
                 audit_query = """
                     INSERT INTO `sys-googl-cortex-security.rls_manager.audit_logs`
-                    (log_id, timestamp, user_email, user_name, user_role, action, status, details)
+                    (timestamp, user_email, user_name, user_role, action, status, details)
                     VALUES
-                    (GENERATE_UUID(), CURRENT_TIMESTAMP(), @email, @name, @role, 'USER_LOGIN', 'SUCCESS', 'Login via Google OAuth')
+                    (CURRENT_TIMESTAMP(), @email, @name, @role, 'USER_LOGIN', 'SUCCESS', 'Login via Google OAuth')
                 """
                 
                 audit_job_config = bigquery.QueryJobConfig(
@@ -196,7 +196,7 @@ def create_login_page():
                         bigquery.ScalarQueryParameter("role", "STRING", user_data.role)
                     ]
                 )
-                client.query(audit_query, job_config=audit_job_config).result()  # CORREÇÃO AQUI!
+                client.query(audit_query, job_config=audit_job_config).result()
                 
                 # Salvar dados completos do usuário na sessão
                 app.storage.user['authenticated'] = True
