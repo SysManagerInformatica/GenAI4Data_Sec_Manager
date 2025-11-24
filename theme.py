@@ -16,10 +16,8 @@ def frame(navtitle: str):
             ui.label('GenAI4Data - Security Manager').classes('font-bold')
             ui.label(f'| {navtitle}').classes('text-white')
             
-            # Espaço no meio
             ui.space()
             
-            # Apenas mostrar role e logout button no header
             user_info = app.storage.user.get('user_info', {})
             if user_info:
                 ui.label(f"Your Role:").classes('text-white')
@@ -37,7 +35,8 @@ def frame(navtitle: str):
                          color='red').classes('ml-2')
     
     # Drawer lateral com menu
-    with ui.left_drawer(value=False, fixed=False).classes('bg-gray-50') as left_drawer:
+    left_drawer = ui.left_drawer(value=False, fixed=False).classes('bg-gray-50')
+    with left_drawer:
         ui.label('Navigation').classes('text-h6 q-mt-md q-mb-md')
         menu()
     
@@ -46,7 +45,9 @@ def frame(navtitle: str):
         with ui.row().classes('w-full justify-between items-center'):
             ui.label('Copyright 2024 CCW Latam - Concept Prototype').classes('text-gray-600')
             
-            # Info da sessão no footer
             if user_info:
                 session_info = f"Session: {user_info.get('role', 'VIEWER')} | {user_info.get('email', '')}"
                 ui.label(session_info).classes('text-gray-600')
+    
+    # Retornar um contexto manager válido
+    return ui.column().classes('w-full')
