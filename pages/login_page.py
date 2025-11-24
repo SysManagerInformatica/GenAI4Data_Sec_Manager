@@ -6,6 +6,7 @@ import os
 import requests
 from google.cloud import bigquery
 from datetime import datetime
+import json
 
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
@@ -181,18 +182,26 @@ def create_login_page():
                 """
                 client.query(update_query, job_config=job_config).result()
                 
-                # Registrar login no audit log (APENAS COLUNAS QUE EXISTEM)
+                # Registrar login no audit log com estrutura correta
+                audit_details = json.dumps({
+                    "user_name": user_data.name or user_info.get('name', ''),
+                    "user_role": user_data.role,
+                    "department": user_data.department,
+                    "company": user_data.company,
+                    "login_method": "Google OAuth"
+                })
+                
                 audit_query = """
                     INSERT INTO `sys-googl-cortex-security.rls_manager.audit_logs`
-                    (timestamp, user_email, user_role, action, status, details)
+                    (timestamp, user_email, action, resource_type, resource_name, taxonomy, details, status, error_message)
                     VALUES
-                    (CURRENT_TIMESTAMP(), @email, @role, 'USER_LOGIN', 'SUCCESS', 'Login via Google OAuth')
+                    (CURRENT_TIMESTAMP(), @email, 'USER_LOGIN', 'AUTH', 'LOGIN_SYSTEM', NULL, PARSE_JSON(@details), 'SUCCESS', NULL)
                 """
                 
                 audit_job_config = bigquery.QueryJobConfig(
                     query_parameters=[
                         bigquery.ScalarQueryParameter("email", "STRING", email),
-                        bigquery.ScalarQueryParameter("role", "STRING", user_data.role)
+                        bigquery.ScalarQueryParameter("details", "STRING", audit_details)
                     ]
                 )
                 client.query(audit_query, job_config=audit_job_config).result()
