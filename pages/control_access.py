@@ -211,9 +211,10 @@ class ControlAccess:
                 email_input = ui.input('Email *', placeholder='user@example.com').classes('w-full')
                 name_input = ui.input('Name', placeholder='Full Name').classes('w-full')
                 
+                # CORRIGIDO: options como primeiro argumento, label como argumento nomeado
                 role_select = ui.select(
-                    'Role *',
                     options=['VIEWER', 'EDITOR', 'ADMIN', 'OWNER'],
+                    label='Role *',
                     value='VIEWER'
                 ).classes('w-full')
                 
@@ -354,9 +355,14 @@ class ControlAccess:
             ui.label(f'Edit User: {user_data["email"]}').classes('text-xl font-bold mb-4')
             
             name_input = ui.input('Name', value=user_data.get('name', '')).classes('w-full mb-2')
-            role_select = ui.select('Role', 
-                                   options=['VIEWER', 'EDITOR', 'ADMIN', 'OWNER'],
-                                   value=user_data.get('role', 'VIEWER')).classes('w-full mb-2')
+            
+            # CORRIGIDO: options como primeiro argumento, label como argumento nomeado
+            role_select = ui.select(
+                options=['VIEWER', 'EDITOR', 'ADMIN', 'OWNER'],
+                label='Role',
+                value=user_data.get('role', 'VIEWER')
+            ).classes('w-full mb-2')
+            
             dept_input = ui.input('Department', value=user_data.get('department', '')).classes('w-full mb-2')
             company_input = ui.input('Company', value=user_data.get('company', '')).classes('w-full mb-2')
             
