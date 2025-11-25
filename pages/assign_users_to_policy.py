@@ -53,6 +53,65 @@ class RLSAssignUserstoPolicy:
         self.headers()
         self.stepper_setup()
 
+    def load_existing_filters(self):
+        """Carrega filtros já existentes da tabela policies_filters"""
+        if not self.selected_policy_dataset or not self.selected_policy_table:
+            return
+        
+        query = f"""
+        SELECT DISTINCT
+            username as user_email,
+            filter_value
+        FROM `{config.FILTER_TABLE}`
+        WHERE rls_type = 'users'
+          AND project_id = '{self.project_id}'
+          AND dataset_id = '{self.selected_policy_dataset}'
+          AND table_id = '{self.selected_policy_table}'
+        ORDER BY username, filter_value
+        """
+        
+        try:
+            query_job = client.query(query)
+            results = [dict(row) for row in query_job]
+            
+            # Extrair usuários únicos
+            users = list(set([row['user_email'] for row in results]))
+            self.user_list = users
+            
+            # Extrair filtros únicos
+            filters = list(set([row['filter_value'] for row in results]))
+            self.filter_values = filters
+            
+            # Atualizar os grids se já existirem
+            if hasattr(self, 'grid_1') and self.grid_1:
+                self.grid_1.options['rowData'] = [{"User email": u} for u in self.user_list]
+                self.grid_1.update()
+            
+            if hasattr(self, 'grid_2') and self.grid_2:
+                self.grid_2.options['rowData'] = [{"Filter Values": f} for f in self.filter_values]
+                self.grid_2.update()
+                
+        except GoogleAPIError as e:
+            ui.notify(f"Error loading existing filters: {e}", type="negative")
+        except Exception as e:
+            ui.notify(f"Unexpected error loading filters: {e}", type="negative")
+
+    def delete_user_from_list(self, email):
+        """Remove usuário da lista (apenas da UI, não do banco)"""
+        if email in self.user_list:
+            self.user_list.remove(email)
+            self.grid_1.options['rowData'] = [{"User email": u} for u in self.user_list]
+            self.grid_1.update()
+            ui.notify(f"User {email} removed from list", type="info")
+
+    def delete_filter_from_list(self, filter_value):
+        """Remove filtro da lista (apenas da UI, não do banco)"""
+        if filter_value in self.filter_values:
+            self.filter_values.remove(filter_value)
+            self.grid_2.options['rowData'] = [{"Filter Values": f} for f in self.filter_values]
+            self.grid_2.update()
+            ui.notify(f"Filter '{filter_value}' removed from list", type="info")
+
     def headers(self):
         ui.page_title(self.page_title)
         ui.label('Assign Users to Row Level Policy').classes('text-primary text-center text-bold')
@@ -190,9 +249,10 @@ class RLSAssignUserstoPolicy:
         self.selected_policy_dataset = self.selected_policy[0]['Dataset ID']
         self.selected_policy_table = self.selected_policy[0]['Table Name']
         self.selected_policy_field = self.selected_policy[0]['Field ID']
-       
-
-        # self.fetch_distinct_values()
+        
+        # NOVO: Carregar dados existentes ANTES de avançar para o step2
+        self.load_existing_filters()
+        
         self.stepper.next()
 
     def step1(self):
@@ -261,7 +321,7 @@ class RLSAssignUserstoPolicy:
                             'columnDefs': [
                                 {'field': 'User email', 'filter': 'agTextColumnFilter'},
                             ],
-                            'rowData': [],
+                            'rowData': [{"User email": u} for u in self.user_list],  # MUDANÇA: Popular com dados existentes
                             'rowSelection': 'multiple',
                         }).classes('max-h-160 ag-theme-quartz')
 
@@ -269,11 +329,12 @@ class RLSAssignUserstoPolicy:
                         ui.label("Add Filter Values:")
                         self.filter_input = ui.input().classes('w-full')
                         ui.button("Add Filter", on_click=self.add_filter)
+                        
                         self.grid_2 = ui.aggrid({
                             'columnDefs': [
                                 {'field': 'Filter Values', 'checkboxSelection': True, 'filter': 'agTextColumnFilter'},
                             ],
-                            'rowData': [],
+                            'rowData': [{"Filter Values": f} for f in self.filter_values],  # MUDANÇA: Popular com dados existentes
                             'rowSelection': 'multiple',
                         }).classes('max-h-160 ag-theme-quartz').on('rowSelected', self.get_selected_filters)
 
