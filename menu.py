@@ -86,6 +86,13 @@ def menu() -> None:
                     ui.icon('search', color='green-500')
                 with ui.item_section():
                     ui.item_label('Schema Browser').classes(replace='text-primary text-bold').style('font-size:14px')
+            
+            # 🆕 NOVA OPÇÃO: Policy Tag Permissions
+            with ui.item(on_click=lambda: ui.navigate.to('/clsapplyiam/')):
+                with ui.item_section().props('avatar'):
+                    ui.icon('admin_panel_settings', color='green-500')
+                with ui.item_section():
+                    ui.item_label('Policy Tag Permissions').classes(replace='text-primary text-bold').style('font-size:14px')
         
         # CONTROL ACCESS - Mostrar apenas para OWNER e ADMIN
         if user.get('role') in ['OWNER', 'ADMIN']:
