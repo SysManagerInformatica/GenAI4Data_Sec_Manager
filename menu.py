@@ -1,26 +1,3 @@
-# Copyright 2024 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-# "IMPORTANT: This application is a prototype and should be used for experimental purposes only.
-# It is not intended for production use. 
-# This software is provided 'as is' without warranty of any kind, express or implied, including but not limited to the warranties 
-# of merchantability, fitness for a particular purpose and noninfringement. 
-# In no event shall Google or the developers be liable for any claim, damages or other liability, whether in an action of contract, 
-# tort or otherwise, arising from, out of or in connection with the software or the use or other dealings in the software. 
-# Google is not responsible for the functionality, reliability, or security of this prototype. 
-# Use of this tool is at your own discretion and risk."
-
 from nicegui import ui
 from services.auth_service import get_current_user
 
@@ -87,12 +64,26 @@ def menu() -> None:
                 with ui.item_section():
                     ui.item_label('Schema Browser').classes(replace='text-primary text-bold').style('font-size:14px')
             
-            # 🆕 NOVA OPÇÃO: Policy Tag Permissions
+            # Policy Tag Permissions
             with ui.item(on_click=lambda: ui.navigate.to('/clsapplyiam/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('admin_panel_settings', color='green-500')
                 with ui.item_section():
                     ui.item_label('Policy Tag Permissions').classes(replace='text-primary text-bold').style('font-size:14px')
+        
+        # 🆕 DATA MASKING
+        with ui.expansion('Data Masking', caption='Click to Expand', icon='masks').classes('w-full text-primary text-bold').style('font-size:16px'):
+            with ui.item(on_click=lambda: ui.navigate.to('/maskcreateview/')):
+                with ui.item_section().props('avatar'):
+                    ui.icon('visibility_off', color='purple-500')
+                with ui.item_section():
+                    ui.item_label('Create Masked View').classes(replace='text-primary text-bold').style('font-size:14px')
+            
+            with ui.item(on_click=lambda: ui.navigate.to('/maskstatus/')):
+                with ui.item_section().props('avatar'):
+                    ui.icon('list', color='purple-500')
+                with ui.item_section():
+                    ui.item_label('View Masking Status').classes(replace='text-primary text-bold').style('font-size:14px')
         
         # CONTROL ACCESS - Mostrar apenas para OWNER e ADMIN
         if user.get('role') in ['OWNER', 'ADMIN']:
