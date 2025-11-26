@@ -127,6 +127,124 @@ class RLSAssignUserstoPolicy:
         except Exception as e:
             ui.notify(f"Error deleting policy: {e}", type="negative")
 
+    def delete_rls_policy_from_bigquery(self, policy_name, dataset, table):
+        """Deleta a política RLS completa do BigQuery"""
+        try:
+            # 1. DROP ROW ACCESS POLICY no BigQuery
+            query_drop_policy = f"""
+            DROP ROW ACCESS POLICY `{policy_name}`
+            ON `{self.project_id}.{dataset}.{table}`;
+            """
+            client.query(query_drop_policy).result()
+            
+            # 2. Deletar da tabela de políticas
+            query_delete_from_policy_table = f"""
+            DELETE FROM `{config.POLICY_TABLE}`
+            WHERE policy_name = '{policy_name}'
+              AND project_id = '{self.project_id}'
+              AND dataset_id = '{dataset}'
+              AND table_name = '{table}';
+            """
+            client.query(query_delete_from_policy_table).result()
+            
+            # 3. Deletar todos os filtros associados
+            query_delete_filters = f"""
+            DELETE FROM `{config.FILTER_TABLE}`
+            WHERE policy_name = '{policy_name}'
+              AND project_id = '{self.project_id}'
+              AND dataset_id = '{dataset}'
+              AND table_id = '{table}';
+            """
+            client.query(query_delete_filters).result()
+            
+            # Log success
+            self.audit_service.log_action(
+                action='DELETE_RLS_POLICY',
+                resource_type='RLS_POLICY',
+                resource_name=policy_name,
+                status='SUCCESS',
+                details={
+                    'policy_name': policy_name,
+                    'dataset': dataset,
+                    'table': table,
+                    'deleted_from': ['BigQuery', 'policies_table', 'policies_filters']
+                }
+            )
+            
+            return True
+            
+        except Exception as e:
+            # Log failure
+            self.audit_service.log_action(
+                action='DELETE_RLS_POLICY',
+                resource_type='RLS_POLICY',
+                resource_name=policy_name,
+                status='FAILED',
+                error_message=str(e),
+                details={
+                    'policy_name': policy_name,
+                    'dataset': dataset,
+                    'table': table
+                }
+            )
+            ui.notify(f"Error deleting policy '{policy_name}': {str(e)}", type="negative")
+            return False
+
+    async def delete_selected_policies(self):
+        """Deleta políticas selecionadas no grid do Step 1"""
+        rows = await self.grid_step1.get_selected_rows()
+        if not rows:
+            ui.notify('No policies selected to delete.', type="warning")
+            return
+        
+        policy_names = [row['Policy Name'] for row in rows]
+        
+        with ui.dialog() as confirm_dialog, ui.card():
+            ui.label(f"Delete {len(policy_names)} policy(ies)?").classes('text-h6 mb-2')
+            with ui.column().classes('mb-4 max-h-64 overflow-auto'):
+                for name in policy_names[:10]:
+                    ui.label(f"• {name}").classes('text-sm')
+                if len(policy_names) > 10:
+                    ui.label(f"... and {len(policy_names) - 10} more").classes('text-sm italic text-grey-7')
+            ui.label('⚠️ This will delete the RLS policy from BigQuery and all associated filters!').classes('text-negative font-bold mb-2')
+            ui.label('This action cannot be undone.').classes('text-sm text-grey-7 mb-4')
+            with ui.row().classes('w-full justify-end gap-2'):
+                ui.button('Cancel', on_click=confirm_dialog.close).props('flat')
+                ui.button(
+                    'DELETE', 
+                    on_click=lambda: self.execute_policy_deletion(rows, confirm_dialog)
+                ).props('color=negative')
+        
+        confirm_dialog.open()
+
+    def execute_policy_deletion(self, rows, dialog):
+        """Executa a deleção das políticas"""
+        dialog.close()
+        
+        success_count = 0
+        fail_count = 0
+        
+        for row in rows:
+            policy_name = row['Policy Name']
+            dataset = row['Dataset ID']
+            table = row['Table Name']
+            
+            if self.delete_rls_policy_from_bigquery(policy_name, dataset, table):
+                success_count += 1
+            else:
+                fail_count += 1
+        
+        # Refresh grid
+        self.policy_list = self.get_policies()
+        self.grid_step1.options['rowData'] = self.policy_list
+        self.grid_step1.update()
+        
+        # Summary message
+        if fail_count == 0:
+            ui.notify(f"✅ Successfully deleted {success_count} policy(ies)!", type="positive")
+        else:
+            ui.notify(f"⚠️ Deleted {success_count}, {fail_count} failed.", type="warning")
+
     def refresh_existing_policies_grid(self):
         """Atualiza o grid de políticas existentes"""
         if self.existing_policies_grid:
@@ -333,8 +451,13 @@ class RLSAssignUserstoPolicy:
             self.step1_next_button.set_visibility(False)
             return
 
-        self.selected_policy = [dict(row) for row in rows]
-        self.step1_next_button.set_visibility(True)
+        # Para avançar, precisa selecionar apenas 1 política
+        if len(rows) == 1:
+            self.selected_policy = [dict(row) for row in rows]
+            self.step1_next_button.set_visibility(True)
+        else:
+            # Múltiplas seleções são apenas para deletar
+            self.step1_next_button.set_visibility(False)
 
     def update_policy_values(self):
         if not self.selected_policy:
@@ -350,24 +473,38 @@ class RLSAssignUserstoPolicy:
 
     def step1(self):
         with ui.step(self.step1_title):
+            ui.label("Select ONE policy to manage, or select MULTIPLE to delete").classes('text-caption text-grey-7 mb-2')
+            
             self.policy_list = self.get_policies()
 
             self.grid_step1 = ui.aggrid({
                 'columnDefs': [
-                    {'field': 'Policy Name', 'checkboxSelection': True, 'filter': 'agTextColumnFilter'},
+                    {'field': 'Policy Name', 'checkboxSelection': True, 'filter': 'agTextColumnFilter', 'minWidth': 350},
                     {'field': 'Project ID', 'filter': 'agTextColumnFilter'},
                     {'field': 'Dataset ID', 'filter': 'agTextColumnFilter'},
                     {'field': 'Table Name', 'filter': 'agTextColumnFilter'},
                     {'field': 'Field ID', 'filter': 'agTextColumnFilter'}
                 ],
                 'rowData': self.policy_list,
-                'rowSelection': 'single',
+                'rowSelection': 'multiple',  # Permitir seleção múltipla
             }).classes('max-h-160 ag-theme-quartz').on('rowSelected', self.get_selected_row)
 
             with ui.stepper_navigation():
-                self.step1_next_button = ui.button("NEXT", icon="arrow_forward_ios",
-                                                    on_click=self.update_policy_values)
-                self.step1_next_button.set_visibility(False)
+                with ui.row().classes('w-full justify-between'):
+                    # Lado esquerdo: Botão DELETE
+                    ui.button(
+                        "DELETE SELECTED", 
+                        icon="delete", 
+                        on_click=self.delete_selected_policies
+                    ).props('color=negative flat')
+                    
+                    # Lado direito: Botão NEXT
+                    self.step1_next_button = ui.button(
+                        "NEXT", 
+                        icon="arrow_forward_ios",
+                        on_click=self.update_policy_values
+                    )
+                    self.step1_next_button.set_visibility(False)
 
     def add_user(self):
         email = self.user_input.value.strip()
