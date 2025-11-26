@@ -216,32 +216,32 @@ class MaskCreateView:
             
             if mask_type == 'none':
                 # Sem mascaramento
-                select_columns.append(f"  {col_name}")
+                select_columns.append(f"{col_name}")
             elif mask_type == 'hash':
                 # Hash SHA256
-                select_columns.append(f"  TO_BASE64(SHA256(CAST({col_name} AS STRING))) AS {col_name}")
+                select_columns.append(f"TO_BASE64(SHA256(CAST({col_name} AS STRING))) AS {col_name}")
             elif mask_type == 'null':
                 # NULL
-                select_columns.append(f"  NULL AS {col_name}")
+                select_columns.append(f"NULL AS {col_name}")
             elif mask_type == 'partial':
                 # Mascaramento parcial
-                select_columns.append(f"  CONCAT(SUBSTR(CAST({col_name} AS STRING), 1, 3), '.XXX.XXX-', SUBSTR(CAST({col_name} AS STRING), -2)) AS {col_name}")
+                select_columns.append(f"CONCAT(SUBSTR(CAST({col_name} AS STRING), 1, 3), '.XXX.XXX-', SUBSTR(CAST({col_name} AS STRING), -2)) AS {col_name}")
             elif mask_type == 'round':
                 # Arredondamento (para números)
                 if col_type in ['INTEGER', 'FLOAT', 'NUMERIC', 'BIGNUMERIC', 'INT64', 'FLOAT64']:
-                    select_columns.append(f"  ROUND({col_name} / 10000) * 10000 AS {col_name}")
+                    select_columns.append(f"ROUND({col_name} / 10000) * 10000 AS {col_name}")
                 else:
-                    select_columns.append(f"  {col_name}  -- Cannot round non-numeric type")
+                    select_columns.append(f"{col_name}  -- Cannot round non-numeric type")
             elif mask_type == 'default':
                 # Valor padrão
-                select_columns.append(f"  '***CONFIDENTIAL***' AS {col_name}")
+                select_columns.append(f"'***CONFIDENTIAL***' AS {col_name}")
         
-        # Montar SQL completo
+        # Montar SQL completo - ✅ CORREÇÃO APLICADA AQUI
         sql = f"""-- Masked view for {self.selected_table}
 -- Created: {self.get_current_timestamp()}
 CREATE OR REPLACE VIEW `{self.project_id}.{self.selected_dataset}.{view_name}` AS
 SELECT
-{','+chr(10).join(select_columns)}
+  {(','+chr(10)+'  ').join(select_columns)}
 FROM `{self.project_id}.{self.selected_dataset}.{self.selected_table}`;"""
         
         # Mostrar SQL no dialog
