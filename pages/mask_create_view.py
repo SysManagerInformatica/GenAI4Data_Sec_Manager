@@ -20,6 +20,7 @@ class MaskCreateView:
         self.selected_table = None
         self.table_columns = []
         self.masking_config = {}  # {column_name: mask_type}
+        self.column_selects = {}  # {column_name: ui.select object}
         self.authorized_users = []
         self.view_name = None
         
@@ -85,44 +86,78 @@ class MaskCreateView:
         
         # Limpar configuração anterior
         self.masking_config = {}
+        self.column_selects = {}
         
-        # Atualizar grid de colunas
-        self.refresh_columns_grid()
+        # Renderizar colunas
+        self.render_columns_config()
     
-    def refresh_columns_grid(self):
-        """Atualiza grid de colunas"""
-        if self.columns_grid and self.table_columns:
-            # Adicionar informação de masking type
-            grid_data = []
-            for col in self.table_columns:
-                mask_type = self.masking_config.get(col['name'], 'none')
-                grid_data.append({
-                    'column_name': col['name'],
-                    'data_type': col['type'],
-                    'mask_type': mask_type,
-                    'preview': self.get_mask_preview(col['name'], col['type'], mask_type)
-                })
+    def render_columns_config(self):
+        """Renderiza interface de configuração de colunas"""
+        if not self.columns_container or not self.table_columns:
+            return
+        
+        self.columns_container.clear()
+        
+        with self.columns_container:
+            ui.label(f"Configure masking for {len(self.table_columns)} columns:").classes('text-sm font-bold mb-2')
             
-            self.columns_grid.options['rowData'] = grid_data
-            self.columns_grid.update()
+            # Criar um card scrollable com todas as colunas
+            with ui.scroll_area().classes('w-full h-96 border rounded p-2'):
+                for col in self.table_columns:
+                    with ui.card().classes('w-full p-3 mb-2'):
+                        with ui.row().classes('w-full items-center gap-4'):
+                            # Nome e tipo da coluna
+                            with ui.column().classes('flex-1'):
+                                ui.label(col['name']).classes('font-bold text-base')
+                                ui.label(f"Type: {col['type']}").classes('text-xs text-grey-6')
+                            
+                            # Seletor de masking type
+                            mask_select = ui.select(
+                                options={
+                                    'none': 'No masking (real data)',
+                                    'hash': 'Hash SHA256',
+                                    'null': 'NULL',
+                                    'partial': 'Partial (first/last chars)',
+                                    'round': 'Round (numbers only)',
+                                    'default': 'Default value (***)'
+                                },
+                                value='none',
+                                label='Masking Type',
+                                on_change=lambda e, c=col['name']: self.update_masking_config(c, e.value)
+                            ).classes('w-64')
+                            
+                            # Guardar referência
+                            self.column_selects[col['name']] = mask_select
+                            
+                            # Preview
+                            preview_label = ui.label(self.get_mask_preview(col['name'], col['type'], 'none'))
+                            preview_label.classes('text-sm text-grey-7 w-48')
+                            
+                            # Atualizar preview quando mudar
+                            mask_select.on('update:model-value', lambda e, c=col['name'], t=col['type'], p=preview_label: 
+                                p.set_text(self.get_mask_preview(c, t, e.args)))
+    
+    def update_masking_config(self, column_name, mask_type):
+        """Atualiza configuração de mascaramento"""
+        self.masking_config[column_name] = mask_type
+        ui.notify(f"Masking '{mask_type}' set for column '{column_name}'", type="info")
     
     def get_mask_preview(self, column_name, data_type, mask_type):
         """Retorna preview do mascaramento"""
-        previews = {
-            'none': 'Real data',
-            'hash': '8d969eef6ecad3c2...',
-            'null': 'NULL',
-            'partial': '123.XXX.XXX-10',
-            'round': '80000.00 (rounded)',
-            'default': '***CONFIDENTIAL***'
-        }
-        return previews.get(mask_type, 'Real data')
-    
-    def apply_mask_to_column(self, column_name, mask_type):
-        """Aplica tipo de mask em uma coluna"""
-        self.masking_config[column_name] = mask_type
-        self.refresh_columns_grid()
-        ui.notify(f"Masking '{mask_type}' applied to column '{column_name}'", type="positive")
+        if mask_type == 'none':
+            return '→ Real data'
+        elif mask_type == 'hash':
+            return '→ 8d969eef6ecad3c2...'
+        elif mask_type == 'null':
+            return '→ NULL'
+        elif mask_type == 'partial':
+            return '→ 123.XXX.XXX-10'
+        elif mask_type == 'round':
+            return '→ 80000.00 (rounded)'
+        elif mask_type == 'default':
+            return '→ ***CONFIDENTIAL***'
+        else:
+            return '→ Real data'
     
     def add_authorized_user(self):
         """Adiciona usuário autorizado"""
@@ -176,6 +211,7 @@ class MaskCreateView:
         select_columns = []
         for col in self.table_columns:
             col_name = col['name']
+            col_type = col['type']
             mask_type = self.masking_config.get(col_name, 'none')
             
             if mask_type == 'none':
@@ -188,25 +224,43 @@ class MaskCreateView:
                 # NULL
                 select_columns.append(f"  NULL AS {col_name}")
             elif mask_type == 'partial':
-                # Mascaramento parcial (primeiros e últimos caracteres)
-                select_columns.append(f"  CONCAT(SUBSTR(CAST({col_name} AS STRING), 1, 3), '***', SUBSTR(CAST({col_name} AS STRING), -2)) AS {col_name}")
+                # Mascaramento parcial
+                select_columns.append(f"  CONCAT(SUBSTR(CAST({col_name} AS STRING), 1, 3), '.XXX.XXX-', SUBSTR(CAST({col_name} AS STRING), -2)) AS {col_name}")
             elif mask_type == 'round':
                 # Arredondamento (para números)
-                select_columns.append(f"  ROUND({col_name} / 10000) * 10000 AS {col_name}")
+                if col_type in ['INTEGER', 'FLOAT', 'NUMERIC', 'BIGNUMERIC', 'INT64', 'FLOAT64']:
+                    select_columns.append(f"  ROUND({col_name} / 10000) * 10000 AS {col_name}")
+                else:
+                    select_columns.append(f"  {col_name}  -- Cannot round non-numeric type")
             elif mask_type == 'default':
                 # Valor padrão
                 select_columns.append(f"  '***CONFIDENTIAL***' AS {col_name}")
         
         # Montar SQL completo
         sql = f"""-- Masked view for {self.selected_table}
+-- Created: {self.get_current_timestamp()}
 CREATE OR REPLACE VIEW `{self.project_id}.{self.selected_dataset}.{view_name}` AS
 SELECT
-{chr(10).join(select_columns)}
+{','+chr(10).join(select_columns)}
 FROM `{self.project_id}.{self.selected_dataset}.{self.selected_table}`;"""
         
         # Mostrar SQL no dialog
         with ui.dialog() as sql_dialog, ui.card().classes('w-full max-w-4xl'):
             ui.label('Generated SQL').classes('text-h6 font-bold mb-4')
+            
+            # Resumo de mascaramento
+            masked_cols = [k for k, v in self.masking_config.items() if v != 'none']
+            if masked_cols:
+                with ui.card().classes('w-full bg-purple-50 p-3 mb-4'):
+                    ui.label(f'✅ {len(masked_cols)} column(s) will be masked:').classes('font-bold text-sm mb-1')
+                    for col in masked_cols[:5]:
+                        ui.label(f'  • {col} → {self.masking_config[col]}').classes('text-xs')
+                    if len(masked_cols) > 5:
+                        ui.label(f'  ... and {len(masked_cols) - 5} more').classes('text-xs')
+            else:
+                with ui.card().classes('w-full bg-orange-50 p-3 mb-4'):
+                    ui.label('⚠️ No columns are being masked! All columns will show real data.').classes('font-bold text-sm text-orange-600')
+            
             ui.code(sql, language='sql').classes('w-full')
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('Close', on_click=sql_dialog.close).props('flat')
@@ -217,12 +271,37 @@ FROM `{self.project_id}.{self.selected_dataset}.{self.selected_table}`;"""
         # Guardar SQL para criação
         self.generated_sql = sql
     
+    def get_current_timestamp(self):
+        """Retorna timestamp atual"""
+        from datetime import datetime
+        return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
     def create_view(self):
         """Cria a view no BigQuery"""
         if not hasattr(self, 'generated_sql'):
             ui.notify("Please generate SQL first", type="warning")
             return
         
+        # Verificar se pelo menos uma coluna está sendo mascarada
+        masked_cols = [k for k, v in self.masking_config.items() if v != 'none']
+        if not masked_cols:
+            with ui.dialog() as warning_dialog, ui.card():
+                ui.label('⚠️ Warning').classes('text-h6 font-bold text-orange-600 mb-4')
+                ui.label('You are creating a view without any masked columns!').classes('mb-2')
+                ui.label('All data will be shown as real data.').classes('mb-4')
+                ui.label('Do you want to continue?').classes('font-bold')
+                
+                with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                    ui.button('Cancel', on_click=warning_dialog.close).props('flat')
+                    ui.button('Continue Anyway', on_click=lambda: [warning_dialog.close(), self.execute_create_view()]).props('color=orange')
+            
+            warning_dialog.open()
+            return
+        
+        self.execute_create_view()
+    
+    def execute_create_view(self):
+        """Executa criação da view"""
         try:
             # Executar SQL
             query_job = client.query(self.generated_sql)
@@ -239,16 +318,14 @@ FROM `{self.project_id}.{self.selected_dataset}.{self.selected_table}`;"""
                 details={
                     'source_table': f"{self.selected_dataset}.{self.selected_table}",
                     'view_name': view_name,
-                    'masked_columns': list(self.masking_config.keys()),
+                    'masked_columns': {k: v for k, v in self.masking_config.items() if v != 'none'},
+                    'total_columns': len(self.table_columns),
+                    'masked_count': len([v for v in self.masking_config.values() if v != 'none']),
                     'authorized_users': self.authorized_users
                 }
             )
             
             ui.notify(f"✅ Masked view '{view_name}' created successfully!", type="positive")
-            
-            # Aplicar RLS se houver usuários autorizados
-            if self.authorized_users:
-                self.apply_rls_to_view(view_name)
             
         except Exception as e:
             # Log failure
@@ -260,11 +337,6 @@ FROM `{self.project_id}.{self.selected_dataset}.{self.selected_table}`;"""
                 error_message=str(e)
             )
             ui.notify(f"Error creating view: {e}", type="negative")
-    
-    def apply_rls_to_view(self, view_name):
-        """Aplica RLS na view para usuários autorizados"""
-        # TODO: Implementar RLS na view se necessário
-        pass
     
     def render_ui(self):
         with theme.frame('Create Masked View'):
@@ -292,28 +364,10 @@ FROM `{self.project_id}.{self.selected_dataset}.{self.selected_table}`;"""
                 
                 # STEP 2: Configure Masking
                 with ui.step('Configure Masking'):
-                    ui.label('Select columns and masking type').classes('text-caption mb-4')
+                    ui.label('Select masking type for each column').classes('text-caption mb-4')
                     
-                    # Grid de colunas
-                    self.columns_grid = ui.aggrid({
-                        'columnDefs': [
-                            {'field': 'column_name', 'headerName': 'Column', 'filter': True, 'minWidth': 200},
-                            {'field': 'data_type', 'headerName': 'Type', 'filter': True, 'minWidth': 100},
-                            {
-                                'field': 'mask_type',
-                                'headerName': 'Masking Type',
-                                'cellEditor': 'agSelectCellEditor',
-                                'cellEditorParams': {
-                                    'values': ['none', 'hash', 'null', 'partial', 'round', 'default']
-                                },
-                                'editable': True,
-                                'minWidth': 150
-                            },
-                            {'field': 'preview', 'headerName': 'Preview', 'minWidth': 200},
-                        ],
-                        'rowData': [],
-                        'defaultColDef': {'sortable': True, 'resizable': True},
-                    }).classes('w-full h-96 ag-theme-quartz')
+                    # Container para colunas
+                    self.columns_container = ui.column().classes('w-full')
                     
                     # Info sobre tipos de masking
                     with ui.card().classes('w-full bg-blue-50 p-3 mt-4'):
@@ -343,27 +397,7 @@ FROM `{self.project_id}.{self.selected_dataset}.{self.selected_table}`;"""
                         ui.button('BACK', icon='arrow_back', on_click=stepper.previous).props('flat')
                         ui.button('NEXT', icon='arrow_forward', on_click=stepper.next).props('color=primary')
                 
-                # STEP 4: Access Control (Optional)
-                with ui.step('Access Control (Optional)'):
-                    ui.label('Add users who should see real data (all others see masked)').classes('text-caption mb-4')
-                    
-                    with ui.row().classes('w-full gap-2 items-end'):
-                        self.user_email_input = ui.input(
-                            label='User Email',
-                            placeholder='user@example.com'
-                        ).classes('flex-1')
-                        ui.button('ADD USER', icon='add', on_click=self.add_authorized_user).props('color=primary')
-                    
-                    ui.label('Authorized Users:').classes('font-bold mt-4 mb-2')
-                    with ui.card().classes('w-full min-h-32'):
-                        self.authorized_users_container = ui.column().classes('w-full gap-1')
-                        self.refresh_authorized_users_list()
-                    
-                    with ui.stepper_navigation():
-                        ui.button('BACK', icon='arrow_back', on_click=stepper.previous).props('flat')
-                        ui.button('NEXT', icon='arrow_forward', on_click=stepper.next).props('color=primary')
-                
-                # STEP 5: Review and Create
+                # STEP 4: Review and Create
                 with ui.step('Review and Create'):
                     ui.label('Review configuration and create masked view').classes('text-caption mb-4')
                     
