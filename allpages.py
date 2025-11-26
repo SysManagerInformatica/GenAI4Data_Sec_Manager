@@ -1,25 +1,3 @@
-# Copyright 2024 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# "IMPORTANT: This application is a prototype and should be used for experimental purposes only.
-# It is not intended for production use. 
-# This software is provided 'as is' without warranty of any kind, express or implied, including but not limited to the warranties 
-# of merchantability, fitness for a particular purpose and noninfringement. 
-# In no event shall Google or the developers be liable for any claim, damages or other liability, whether in an action of contract, 
-# tort or otherwise, arising from, out of or in connection with the software or the use or other dealings in the software. 
-# Google is not responsible for the functionality, reliability, or security of this prototype. 
-# Use of this tool is at your own discretion and risk."
-
 from nicegui import ui
 
 # Tentar importar as páginas originais, criar placeholders se não existirem
@@ -103,7 +81,7 @@ except:
                 ui.label('BigQuery Schema Browser').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
-# 🆕 NOVO: Policy Tag Permissions
+# Policy Tag Permissions
 try:
     from pages.cls_apply_iam import CLSPermissionsManager
 except:
@@ -112,6 +90,28 @@ except:
             from theme import frame
             with frame('Policy Tag Permissions'):
                 ui.label('Policy Tag IAM Permissions Manager').classes('text-2xl font-bold mb-4')
+                ui.label('This feature is under development').classes('text-orange-600')
+
+# 🆕 DATA MASKING - Create Masked View
+try:
+    from pages.mask_create_view import MaskCreateView
+except:
+    class MaskCreateView:
+        def run(self):
+            from theme import frame
+            with frame('Create Masked View'):
+                ui.label('Create Masked View').classes('text-2xl font-bold mb-4')
+                ui.label('This feature is under development').classes('text-orange-600')
+
+# 🆕 DATA MASKING - View Masking Status
+try:
+    from pages.mask_status import MaskStatus
+except:
+    class MaskStatus:
+        def run(self):
+            from theme import frame
+            with frame('View Masking Status'):
+                ui.label('View Masking Status').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
 try:
@@ -124,7 +124,7 @@ except:
                 ui.label('System Audit Logs').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
-# Importar Control Access (já criamos)
+# Importar Control Access
 try:
     from pages.control_access import ControlAccess
 except:
@@ -189,11 +189,22 @@ def create() -> None:
         cls_instance.run()
     ui.page('/clsschemabrowser/')(cls_schema_browser_page)
 
-    # 🆕 NOVO: Policy Tag Permissions Page
+    # Policy Tag Permissions Page
     def cls_apply_iam_page():
         cls_instance = CLSPermissionsManager()
         cls_instance.run()
     ui.page('/clsapplyiam/')(cls_apply_iam_page)
+
+    # 🆕 DATA MASKING Pages
+    def mask_create_view_page():
+        mask_instance = MaskCreateView()
+        mask_instance.run()
+    ui.page('/maskcreateview/')(mask_create_view_page)
+
+    def mask_status_page():
+        mask_instance = MaskStatus()
+        mask_instance.run()
+    ui.page('/maskstatus/')(mask_status_page)
 
     # Audit Logs Page
     def audit_logs_page():
@@ -201,7 +212,7 @@ def create() -> None:
         audit_instance.run()
     ui.page('/auditlogs/')(audit_logs_page)
 
-    # Control Access Page (NOVO)
+    # Control Access Page
     def control_access_page():
         control_instance = ControlAccess()
         control_instance.run()
