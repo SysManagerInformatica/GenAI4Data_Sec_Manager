@@ -110,8 +110,7 @@ class CLSPermissionsManager:
     def format_role_name(self, role):
         """Formata nome da role para exibição"""
         role_map = {
-            'roles/datacatalog.categoryFineGrainedReader': 'Fine-Grained Reader (Full Access)',
-            'roles/datacatalog.categoryMaskedReader': 'Masked Reader (Returns NULL)',  # ← ATUALIZADO
+            'roles/datacatalog.categoryFineGrainedReader': 'Fine-Grained Reader',
             'roles/datacatalog.categoryAdmin': 'Category Admin',
             'roles/owner': 'Owner',
             'roles/viewer': 'Viewer'
@@ -122,6 +121,10 @@ class CLSPermissionsManager:
         """Adiciona permissão"""
         if not self.selected_policy_tag:
             ui.notify("Please select a policy tag first", type="warning")
+            return
+        
+        if not user_email or '@' not in user_email:
+            ui.notify("Please enter a valid email address", type="warning")
             return
         
         try:
@@ -139,6 +142,9 @@ class CLSPermissionsManager:
                 if binding.role == role:
                     if member not in binding.members:
                         binding.members.append(member)
+                    else:
+                        ui.notify(f"User {user_email} already has this role", type="info")
+                        return
                     role_exists = True
                     break
             
@@ -169,10 +175,23 @@ class CLSPermissionsManager:
                 }
             )
             
-            ui.notify(f"Permission granted to {user_email}", type="positive")
+            ui.notify(f"✅ Permission granted to {user_email}", type="positive")
+            self.email_input.value = ''  # Limpar campo
             self.refresh_permissions_grid()
             
         except Exception as e:
+            # Audit log failure
+            self.audit_service.log_action(
+                action='GRANT_POLICY_TAG_PERMISSION',
+                resource_type='POLICY_TAG_IAM',
+                resource_name=self.selected_policy_tag,
+                status='FAILED',
+                error_message=str(e),
+                details={
+                    'user_email': user_email,
+                    'role': role
+                }
+            )
             ui.notify(f"Error granting permission: {e}", type="negative")
     
     def revoke_permission(self, user_email, role):
@@ -212,10 +231,22 @@ class CLSPermissionsManager:
                 }
             )
             
-            ui.notify(f"Permission revoked from {user_email}", type="positive")
+            ui.notify(f"✅ Permission revoked from {user_email}", type="positive")
             self.refresh_permissions_grid()
             
         except Exception as e:
+            # Audit log failure
+            self.audit_service.log_action(
+                action='REVOKE_POLICY_TAG_PERMISSION',
+                resource_type='POLICY_TAG_IAM',
+                resource_name=self.selected_policy_tag,
+                status='FAILED',
+                error_message=str(e),
+                details={
+                    'user_email': user_email,
+                    'role': role
+                }
+            )
             ui.notify(f"Error revoking permission: {e}", type="negative")
     
     def refresh_permissions_grid(self):
@@ -289,7 +320,6 @@ class CLSPermissionsManager:
                             self.role_select = ui.select(
                                 options=[
                                     'roles/datacatalog.categoryFineGrainedReader',
-                                    'roles/datacatalog.categoryMaskedReader',  # ← ADICIONADO
                                     'roles/datacatalog.categoryAdmin'
                                 ],
                                 label="Role",
@@ -305,12 +335,11 @@ class CLSPermissionsManager:
                                 )
                             ).props('color=primary')
                         
-                        # ← ADICIONADO: Info box sobre roles
+                        # Info box sobre roles
                         with ui.card().classes('w-full bg-blue-50 p-3'):
                             ui.label('ℹ️ Role Information:').classes('text-sm font-bold mb-2')
                             with ui.column().classes('gap-1'):
-                                ui.label('• Fine-Grained Reader: User sees real data (e.g., 123.456.789-10)').classes('text-xs')
-                                ui.label('• Masked Reader: User sees NULL instead of sensitive data').classes('text-xs text-orange-600')
+                                ui.label('• Fine-Grained Reader: User can see real data in protected columns').classes('text-xs')
                                 ui.label('• Category Admin: User can manage policy tags and taxonomies').classes('text-xs')
     
     def on_taxonomy_change(self, taxonomy_name):
