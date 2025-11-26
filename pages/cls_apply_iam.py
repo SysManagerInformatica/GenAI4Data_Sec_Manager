@@ -1,3 +1,26 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# "IMPORTANT: This application is a prototype and should be used for experimental purposes only.
+# It is not intended for production use. 
+# This software is provided 'as is' without warranty of any kind, express or implied, including but not limited to the warranties 
+# of merchantability, fitness for a particular purpose and noninfringement. 
+# In no event shall Google or the developers be liable for any claim, damages or other liability, whether in an action of contract, 
+# tort or otherwise, arising from, out of or in connection with the software or the use or other dealings in the software. 
+# Google is not responsible for the functionality, reliability, or security of this prototype. 
+# Use of this tool is at your own discretion and risk."
+
 import theme
 from config import Config
 from nicegui import ui
@@ -87,7 +110,8 @@ class CLSPermissionsManager:
     def format_role_name(self, role):
         """Formata nome da role para exibição"""
         role_map = {
-            'roles/datacatalog.categoryFineGrainedReader': 'Fine-Grained Reader',
+            'roles/datacatalog.categoryFineGrainedReader': 'Fine-Grained Reader (Full Access)',
+            'roles/datacatalog.categoryMaskedReader': 'Masked Reader (Returns NULL)',  # ← ATUALIZADO
             'roles/datacatalog.categoryAdmin': 'Category Admin',
             'roles/owner': 'Owner',
             'roles/viewer': 'Viewer'
@@ -239,8 +263,8 @@ class CLSPermissionsManager:
                 
                 self.permissions_grid = ui.aggrid({
                     'columnDefs': [
-                        {'field': 'email', 'headerName': 'User Email', 'checkboxSelection': True, 'filter': 'agTextColumnFilter'},
-                        {'field': 'role_display', 'headerName': 'Role', 'filter': 'agTextColumnFilter'},
+                        {'field': 'email', 'headerName': 'User Email', 'checkboxSelection': True, 'filter': 'agTextColumnFilter', 'minWidth': 300},
+                        {'field': 'role_display', 'headerName': 'Role', 'filter': 'agTextColumnFilter', 'minWidth': 250},
                     ],
                     'rowData': [],
                     'rowSelection': 'multiple',
@@ -255,29 +279,39 @@ class CLSPermissionsManager:
                 ui.label("Grant New Permission").classes('text-h6 font-bold mt-4 mb-2')
                 
                 with ui.card().classes('w-full p-4'):
-                    with ui.row().classes('w-full gap-4 items-end'):
-                        self.email_input = ui.input(
-                            label="User Email",
-                            placeholder="user@example.com"
-                        ).classes('flex-1')
+                    with ui.column().classes('w-full gap-4'):
+                        with ui.row().classes('w-full gap-4 items-end'):
+                            self.email_input = ui.input(
+                                label="User Email",
+                                placeholder="user@example.com"
+                            ).classes('flex-1')
+                            
+                            self.role_select = ui.select(
+                                options=[
+                                    'roles/datacatalog.categoryFineGrainedReader',
+                                    'roles/datacatalog.categoryMaskedReader',  # ← ADICIONADO
+                                    'roles/datacatalog.categoryAdmin'
+                                ],
+                                label="Role",
+                                value='roles/datacatalog.categoryFineGrainedReader'
+                            ).classes('flex-1')
+                            
+                            ui.button(
+                                "GRANT ACCESS",
+                                icon="lock_open",
+                                on_click=lambda: self.grant_permission(
+                                    self.email_input.value,
+                                    self.role_select.value
+                                )
+                            ).props('color=primary')
                         
-                        self.role_select = ui.select(
-                            options=[
-                                'roles/datacatalog.categoryFineGrainedReader',
-                                'roles/datacatalog.categoryAdmin'
-                            ],
-                            label="Role",
-                            value='roles/datacatalog.categoryFineGrainedReader'
-                        ).classes('flex-1')
-                        
-                        ui.button(
-                            "GRANT ACCESS",
-                            icon="lock_open",
-                            on_click=lambda: self.grant_permission(
-                                self.email_input.value,
-                                self.role_select.value
-                            )
-                        ).props('color=primary')
+                        # ← ADICIONADO: Info box sobre roles
+                        with ui.card().classes('w-full bg-blue-50 p-3'):
+                            ui.label('ℹ️ Role Information:').classes('text-sm font-bold mb-2')
+                            with ui.column().classes('gap-1'):
+                                ui.label('• Fine-Grained Reader: User sees real data (e.g., 123.456.789-10)').classes('text-xs')
+                                ui.label('• Masked Reader: User sees NULL instead of sensitive data').classes('text-xs text-orange-600')
+                                ui.label('• Category Admin: User can manage policy tags and taxonomies').classes('text-xs')
     
     def on_taxonomy_change(self, taxonomy_name):
         """Quando seleciona uma taxonomia"""
