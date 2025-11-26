@@ -103,6 +103,17 @@ except:
                 ui.label('BigQuery Schema Browser').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
+# 🆕 NOVO: Policy Tag Permissions
+try:
+    from pages.cls_apply_iam import CLSPermissionsManager
+except:
+    class CLSPermissionsManager:
+        def run(self):
+            from theme import frame
+            with frame('Policy Tag Permissions'):
+                ui.label('Policy Tag IAM Permissions Manager').classes('text-2xl font-bold mb-4')
+                ui.label('This feature is under development').classes('text-orange-600')
+
 try:
     from pages.audit_logs import AuditLogs
 except:
@@ -177,6 +188,12 @@ def create() -> None:
         cls_instance = CLSSchemaBrowser()
         cls_instance.run()
     ui.page('/clsschemabrowser/')(cls_schema_browser_page)
+
+    # 🆕 NOVO: Policy Tag Permissions Page
+    def cls_apply_iam_page():
+        cls_instance = CLSPermissionsManager()
+        cls_instance.run()
+    ui.page('/clsapplyiam/')(cls_apply_iam_page)
 
     # Audit Logs Page
     def audit_logs_page():
