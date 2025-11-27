@@ -20,10 +20,11 @@ class DynamicColumnManage:
         self.restricted_views = []
         self.views_grid = None
         
-        # Para gerenciamento de colunas
+        # Para gerenciamento de colunas e usuários
         self.current_view = None
         self.source_table_columns = []
         self.hidden_columns = []
+        self.documented_users = []
         
         self.headers()
         self.render_ui()
@@ -88,9 +89,6 @@ class DynamicColumnManage:
             # Remover quebras de linha e espaços extras
             view_query = ' '.join(view_query.split())
             
-            # Debug
-            print(f"[DEBUG] View query: {view_query[:200]}...")
-            
             # Tentar vários padrões de regex
             patterns = [
                 r'FROM\s+`[^`]*\.([^`\.]+)`',  # FROM `project.dataset.table`
@@ -102,10 +100,8 @@ class DynamicColumnManage:
                 match = re.search(pattern, view_query, re.IGNORECASE)
                 if match:
                     table_name = match.group(1)
-                    print(f"[DEBUG] Extracted source table: {table_name}")
                     return table_name
             
-            print("[DEBUG] Could not extract source table")
             return 'Unknown'
         except Exception as e:
             print(f"[ERROR] Error extracting source table: {e}")
@@ -152,7 +148,7 @@ class DynamicColumnManage:
             self.total_views_label.set_text(str(total))
     
     async def view_details(self):
-        """Mostra detalhes da view"""
+        """Mostra detalhes da view com botão EDIT VIEW"""
         rows = await self.views_grid.get_selected_rows()
         if not rows:
             ui.notify('No view selected', type="warning")
@@ -191,25 +187,20 @@ class DynamicColumnManage:
             
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('Close', on_click=details_dialog.close).props('flat')
-                ui.button('MANAGE COLUMNS', on_click=lambda: [details_dialog.close(), self.manage_columns(view_info)]).props('color=primary')
+                ui.button('EDIT VIEW', icon='edit', on_click=lambda: [details_dialog.close(), self.edit_view(view_info)]).props('color=primary')
         
         details_dialog.open()
     
-    def manage_columns(self, view_info):
-        """Interface para gerenciar colunas ocultas"""
+    def edit_view(self, view_info):
+        """Editor completo da view com abas para colunas e usuários"""
         self.current_view = view_info
         
-        # Carregar todas as colunas da tabela origem
+        # Carregar colunas da tabela origem
         try:
             source_table = view_info['source_table']
             
-            # Debug
-            print(f"[DEBUG] Loading source table: {source_table}")
-            print(f"[DEBUG] Dataset: {self.selected_dataset}")
-            
             if source_table == 'Unknown' or not source_table:
-                ui.notify("⚠️ Cannot determine source table from view definition", type="warning")
-                # Tentar perguntar ao usuário
+                ui.notify("⚠️ Cannot determine source table", type="warning")
                 self.ask_source_table(view_info)
                 return
             
@@ -226,78 +217,221 @@ class DynamicColumnManage:
             
             self.hidden_columns = list(view_info['hidden_columns'])
             
-            print(f"[DEBUG] Loaded {len(self.source_table_columns)} columns")
-            print(f"[DEBUG] Hidden columns: {self.hidden_columns}")
+            # Carregar usuários documentados (da descrição da view)
+            view_ref = client.dataset(self.selected_dataset).table(view_info['view_name'])
+            view_obj = client.get_table(view_ref)
+            self.documented_users = self.parse_users_from_description(view_obj.description)
             
         except Exception as e:
-            print(f"[ERROR] Error loading source table: {e}")
-            ui.notify(f"Error loading source table: {e}", type="negative")
+            print(f"[ERROR] Error loading view data: {e}")
+            ui.notify(f"Error loading view: {e}", type="negative")
             return
         
-        # Dialog para gerenciar
-        with ui.dialog() as manage_dialog, ui.card().classes('w-full max-w-5xl'):
-            ui.label(f'Manage Columns: {view_info["view_name"]}').classes('text-h5 font-bold mb-4')
+        # Dialog com tabs
+        with ui.dialog() as edit_dialog, ui.card().classes('w-full max-w-6xl'):
+            ui.label(f'Edit View: {view_info["view_name"]}').classes('text-h5 font-bold mb-4')
             
-            with ui.card().classes('w-full bg-blue-50 p-3 mb-4'):
-                ui.label('ℹ️ Instructions:').classes('font-bold text-sm mb-2')
-                ui.label('• Check columns to HIDE them from the view').classes('text-xs')
-                ui.label('• Uncheck columns to make them VISIBLE in the view').classes('text-xs')
-                ui.label('• Click SAVE CHANGES to recreate the view with new configuration').classes('text-xs')
+            with ui.tabs().classes('w-full') as tabs:
+                tab_columns = ui.tab('Hidden Columns', icon='visibility_off')
+                tab_users = ui.tab('User Documentation', icon='people')
             
-            # Lista de colunas
-            ui.label(f'Source table: {view_info["source_table"]} ({len(self.source_table_columns)} columns)').classes('text-sm font-bold mb-2')
-            
-            with ui.scroll_area().classes('w-full h-96 border rounded p-2'):
-                for col in self.source_table_columns:
-                    with ui.card().classes('w-full p-3 mb-2'):
-                        with ui.row().classes('w-full items-center gap-4'):
-                            # Checkbox com closure correta
-                            is_hidden = col['name'] in self.hidden_columns
-                            
-                            def make_toggle(column_name):
-                                def toggle(e):
-                                    if e.value and column_name not in self.hidden_columns:
-                                        self.hidden_columns.append(column_name)
-                                        print(f"[DEBUG] Hidden: {column_name}")
-                                    elif not e.value and column_name in self.hidden_columns:
-                                        self.hidden_columns.remove(column_name)
-                                        print(f"[DEBUG] Visible: {column_name}")
-                                return toggle
-                            
-                            checkbox = ui.checkbox(
-                                text='Hide',
-                                value=is_hidden,
-                                on_change=make_toggle(col['name'])
-                            )
-                            
-                            # Nome e tipo
-                            with ui.column().classes('flex-1'):
-                                ui.label(col['name']).classes('font-bold text-base')
-                                ui.label(f"Type: {col['type']}").classes('text-xs text-grey-6')
-                            
-                            # Status
-                            status = 'HIDDEN' if is_hidden else 'VISIBLE'
-                            status_label = ui.label(status).classes('text-sm px-3 py-1 rounded')
-                            if is_hidden:
-                                status_label.classes('bg-red-100 text-red-600')
+            with ui.tab_panels(tabs, value=tab_columns).classes('w-full'):
+                # TAB 1: Hidden Columns
+                with ui.tab_panel(tab_columns):
+                    with ui.card().classes('w-full bg-blue-50 p-3 mb-4'):
+                        ui.label('ℹ️ Manage which columns are hidden from this view').classes('font-bold text-sm mb-2')
+                        ui.label('• Check to HIDE, uncheck to SHOW').classes('text-xs')
+                        ui.label('• Changes take effect after clicking SAVE CHANGES').classes('text-xs')
+                    
+                    ui.label(f'Source: {source_table} ({len(self.source_table_columns)} columns)').classes('text-sm font-bold mb-2')
+                    
+                    with ui.scroll_area().classes('w-full h-96 border rounded p-2'):
+                        for col in self.source_table_columns:
+                            with ui.card().classes('w-full p-3 mb-2'):
+                                with ui.row().classes('w-full items-center gap-4'):
+                                    is_hidden = col['name'] in self.hidden_columns
+                                    
+                                    def make_toggle(column_name):
+                                        def toggle(e):
+                                            if e.value and column_name not in self.hidden_columns:
+                                                self.hidden_columns.append(column_name)
+                                            elif not e.value and column_name in self.hidden_columns:
+                                                self.hidden_columns.remove(column_name)
+                                        return toggle
+                                    
+                                    ui.checkbox(
+                                        text='Hide',
+                                        value=is_hidden,
+                                        on_change=make_toggle(col['name'])
+                                    ).classes('w-20')
+                                    
+                                    with ui.column().classes('flex-1'):
+                                        ui.label(col['name']).classes('font-bold text-base')
+                                        ui.label(f"Type: {col['type']}").classes('text-xs text-grey-6')
+                                    
+                                    status_label = ui.label('HIDDEN' if is_hidden else 'VISIBLE')
+                                    status_label.classes('text-sm px-3 py-1 rounded')
+                                    if is_hidden:
+                                        status_label.classes('bg-red-100 text-red-600')
+                                    else:
+                                        status_label.classes('bg-green-100 text-green-600')
+                    
+                    # Resumo
+                    visible_count = len(self.source_table_columns) - len(self.hidden_columns)
+                    with ui.card().classes('w-full bg-purple-50 p-3 mt-4'):
+                        ui.label(f'📊 Total: {len(self.source_table_columns)} | Visible: {visible_count} | Hidden: {len(self.hidden_columns)}').classes('text-sm font-bold')
+                
+                # TAB 2: User Documentation
+                with ui.tab_panel(tab_users):
+                    with ui.card().classes('w-full bg-orange-50 p-3 mb-4'):
+                        ui.label('ℹ️ Document which users should access this view').classes('font-bold text-sm mb-2')
+                        ui.label('• This is DOCUMENTATION ONLY (not access control)').classes('text-xs')
+                        ui.label('• Helps team know who should use this view').classes('text-xs')
+                        ui.label('• Saved in view description metadata').classes('text-xs')
+                    
+                    ui.label('Recommended Users:').classes('text-sm font-bold mb-2')
+                    
+                    # Input para adicionar usuário
+                    with ui.row().classes('w-full gap-2 mb-4'):
+                        user_input = ui.input(
+                            placeholder='user@company.com',
+                            label='Add user email'
+                        ).classes('flex-1')
+                        
+                        def add_user():
+                            email = user_input.value.strip()
+                            if email and '@' in email:
+                                if email not in self.documented_users:
+                                    self.documented_users.append(email)
+                                    user_input.value = ''
+                                    users_container.refresh()
+                                    ui.notify(f"Added: {email}", type="positive")
+                                else:
+                                    ui.notify("User already in list", type="warning")
                             else:
-                                status_label.classes('bg-green-100 text-green-600')
+                                ui.notify("Invalid email", type="warning")
+                        
+                        ui.button('ADD', icon='add', on_click=add_user).props('color=positive')
+                    
+                    # Lista de usuários
+                    @ui.refreshable
+                    def users_container():
+                        if not self.documented_users:
+                            ui.label('No users documented yet').classes('text-grey-5 italic')
+                        else:
+                            for email in self.documented_users:
+                                with ui.row().classes('w-full items-center justify-between p-2 border rounded mb-1 bg-white'):
+                                    ui.label(email).classes('text-sm')
+                                    
+                                    def make_remove(user_email):
+                                        def remove():
+                                            self.documented_users.remove(user_email)
+                                            users_container.refresh()
+                                            ui.notify(f"Removed: {user_email}", type="info")
+                                        return remove
+                                    
+                                    ui.button(
+                                        icon='delete',
+                                        on_click=make_remove(email)
+                                    ).props('flat dense size=sm color=negative')
+                    
+                    users_container()
             
-            # Resumo
-            visible_count = len(self.source_table_columns) - len(self.hidden_columns)
-            with ui.card().classes('w-full bg-purple-50 p-3 mt-4'):
-                ui.label(f'📊 Total: {len(self.source_table_columns)} columns | Visible: {visible_count} | Hidden: {len(self.hidden_columns)}').classes('text-sm font-bold')
-            
-            # Botões
+            # Botões de ação
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
-                ui.button('CANCEL', on_click=manage_dialog.close).props('flat')
+                ui.button('CANCEL', on_click=edit_dialog.close).props('flat')
                 ui.button(
                     'SAVE CHANGES',
                     icon='save',
-                    on_click=lambda: self.save_column_changes(manage_dialog)
+                    on_click=lambda: self.save_view_changes(edit_dialog)
                 ).props('color=positive')
         
-        manage_dialog.open()
+        edit_dialog.open()
+    
+    def parse_users_from_description(self, description):
+        """Extrai lista de usuários da descrição da view"""
+        if not description:
+            return []
+        
+        try:
+            # Procura por padrão: USERS: email1@..., email2@...
+            if 'USERS:' in description:
+                users_text = description.split('USERS:')[1].split('\n')[0]
+                emails = [email.strip() for email in users_text.split(',')]
+                return [e for e in emails if '@' in e]
+        except:
+            pass
+        
+        return []
+    
+    def save_view_changes(self, dialog):
+        """Salva todas as mudanças (colunas + usuários)"""
+        if not self.current_view:
+            return
+        
+        # Validação
+        visible_columns = [col['name'] for col in self.source_table_columns if col['name'] not in self.hidden_columns]
+        
+        if not visible_columns:
+            ui.notify("❌ Cannot hide ALL columns!", type="negative")
+            return
+        
+        try:
+            view_name = self.current_view['view_name']
+            source_table = self.current_view['source_table']
+            
+            # 1. Recriar view com novas colunas
+            sql = f"""CREATE OR REPLACE VIEW `{self.project_id}.{self.selected_dataset}.{view_name}` AS
+SELECT
+  {(','+chr(10)+'  ').join(visible_columns)}
+FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
+            
+            query_job = client.query(sql)
+            query_job.result()
+            
+            # 2. Atualizar descrição com usuários documentados
+            if self.documented_users:
+                description = f"Restricted view from {source_table}\nHidden columns: {', '.join(self.hidden_columns)}\nUSERS: {', '.join(self.documented_users)}"
+            else:
+                description = f"Restricted view from {source_table}\nHidden columns: {', '.join(self.hidden_columns)}"
+            
+            table_ref = client.dataset(self.selected_dataset).table(view_name)
+            table = client.get_table(table_ref)
+            table.description = description
+            client.update_table(table, ['description'])
+            
+            # Log audit
+            self.audit_service.log_action(
+                action='UPDATE_RESTRICTED_VIEW',
+                resource_type='RESTRICTED_VIEW',
+                resource_name=f"{self.selected_dataset}.{view_name}",
+                status='SUCCESS',
+                details={
+                    'hidden_columns': self.hidden_columns,
+                    'visible_columns': visible_columns,
+                    'documented_users': self.documented_users,
+                    'total_columns': len(self.source_table_columns)
+                }
+            )
+            
+            ui.notify(f"✅ View '{view_name}' updated successfully!", type="positive")
+            dialog.close()
+            
+            # Refresh
+            self.restricted_views = self.get_restricted_views(self.selected_dataset)
+            self.refresh_views_grid()
+            self.update_statistics()
+            
+        except Exception as e:
+            print(f"[ERROR] Error saving changes: {e}")
+            self.audit_service.log_action(
+                action='UPDATE_RESTRICTED_VIEW',
+                resource_type='RESTRICTED_VIEW',
+                resource_name=f"{self.selected_dataset}.{view_name}",
+                status='FAILED',
+                error_message=str(e)
+            )
+            ui.notify(f"Error saving changes: {e}", type="negative")
     
     def ask_source_table(self, view_info):
         """Pergunta ao usuário qual é a tabela origem"""
@@ -349,78 +483,7 @@ class DynamicColumnManage:
         view_info['source_table'] = source_table
         
         # Tentar novamente
-        self.manage_columns(view_info)
-    
-    def toggle_column_visibility(self, column_name, is_hidden, container):
-        """Toggle visibilidade da coluna"""
-        if is_hidden and column_name not in self.hidden_columns:
-            self.hidden_columns.append(column_name)
-        elif not is_hidden and column_name in self.hidden_columns:
-            self.hidden_columns.remove(column_name)
-    
-    def save_column_changes(self, dialog):
-        """Salva mudanças e recria a view"""
-        if not self.current_view:
-            return
-        
-        # Validação: não pode ocultar todas as colunas
-        visible_columns = [col['name'] for col in self.source_table_columns if col['name'] not in self.hidden_columns]
-        
-        if not visible_columns:
-            ui.notify("❌ Cannot hide ALL columns! At least one column must be visible.", type="negative")
-            return
-        
-        try:
-            view_name = self.current_view['view_name']
-            source_table = self.current_view['source_table']
-            
-            print(f"[DEBUG] Updating view: {view_name}")
-            print(f"[DEBUG] Visible columns: {visible_columns}")
-            print(f"[DEBUG] Hidden columns: {self.hidden_columns}")
-            
-            # Gerar SQL da view
-            sql = f"""CREATE OR REPLACE VIEW `{self.project_id}.{self.selected_dataset}.{view_name}` AS
-SELECT
-  {(','+chr(10)+'  ').join(visible_columns)}
-FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
-            
-            print(f"[DEBUG] SQL: {sql}")
-            
-            # Executar
-            query_job = client.query(sql)
-            query_job.result()
-            
-            # Log audit
-            self.audit_service.log_action(
-                action='UPDATE_RESTRICTED_VIEW',
-                resource_type='RESTRICTED_VIEW',
-                resource_name=f"{self.selected_dataset}.{view_name}",
-                status='SUCCESS',
-                details={
-                    'hidden_columns': self.hidden_columns,
-                    'visible_columns': visible_columns,
-                    'total_columns': len(self.source_table_columns)
-                }
-            )
-            
-            ui.notify(f"✅ View '{view_name}' updated successfully!", type="positive")
-            dialog.close()
-            
-            # Refresh
-            self.restricted_views = self.get_restricted_views(self.selected_dataset)
-            self.refresh_views_grid()
-            self.update_statistics()
-            
-        except Exception as e:
-            print(f"[ERROR] Error updating view: {e}")
-            self.audit_service.log_action(
-                action='UPDATE_RESTRICTED_VIEW',
-                resource_type='RESTRICTED_VIEW',
-                resource_name=f"{self.selected_dataset}.{view_name}",
-                status='FAILED',
-                error_message=str(e)
-            )
-            ui.notify(f"Error updating view: {e}", type="negative")
+        self.edit_view(view_info)
     
     async def delete_selected_views(self):
         """Deleta views selecionadas"""
