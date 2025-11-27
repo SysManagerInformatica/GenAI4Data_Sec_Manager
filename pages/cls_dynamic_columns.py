@@ -242,16 +242,98 @@ FROM `{self.project_id}.{self.selected_dataset}.{base_name}`;"""
         sql_dialog.open()
         self.generated_sql = full_sql
     
+    def generate_rls_sql(self):
+        """Gera SQL das policies RLS para as views
+        
+        LÓGICA DE ACESSO:
+        - FULL users: acesso a TODAS as views (full, masked, public)
+        - MASKED users: acesso APENAS à view masked
+        - PUBLIC users: acesso APENAS à view public
+        """
+        if not self.selected_table:
+            return ""
+        
+        base_name = self.selected_table
+        
+        # RLS para VIEW FULL
+        # Apenas usuários FULL podem acessar
+        if self.user_access['full']:
+            full_users = "', '".join(self.user_access['full'])
+            rls_full = f"""-- RLS for FULL view (only FULL users)
+CREATE OR REPLACE ROW ACCESS POLICY rap_{base_name}_full
+ON `{self.project_id}.{self.selected_dataset}.vw_{base_name}_full`
+GRANT TO ("allAuthenticatedUsers")
+FILTER USING (
+  SESSION_USER() IN ('{full_users}')
+);"""
+        else:
+            rls_full = ""
+        
+        # RLS para VIEW MASKED
+        # Usuários FULL + MASKED podem acessar
+        masked_allowed = list(self.user_access['full']) + list(self.user_access['masked'])
+        if masked_allowed:
+            masked_users = "', '".join(masked_allowed)
+            rls_masked = f"""-- RLS for MASKED view (FULL + MASKED users)
+CREATE OR REPLACE ROW ACCESS POLICY rap_{base_name}_masked
+ON `{self.project_id}.{self.selected_dataset}.vw_{base_name}_masked`
+GRANT TO ("allAuthenticatedUsers")
+FILTER USING (
+  SESSION_USER() IN ('{masked_users}')
+);"""
+        else:
+            rls_masked = ""
+        
+        # RLS para VIEW PUBLIC
+        # Usuários FULL + PUBLIC podem acessar
+        public_allowed = list(self.user_access['full']) + list(self.user_access['public'])
+        if public_allowed:
+            public_users = "', '".join(public_allowed)
+            rls_public = f"""-- RLS for PUBLIC view (FULL + PUBLIC users)
+CREATE OR REPLACE ROW ACCESS POLICY rap_{base_name}_public
+ON `{self.project_id}.{self.selected_dataset}.vw_{base_name}_public`
+GRANT TO ("allAuthenticatedUsers")
+FILTER USING (
+  SESSION_USER() IN ('{public_users}')
+);"""
+        else:
+            rls_public = ""
+        
+        # Combinar todos
+        rls_sql = ""
+        if rls_full:
+            rls_sql += f"\n\n{rls_full}"
+        if rls_masked:
+            rls_sql += f"\n\n{rls_masked}"
+        if rls_public:
+            rls_sql += f"\n\n{rls_public}"
+        
+        return rls_sql
+    
     def create_views(self):
-        """Cria as 3 views no BigQuery"""
+        """Cria as 3 views + RLS no BigQuery"""
         if not hasattr(self, 'generated_sql'):
             ui.notify("Please generate SQL first", type="warning")
             return
         
+        # Verificar se há usuários em pelo menos um nível
+        if not self.user_access['full'] and not self.user_access['masked'] and not self.user_access['public']:
+            ui.notify("⚠️ Please add at least one user to any access level", type="warning")
+            return
+        
         try:
-            # Executar SQL
+            # 1. Criar views
             query_job = client.query(self.generated_sql)
             query_job.result()
+            
+            ui.notify("✅ Views created successfully!", type="positive")
+            
+            # 2. Criar RLS policies
+            rls_sql = self.generate_rls_sql()
+            if rls_sql:
+                query_job_rls = client.query(rls_sql)
+                query_job_rls.result()
+                ui.notify("✅ RLS policies applied successfully!", type="positive")
             
             # Log audit
             self.audit_service.log_action(
@@ -266,8 +348,6 @@ FROM `{self.project_id}.{self.selected_dataset}.{base_name}`;"""
                     'user_assignments': self.user_access
                 }
             )
-            
-            ui.notify(f"✅ 3 views created successfully!", type="positive")
             
             # Mostrar guia de uso
             self.show_usage_guide()
@@ -291,22 +371,37 @@ FROM `{self.project_id}.{self.selected_dataset}.{base_name}`;"""
             base_name = self.selected_table
             
             with ui.card().classes('w-full bg-green-50 p-3 mb-2'):
-                ui.label('👑 FULL ACCESS Users:').classes('font-bold text-sm mb-1')
-                for user in self.user_access['full']:
-                    ui.label(f'  • {user}').classes('text-xs')
+                ui.label('👑 FULL ACCESS Users (can access ALL views):').classes('font-bold text-sm mb-1')
+                if self.user_access['full']:
+                    for user in self.user_access['full']:
+                        ui.label(f'  • {user}').classes('text-xs')
+                else:
+                    ui.label('  • No users assigned').classes('text-xs text-grey-5')
                 ui.code(f"SELECT * FROM `{self.selected_dataset}.vw_{base_name}_full`;", language='sql').classes('w-full text-xs')
             
             with ui.card().classes('w-full bg-purple-50 p-3 mb-2'):
-                ui.label('🎭 MASKED ACCESS Users:').classes('font-bold text-sm mb-1')
-                for user in self.user_access['masked']:
-                    ui.label(f'  • {user}').classes('text-xs')
+                ui.label('🎭 MASKED ACCESS Users (can access ONLY masked view):').classes('font-bold text-sm mb-1')
+                if self.user_access['masked']:
+                    for user in self.user_access['masked']:
+                        ui.label(f'  • {user}').classes('text-xs')
+                else:
+                    ui.label('  • No users assigned').classes('text-xs text-grey-5')
                 ui.code(f"SELECT * FROM `{self.selected_dataset}.vw_{base_name}_masked`;", language='sql').classes('w-full text-xs')
             
             with ui.card().classes('w-full bg-blue-50 p-3 mb-2'):
-                ui.label('👁️ PUBLIC ACCESS Users:').classes('font-bold text-sm mb-1')
-                for user in self.user_access['public']:
-                    ui.label(f'  • {user}').classes('text-xs')
+                ui.label('👁️ PUBLIC ACCESS Users (can access ONLY public view):').classes('font-bold text-sm mb-1')
+                if self.user_access['public']:
+                    for user in self.user_access['public']:
+                        ui.label(f'  • {user}').classes('text-xs')
+                else:
+                    ui.label('  • No users assigned').classes('text-xs text-grey-5')
                 ui.code(f"SELECT * FROM `{self.selected_dataset}.vw_{base_name}_public`;", language='sql').classes('w-full text-xs')
+            
+            with ui.card().classes('w-full bg-yellow-50 p-3 mt-4'):
+                ui.label('ℹ️ Access Rules:').classes('text-sm font-bold mb-1')
+                ui.label('• FULL users: Can access all 3 views (full, masked, public)').classes('text-xs')
+                ui.label('• MASKED users: Can access only masked view').classes('text-xs')
+                ui.label('• PUBLIC users: Can access only public view').classes('text-xs')
             
             with ui.row().classes('w-full justify-end mt-4'):
                 ui.button('Close', on_click=guide_dialog.close).props('color=primary')
@@ -369,7 +464,7 @@ FROM `{self.project_id}.{self.selected_dataset}.{base_name}`;"""
                     with ui.column().classes('w-full gap-4'):
                         # FULL ACCESS
                         with ui.card().classes('w-full p-4 bg-green-50'):
-                            ui.label('👑 FULL ACCESS (see all columns real)').classes('font-bold mb-2')
+                            ui.label('👑 FULL ACCESS (see all columns real + access all views)').classes('font-bold mb-2')
                             with ui.row().classes('w-full gap-2'):
                                 self.full_email_input = ui.input(
                                     placeholder='user@company.com'
@@ -411,6 +506,13 @@ FROM `{self.project_id}.{self.selected_dataset}.{base_name}`;"""
                                 ).props('color=blue')
                             self.public_users_container = ui.column().classes('w-full mt-2')
                             self.refresh_user_list('public')
+                    
+                    # Info sobre hierarquia de acesso
+                    with ui.card().classes('w-full bg-yellow-50 p-3 mt-4'):
+                        ui.label('ℹ️ Access Hierarchy:').classes('text-sm font-bold mb-1')
+                        ui.label('• FULL users: Can access ALL views (full + masked + public)').classes('text-xs')
+                        ui.label('• MASKED users: Can access ONLY masked view').classes('text-xs')
+                        ui.label('• PUBLIC users: Can access ONLY public view').classes('text-xs')
                     
                     with ui.stepper_navigation():
                         ui.button('BACK', icon='arrow_back', on_click=stepper.previous).props('flat')
