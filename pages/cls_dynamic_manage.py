@@ -193,6 +193,11 @@ class DynamicColumnManage:
     
     def edit_view(self, view_info):
         """Editor completo da view com abas para colunas e usuários"""
+        print(f"[DEBUG] ===== EDIT_VIEW CALLED =====")
+        print(f"[DEBUG] View name: {view_info['view_name']}")
+        print(f"[DEBUG] Source table: {view_info['source_table']}")
+        print(f"[DEBUG] Dataset: {self.selected_dataset}")
+        
         self.current_view = view_info
         
         # Carregar colunas da tabela origem
@@ -200,10 +205,12 @@ class DynamicColumnManage:
             source_table = view_info['source_table']
             
             if source_table == 'Unknown' or not source_table:
+                print("[DEBUG] Source table is Unknown - asking user")
                 ui.notify("⚠️ Cannot determine source table", type="warning")
                 self.ask_source_table(view_info)
                 return
             
+            print(f"[DEBUG] Getting table reference for: {source_table}")
             table_ref = client.dataset(self.selected_dataset).table(source_table)
             table_obj = client.get_table(table_ref)
             
@@ -215,17 +222,26 @@ class DynamicColumnManage:
                     'mode': field.mode
                 })
             
+            print(f"[DEBUG] Loaded {len(self.source_table_columns)} columns")
+            
             self.hidden_columns = list(view_info['hidden_columns'])
+            print(f"[DEBUG] Hidden columns: {self.hidden_columns}")
             
             # Carregar usuários documentados (da descrição da view)
+            print(f"[DEBUG] Loading view metadata")
             view_ref = client.dataset(self.selected_dataset).table(view_info['view_name'])
             view_obj = client.get_table(view_ref)
             self.documented_users = self.parse_users_from_description(view_obj.description)
+            print(f"[DEBUG] Documented users: {self.documented_users}")
             
         except Exception as e:
             print(f"[ERROR] Error loading view data: {e}")
+            import traceback
+            traceback.print_exc()
             ui.notify(f"Error loading view: {e}", type="negative")
             return
+        
+        print("[DEBUG] Creating edit dialog...")
         
         # Dialog com tabs
         with ui.dialog() as edit_dialog, ui.card().classes('w-full max-w-6xl'):
@@ -255,8 +271,10 @@ class DynamicColumnManage:
                                         def toggle(e):
                                             if e.value and column_name not in self.hidden_columns:
                                                 self.hidden_columns.append(column_name)
+                                                print(f"[DEBUG] Hiding column: {column_name}")
                                             elif not e.value and column_name in self.hidden_columns:
                                                 self.hidden_columns.remove(column_name)
+                                                print(f"[DEBUG] Showing column: {column_name}")
                                         return toggle
                                     
                                     ui.checkbox(
@@ -346,7 +364,9 @@ class DynamicColumnManage:
                     on_click=lambda: self.save_view_changes(edit_dialog)
                 ).props('color=positive')
         
+        print("[DEBUG] Opening dialog...")
         edit_dialog.open()
+        print("[DEBUG] Dialog opened!")
     
     def parse_users_from_description(self, description):
         """Extrai lista de usuários da descrição da view"""
