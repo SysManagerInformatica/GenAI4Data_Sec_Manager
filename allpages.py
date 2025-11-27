@@ -92,7 +92,18 @@ except:
                 ui.label('Policy Tag IAM Permissions Manager').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
-# 🆕 DATA MASKING - Create Masked View
+# 🆕 Dynamic Column Security
+try:
+    from pages.cls_dynamic_columns import DynamicColumnSecurity
+except:
+    class DynamicColumnSecurity:
+        def run(self):
+            from theme import frame
+            with frame('Dynamic Column Security'):
+                ui.label('Dynamic Column Security').classes('text-2xl font-bold mb-4')
+                ui.label('This feature is under development').classes('text-orange-600')
+
+# DATA MASKING - Create Masked View
 try:
     from pages.mask_create_view import MaskCreateView
 except:
@@ -103,7 +114,7 @@ except:
                 ui.label('Create Masked View').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
-# 🆕 DATA MASKING - View Masking Status
+# DATA MASKING - View Masking Status
 try:
     from pages.mask_status import MaskStatus
 except:
@@ -195,7 +206,13 @@ def create() -> None:
         cls_instance.run()
     ui.page('/clsapplyiam/')(cls_apply_iam_page)
 
-    # 🆕 DATA MASKING Pages
+    # 🆕 Dynamic Column Security Page
+    def cls_dynamic_columns_page():
+        cls_instance = DynamicColumnSecurity()
+        cls_instance.run()
+    ui.page('/clsdynamiccolumns/')(cls_dynamic_columns_page)
+
+    # DATA MASKING Pages
     def mask_create_view_page():
         mask_instance = MaskCreateView()
         mask_instance.run()
