@@ -18,12 +18,9 @@ class DynamicColumnSecurity:
         self.selected_dataset = None
         self.selected_table = None
         self.table_columns = []
-        self.column_visibility = {}  # {column_name: 'public'/'restricted'/'masked'}
-        self.user_access = {
-            'full': [],     # vê tudo real
-            'masked': [],   # vê restrito com hash
-            'public': []    # não vê restrito
-        }
+        self.hidden_columns = []  # Lista de colunas a serem OCULTAS
+        self.apply_policy_tags = False
+        self.selected_policy_tag = None
         
         self.headers()
         self.render_ui()
@@ -68,6 +65,28 @@ class DynamicColumnSecurity:
             ui.notify(f"Error getting schema: {e}", type="negative")
             return []
     
+    def get_policy_tags(self):
+        """Lista policy tags disponíveis"""
+        try:
+            from google.cloud import datacatalog_v1
+            
+            policy_client = datacatalog_v1.PolicyTagManagerClient()
+            location = "us-central1"
+            
+            parent = f"projects/{self.project_id}/locations/{location}"
+            taxonomies = policy_client.list_taxonomies(parent=parent)
+            
+            tags = {}
+            for taxonomy in taxonomies:
+                policy_tags = policy_client.list_policy_tags(parent=taxonomy.name)
+                for tag in policy_tags:
+                    tags[tag.display_name] = tag.name
+            
+            return tags
+        except Exception as e:
+            print(f"Error getting policy tags: {e}")
+            return {}
+    
     def on_dataset_change(self, dataset_id):
         """Quando seleciona dataset"""
         self.selected_dataset = dataset_id
@@ -80,340 +99,213 @@ class DynamicColumnSecurity:
         """Quando seleciona tabela"""
         self.selected_table = table_id
         self.table_columns = self.get_table_schema(self.selected_dataset, table_id)
-        
-        # Inicializar todas como public
-        self.column_visibility = {col['name']: 'public' for col in self.table_columns}
+        self.hidden_columns = []
     
-    def render_column_visibility_config(self):
-        """Renderiza configuração de visibilidade das colunas"""
+    def render_columns_selection(self):
+        """Renderiza seleção de colunas para ocultar"""
         if not self.columns_container or not self.table_columns:
             return
         
         self.columns_container.clear()
         
         with self.columns_container:
-            ui.label(f"Configure visibility for {len(self.table_columns)} columns:").classes('text-sm font-bold mb-2')
+            ui.label(f"Select columns to HIDE in the view ({len(self.table_columns)} columns available):").classes('text-sm font-bold mb-2')
             
             with ui.scroll_area().classes('w-full h-96 border rounded p-2'):
                 for col in self.table_columns:
                     with ui.card().classes('w-full p-3 mb-2'):
                         with ui.row().classes('w-full items-center gap-4'):
+                            # Checkbox para ocultar
+                            checkbox = ui.checkbox(
+                                text='',
+                                value=col['name'] in self.hidden_columns,
+                                on_change=lambda e, c=col['name']: self.toggle_hidden_column(c, e.value)
+                            )
+                            
                             # Nome e tipo da coluna
                             with ui.column().classes('flex-1'):
                                 ui.label(col['name']).classes('font-bold text-base')
                                 ui.label(f"Type: {col['type']}").classes('text-xs text-grey-6')
                             
-                            # Seletor de visibilidade
-                            visibility_select = ui.select(
-                                options={
-                                    'public': '👁️ Public (all users see)',
-                                    'restricted': '🔒 Restricted (only authorized)',
-                                    'masked': '🎭 Restricted + Masked (hash for analysts)'
-                                },
-                                value=self.column_visibility.get(col['name'], 'public'),
-                                label='Visibility Level',
-                                on_change=lambda e, c=col['name']: self.update_column_visibility(c, e.value)
-                            ).classes('w-80')
+                            # Status
+                            status_label = ui.label('Visible' if col['name'] not in self.hidden_columns else 'Hidden')
+                            status_label.classes('text-sm px-3 py-1 rounded')
+                            if col['name'] in self.hidden_columns:
+                                status_label.classes('bg-red-100 text-red-600')
+                            else:
+                                status_label.classes('bg-green-100 text-green-600')
     
-    def update_column_visibility(self, column_name, visibility):
-        """Atualiza visibilidade da coluna"""
-        self.column_visibility[column_name] = visibility
-        ui.notify(f"Column '{column_name}' set to '{visibility}'", type="info")
-    
-    def add_user_to_level(self, level):
-        """Adiciona usuário a um nível de acesso"""
-        email_input = getattr(self, f'{level}_email_input')
-        email = email_input.value.strip()
+    def toggle_hidden_column(self, column_name, is_hidden):
+        """Toggle coluna oculta"""
+        if is_hidden and column_name not in self.hidden_columns:
+            self.hidden_columns.append(column_name)
+            ui.notify(f"Column '{column_name}' will be HIDDEN", type="info")
+        elif not is_hidden and column_name in self.hidden_columns:
+            self.hidden_columns.remove(column_name)
+            ui.notify(f"Column '{column_name}' will be VISIBLE", type="info")
         
-        if email and '@' in email:
-            if email not in self.user_access[level]:
-                self.user_access[level].append(email)
-                self.refresh_user_list(level)
-                email_input.value = ''
-                ui.notify(f"User added to {level} access", type="positive")
-            else:
-                ui.notify("User already in this level", type="warning")
-        else:
-            ui.notify("Invalid email", type="warning")
+        # Refresh display
+        self.render_columns_selection()
     
-    def remove_user_from_level(self, level, email):
-        """Remove usuário de um nível"""
-        if email in self.user_access[level]:
-            self.user_access[level].remove(email)
-            self.refresh_user_list(level)
-            ui.notify(f"User removed from {level} access", type="info")
-    
-    def refresh_user_list(self, level):
-        """Atualiza lista de usuários de um nível"""
-        container = getattr(self, f'{level}_users_container')
-        if container:
-            container.clear()
-            with container:
-                if not self.user_access[level]:
-                    ui.label("No users added yet").classes('text-grey-5 italic text-sm')
-                else:
-                    for email in self.user_access[level]:
-                        with ui.row().classes('w-full items-center justify-between p-2 border rounded mb-1'):
-                            ui.label(email).classes('text-sm flex-1')
-                            ui.button(
-                                icon='delete',
-                                on_click=lambda e=email, l=level: self.remove_user_from_level(l, e)
-                            ).props('flat dense size=sm color=negative')
-    
-    def generate_views_sql(self):
-        """Gera SQL das 3 views"""
+    def generate_view_sql(self):
+        """Gera SQL da view"""
         if not self.selected_dataset or not self.selected_table:
             ui.notify("Please select dataset and table first", type="warning")
             return
         
-        base_name = self.selected_table
+        if not self.hidden_columns:
+            ui.notify("⚠️ No columns selected to hide! View will have all columns.", type="warning")
         
-        # Separar colunas por visibilidade
-        public_cols = [col['name'] for col in self.table_columns 
-                      if self.column_visibility[col['name']] == 'public']
-        restricted_cols = [col['name'] for col in self.table_columns 
-                          if self.column_visibility[col['name']] in ['restricted', 'masked']]
-        masked_cols = [col['name'] for col in self.table_columns 
-                      if self.column_visibility[col['name']] == 'masked']
+        # Colunas visíveis (todas MENOS as ocultas)
+        visible_columns = [col['name'] for col in self.table_columns if col['name'] not in self.hidden_columns]
         
-        if not restricted_cols:
-            ui.notify("⚠️ No restricted columns configured!", type="warning")
+        if not visible_columns:
+            ui.notify("❌ Cannot hide ALL columns!", type="negative")
             return
         
-        # VIEW 1: FULL (todas colunas)
-        all_cols = [col['name'] for col in self.table_columns]
-        sql_full = f"""-- VIEW FULL: All columns (for authorized users)
-CREATE OR REPLACE VIEW `{self.project_id}.{self.selected_dataset}.vw_{base_name}_full` AS
+        view_name = f"vw_{self.selected_table}_restricted"
+        
+        sql = f"""-- Restricted view for {self.selected_table}
+-- Hidden columns: {', '.join(self.hidden_columns) if self.hidden_columns else 'none'}
+-- Created: {self.get_current_timestamp()}
+CREATE OR REPLACE VIEW `{self.project_id}.{self.selected_dataset}.{view_name}` AS
 SELECT
-  {(','+chr(10)+'  ').join(all_cols)}
-FROM `{self.project_id}.{self.selected_dataset}.{base_name}`;"""
-        
-        # VIEW 2: MASKED (todas colunas, mas restritas com hash)
-        masked_select = []
-        for col in self.table_columns:
-            if col['name'] in masked_cols:
-                masked_select.append(f"TO_BASE64(SHA256(CAST({col['name']} AS STRING))) AS {col['name']}")
-            else:
-                masked_select.append(col['name'])
-        
-        sql_masked = f"""-- VIEW MASKED: Restricted columns shown as hash
-CREATE OR REPLACE VIEW `{self.project_id}.{self.selected_dataset}.vw_{base_name}_masked` AS
-SELECT
-  {(','+chr(10)+'  ').join(masked_select)}
-FROM `{self.project_id}.{self.selected_dataset}.{base_name}`;"""
-        
-        # VIEW 3: PUBLIC (apenas colunas públicas)
-        sql_public = f"""-- VIEW PUBLIC: Only public columns (restricted columns hidden)
-CREATE OR REPLACE VIEW `{self.project_id}.{self.selected_dataset}.vw_{base_name}_public` AS
-SELECT
-  {(','+chr(10)+'  ').join(public_cols)}
-FROM `{self.project_id}.{self.selected_dataset}.{base_name}`;"""
-        
-        # SQL completo
-        full_sql = f"""{sql_full}
-
-{sql_masked}
-
-{sql_public}"""
+  {(','+chr(10)+'  ').join(visible_columns)}
+FROM `{self.project_id}.{self.selected_dataset}.{self.selected_table}`;"""
         
         # Mostrar dialog
         with ui.dialog() as sql_dialog, ui.card().classes('w-full max-w-5xl'):
-            ui.label('Generated SQL - 3 Views').classes('text-h6 font-bold mb-4')
+            ui.label('Generated SQL').classes('text-h6 font-bold mb-4')
             
             # Resumo
             with ui.card().classes('w-full bg-blue-50 p-3 mb-4'):
-                ui.label('📊 Views Summary:').classes('font-bold text-sm mb-2')
-                ui.label(f'  • vw_{base_name}_full: {len(all_cols)} columns (all real)').classes('text-xs')
-                ui.label(f'  • vw_{base_name}_masked: {len(all_cols)} columns ({len(masked_cols)} hashed)').classes('text-xs')
-                ui.label(f'  • vw_{base_name}_public: {len(public_cols)} columns (restricted hidden)').classes('text-xs')
+                ui.label('📊 View Summary:').classes('font-bold text-sm mb-2')
+                ui.label(f'  • View name: {view_name}').classes('text-xs')
+                ui.label(f'  • Visible columns: {len(visible_columns)}').classes('text-xs')
+                ui.label(f'  • Hidden columns: {len(self.hidden_columns)}').classes('text-xs')
             
-            with ui.card().classes('w-full bg-purple-50 p-3 mb-4'):
-                ui.label('👥 User Assignments:').classes('font-bold text-sm mb-2')
-                ui.label(f'  • Full access: {len(self.user_access["full"])} users').classes('text-xs')
-                ui.label(f'  • Masked access: {len(self.user_access["masked"])} users').classes('text-xs')
-                ui.label(f'  • Public access: {len(self.user_access["public"])} users').classes('text-xs')
+            if self.hidden_columns:
+                with ui.card().classes('w-full bg-red-50 p-3 mb-4'):
+                    ui.label('🚫 Columns HIDDEN from view:').classes('font-bold text-sm mb-2')
+                    for col in self.hidden_columns:
+                        ui.label(f'  • {col}').classes('text-xs')
             
-            ui.code(full_sql, language='sql').classes('w-full')
+            ui.code(sql, language='sql').classes('w-full')
             
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('Close', on_click=sql_dialog.close).props('flat')
-                ui.button('Copy SQL', on_click=lambda: ui.run_javascript(f'navigator.clipboard.writeText(`{full_sql}`)')).props('color=primary')
+                ui.button('Copy SQL', on_click=lambda: ui.run_javascript(f'navigator.clipboard.writeText(`{sql}`)')).props('color=primary')
         
         sql_dialog.open()
-        self.generated_sql = full_sql
+        self.generated_sql = sql
     
-    def generate_rls_sql(self):
-        """Gera SQL das policies RLS para as views
-        
-        LÓGICA DE ACESSO:
-        - FULL users: acesso a TODAS as views (full, masked, public)
-        - MASKED users: acesso APENAS à view masked
-        - PUBLIC users: acesso APENAS à view public
-        """
-        if not self.selected_table:
-            return ""
-        
-        base_name = self.selected_table
-        
-        # RLS para VIEW FULL
-        # Apenas usuários FULL podem acessar
-        if self.user_access['full']:
-            full_users = "', '".join(self.user_access['full'])
-            rls_full = f"""-- RLS for FULL view (only FULL users)
-CREATE OR REPLACE ROW ACCESS POLICY rap_{base_name}_full
-ON `{self.project_id}.{self.selected_dataset}.vw_{base_name}_full`
-GRANT TO ("allAuthenticatedUsers")
-FILTER USING (
-  SESSION_USER() IN ('{full_users}')
-);"""
-        else:
-            rls_full = ""
-        
-        # RLS para VIEW MASKED
-        # Usuários FULL + MASKED podem acessar
-        masked_allowed = list(self.user_access['full']) + list(self.user_access['masked'])
-        if masked_allowed:
-            masked_users = "', '".join(masked_allowed)
-            rls_masked = f"""-- RLS for MASKED view (FULL + MASKED users)
-CREATE OR REPLACE ROW ACCESS POLICY rap_{base_name}_masked
-ON `{self.project_id}.{self.selected_dataset}.vw_{base_name}_masked`
-GRANT TO ("allAuthenticatedUsers")
-FILTER USING (
-  SESSION_USER() IN ('{masked_users}')
-);"""
-        else:
-            rls_masked = ""
-        
-        # RLS para VIEW PUBLIC
-        # Usuários FULL + PUBLIC podem acessar
-        public_allowed = list(self.user_access['full']) + list(self.user_access['public'])
-        if public_allowed:
-            public_users = "', '".join(public_allowed)
-            rls_public = f"""-- RLS for PUBLIC view (FULL + PUBLIC users)
-CREATE OR REPLACE ROW ACCESS POLICY rap_{base_name}_public
-ON `{self.project_id}.{self.selected_dataset}.vw_{base_name}_public`
-GRANT TO ("allAuthenticatedUsers")
-FILTER USING (
-  SESSION_USER() IN ('{public_users}')
-);"""
-        else:
-            rls_public = ""
-        
-        # Combinar todos
-        rls_sql = ""
-        if rls_full:
-            rls_sql += f"\n\n{rls_full}"
-        if rls_masked:
-            rls_sql += f"\n\n{rls_masked}"
-        if rls_public:
-            rls_sql += f"\n\n{rls_public}"
-        
-        return rls_sql
-    
-    def create_views(self):
-        """Cria as 3 views + RLS no BigQuery"""
+    def create_view(self):
+        """Cria a view no BigQuery"""
         if not hasattr(self, 'generated_sql'):
             ui.notify("Please generate SQL first", type="warning")
             return
         
-        # Verificar se há usuários em pelo menos um nível
-        if not self.user_access['full'] and not self.user_access['masked'] and not self.user_access['public']:
-            ui.notify("⚠️ Please add at least one user to any access level", type="warning")
-            return
-        
         try:
-            # 1. Criar views
+            # Criar view
             query_job = client.query(self.generated_sql)
             query_job.result()
             
-            ui.notify("✅ Views created successfully!", type="positive")
+            view_name = f"vw_{self.selected_table}_restricted"
             
-            # 2. Criar RLS policies
-            rls_sql = self.generate_rls_sql()
-            if rls_sql:
-                query_job_rls = client.query(rls_sql)
-                query_job_rls.result()
-                ui.notify("✅ RLS policies applied successfully!", type="positive")
+            # Aplicar Policy Tags se solicitado
+            if self.apply_policy_tags and self.selected_policy_tag and self.hidden_columns:
+                self.apply_tags_to_hidden_columns(view_name)
             
             # Log audit
             self.audit_service.log_action(
-                action='CREATE_DYNAMIC_COLUMN_VIEWS',
-                resource_type='DYNAMIC_VIEWS',
-                resource_name=f"{self.selected_dataset}.{self.selected_table}",
+                action='CREATE_RESTRICTED_VIEW',
+                resource_type='RESTRICTED_VIEW',
+                resource_name=f"{self.selected_dataset}.{view_name}",
                 status='SUCCESS',
                 details={
                     'source_table': f"{self.selected_dataset}.{self.selected_table}",
-                    'public_columns': [k for k, v in self.column_visibility.items() if v == 'public'],
-                    'restricted_columns': [k for k, v in self.column_visibility.items() if v in ['restricted', 'masked']],
-                    'user_assignments': self.user_access
+                    'view_name': view_name,
+                    'hidden_columns': self.hidden_columns,
+                    'visible_columns': len(self.table_columns) - len(self.hidden_columns),
+                    'policy_tags_applied': self.apply_policy_tags
                 }
             )
+            
+            ui.notify(f"✅ View '{view_name}' created successfully!", type="positive")
             
             # Mostrar guia de uso
             self.show_usage_guide()
             
         except Exception as e:
             self.audit_service.log_action(
-                action='CREATE_DYNAMIC_COLUMN_VIEWS',
-                resource_type='DYNAMIC_VIEWS',
-                resource_name=f"{self.selected_dataset}.{self.selected_table}",
+                action='CREATE_RESTRICTED_VIEW',
+                resource_type='RESTRICTED_VIEW',
+                resource_name=f"{self.selected_dataset}.vw_{self.selected_table}_restricted",
                 status='FAILED',
                 error_message=str(e)
             )
-            ui.notify(f"Error creating views: {e}", type="negative")
+            ui.notify(f"Error creating view: {e}", type="negative")
+    
+    def apply_tags_to_hidden_columns(self, view_name):
+        """Aplica Policy Tags nas colunas que ainda existem na view (proteção extra)"""
+        try:
+            # Aqui você pode implementar lógica adicional se necessário
+            # Por enquanto, apenas notifica
+            ui.notify("ℹ️ Policy Tags feature can be configured separately", type="info")
+        except Exception as e:
+            print(f"Error applying policy tags: {e}")
     
     def show_usage_guide(self):
-        """Mostra guia de uso das views"""
+        """Mostra guia de uso"""
         with ui.dialog() as guide_dialog, ui.card().classes('w-full max-w-3xl'):
-            ui.label('✅ Views Created Successfully!').classes('text-h5 font-bold text-green-600 mb-4')
-            ui.label('Usage Guide:').classes('text-h6 font-bold mb-2')
+            ui.label('✅ View Created Successfully!').classes('text-h5 font-bold text-green-600 mb-4')
             
-            base_name = self.selected_table
+            view_name = f"vw_{self.selected_table}_restricted"
+            
+            with ui.card().classes('w-full bg-blue-50 p-3 mb-4'):
+                ui.label('📊 View Information:').classes('font-bold text-sm mb-2')
+                ui.label(f'  • View name: {view_name}').classes('text-xs')
+                ui.label(f'  • Visible columns: {len(self.table_columns) - len(self.hidden_columns)}').classes('text-xs')
+                ui.label(f'  • Hidden columns: {len(self.hidden_columns)}').classes('text-xs')
             
             with ui.card().classes('w-full bg-green-50 p-3 mb-2'):
-                ui.label('👑 FULL ACCESS Users (can access ALL views):').classes('font-bold text-sm mb-1')
-                if self.user_access['full']:
-                    for user in self.user_access['full']:
-                        ui.label(f'  • {user}').classes('text-xs')
-                else:
-                    ui.label('  • No users assigned').classes('text-xs text-grey-5')
-                ui.code(f"SELECT * FROM `{self.selected_dataset}.vw_{base_name}_full`;", language='sql').classes('w-full text-xs')
+                ui.label('👑 Full Access (use original table):').classes('font-bold text-sm mb-1')
+                ui.code(f"SELECT * FROM `{self.selected_dataset}.{self.selected_table}`;", language='sql').classes('w-full text-xs')
+                ui.label('→ See ALL columns including hidden ones').classes('text-xs text-grey-7 mt-1')
             
-            with ui.card().classes('w-full bg-purple-50 p-3 mb-2'):
-                ui.label('🎭 MASKED ACCESS Users (can access ONLY masked view):').classes('font-bold text-sm mb-1')
-                if self.user_access['masked']:
-                    for user in self.user_access['masked']:
-                        ui.label(f'  • {user}').classes('text-xs')
-                else:
-                    ui.label('  • No users assigned').classes('text-xs text-grey-5')
-                ui.code(f"SELECT * FROM `{self.selected_dataset}.vw_{base_name}_masked`;", language='sql').classes('w-full text-xs')
+            with ui.card().classes('w-full bg-orange-50 p-3 mb-2'):
+                ui.label('👁️ Restricted Access (use view):').classes('font-bold text-sm mb-1')
+                ui.code(f"SELECT * FROM `{self.selected_dataset}.{view_name}`;", language='sql').classes('w-full text-xs')
+                ui.label(f'→ See only {len(self.table_columns) - len(self.hidden_columns)} columns (hidden columns not accessible)').classes('text-xs text-grey-7 mt-1')
             
-            with ui.card().classes('w-full bg-blue-50 p-3 mb-2'):
-                ui.label('👁️ PUBLIC ACCESS Users (can access ONLY public view):').classes('font-bold text-sm mb-1')
-                if self.user_access['public']:
-                    for user in self.user_access['public']:
-                        ui.label(f'  • {user}').classes('text-xs')
-                else:
-                    ui.label('  • No users assigned').classes('text-xs text-grey-5')
-                ui.code(f"SELECT * FROM `{self.selected_dataset}.vw_{base_name}_public`;", language='sql').classes('w-full text-xs')
+            if self.hidden_columns:
+                with ui.card().classes('w-full bg-red-50 p-3 mb-4'):
+                    ui.label('🚫 Hidden Columns:').classes('font-bold text-sm mb-2')
+                    for col in self.hidden_columns:
+                        ui.label(f'  • {col}').classes('text-xs')
             
             with ui.card().classes('w-full bg-yellow-50 p-3 mt-4'):
-                ui.label('ℹ️ Access Rules:').classes('text-sm font-bold mb-1')
-                ui.label('• FULL users: Can access all 3 views (full, masked, public)').classes('text-xs')
-                ui.label('• MASKED users: Can access only masked view').classes('text-xs')
-                ui.label('• PUBLIC users: Can access only public view').classes('text-xs')
+                ui.label('ℹ️ Management:').classes('text-sm font-bold mb-1')
+                ui.label('• To modify hidden columns, use "Manage Dynamic Views"').classes('text-xs')
+                ui.label('• To delete this view, use "Manage Dynamic Views"').classes('text-xs')
+                ui.label('• Original table remains unchanged').classes('text-xs')
             
             with ui.row().classes('w-full justify-end mt-4'):
                 ui.button('Close', on_click=guide_dialog.close).props('color=primary')
         
         guide_dialog.open()
     
+    def get_current_timestamp(self):
+        """Retorna timestamp atual"""
+        from datetime import datetime
+        return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
     def render_ui(self):
         with theme.frame('Dynamic Column Security'):
             with ui.stepper().props('vertical').classes('w-full') as stepper:
                 # STEP 1: Select Source
                 with ui.step('Select Source Table'):
-                    ui.label('Choose the table to configure dynamic column security').classes('text-caption mb-4')
+                    ui.label('Choose the table to create a restricted view').classes('text-caption mb-4')
                     
                     with ui.row().classes('w-full gap-4'):
                         datasets = self.get_datasets()
@@ -432,99 +324,40 @@ FILTER USING (
                     with ui.stepper_navigation():
                         ui.button('NEXT', icon='arrow_forward', on_click=stepper.next).props('color=primary')
                 
-                # STEP 2: Configure Column Visibility
-                with ui.step('Configure Column Visibility'):
-                    ui.label('Define which columns are sensitive').classes('text-caption mb-4')
+                # STEP 2: Select Columns to Hide
+                with ui.step('Select Columns to Hide'):
+                    ui.label('Check the columns you want to HIDE from the view').classes('text-caption mb-4')
                     
                     self.columns_container = ui.column().classes('w-full')
                     
                     # Info box
                     with ui.card().classes('w-full bg-blue-50 p-3 mt-4'):
-                        ui.label('ℹ️ Visibility Levels:').classes('text-sm font-bold mb-2')
+                        ui.label('ℹ️ How it works:').classes('text-sm font-bold mb-2')
                         with ui.column().classes('gap-1'):
-                            ui.label('• Public: All users see this column').classes('text-xs')
-                            ui.label('• Restricted: Only authorized users see real data').classes('text-xs')
-                            ui.label('• Restricted + Masked: Analysts see hash, others hidden').classes('text-xs')
+                            ui.label('• Checked columns will be HIDDEN (not in view)').classes('text-xs')
+                            ui.label('• Unchecked columns will be VISIBLE (in view)').classes('text-xs')
+                            ui.label('• Original table remains unchanged').classes('text-xs')
+                            ui.label('• Users with full access use the original table').classes('text-xs')
+                            ui.label('• Restricted users use the view').classes('text-xs')
                     
-                    # Botão para renderizar colunas
+                    # Botão para carregar colunas
                     ui.button(
                         'LOAD COLUMNS',
                         icon='refresh',
-                        on_click=self.render_column_visibility_config
+                        on_click=self.render_columns_selection
                     ).props('color=primary').classes('mt-2')
                     
                     with ui.stepper_navigation():
                         ui.button('BACK', icon='arrow_back', on_click=stepper.previous).props('flat')
                         ui.button('NEXT', icon='arrow_forward', on_click=stepper.next).props('color=primary')
                 
-                # STEP 3: Assign User Access
-                with ui.step('Assign User Access Levels'):
-                    ui.label('Assign users to different access levels').classes('text-caption mb-4')
-                    
-                    with ui.column().classes('w-full gap-4'):
-                        # FULL ACCESS
-                        with ui.card().classes('w-full p-4 bg-green-50'):
-                            ui.label('👑 FULL ACCESS (see all columns real + access all views)').classes('font-bold mb-2')
-                            with ui.row().classes('w-full gap-2'):
-                                self.full_email_input = ui.input(
-                                    placeholder='user@company.com'
-                                ).classes('flex-1')
-                                ui.button(
-                                    'ADD',
-                                    icon='add',
-                                    on_click=lambda: self.add_user_to_level('full')
-                                ).props('color=positive')
-                            self.full_users_container = ui.column().classes('w-full mt-2')
-                            self.refresh_user_list('full')
-                        
-                        # MASKED ACCESS
-                        with ui.card().classes('w-full p-4 bg-purple-50'):
-                            ui.label('🎭 MASKED ACCESS (restricted columns as hash)').classes('font-bold mb-2')
-                            with ui.row().classes('w-full gap-2'):
-                                self.masked_email_input = ui.input(
-                                    placeholder='analyst@company.com'
-                                ).classes('flex-1')
-                                ui.button(
-                                    'ADD',
-                                    icon='add',
-                                    on_click=lambda: self.add_user_to_level('masked')
-                                ).props('color=purple')
-                            self.masked_users_container = ui.column().classes('w-full mt-2')
-                            self.refresh_user_list('masked')
-                        
-                        # PUBLIC ACCESS
-                        with ui.card().classes('w-full p-4 bg-blue-50'):
-                            ui.label('👁️ PUBLIC ACCESS (restricted columns hidden)').classes('font-bold mb-2')
-                            with ui.row().classes('w-full gap-2'):
-                                self.public_email_input = ui.input(
-                                    placeholder='viewer@company.com'
-                                ).classes('flex-1')
-                                ui.button(
-                                    'ADD',
-                                    icon='add',
-                                    on_click=lambda: self.add_user_to_level('public')
-                                ).props('color=blue')
-                            self.public_users_container = ui.column().classes('w-full mt-2')
-                            self.refresh_user_list('public')
-                    
-                    # Info sobre hierarquia de acesso
-                    with ui.card().classes('w-full bg-yellow-50 p-3 mt-4'):
-                        ui.label('ℹ️ Access Hierarchy:').classes('text-sm font-bold mb-1')
-                        ui.label('• FULL users: Can access ALL views (full + masked + public)').classes('text-xs')
-                        ui.label('• MASKED users: Can access ONLY masked view').classes('text-xs')
-                        ui.label('• PUBLIC users: Can access ONLY public view').classes('text-xs')
-                    
-                    with ui.stepper_navigation():
-                        ui.button('BACK', icon='arrow_back', on_click=stepper.previous).props('flat')
-                        ui.button('NEXT', icon='arrow_forward', on_click=stepper.next).props('color=primary')
-                
-                # STEP 4: Review and Create
+                # STEP 3: Review and Create
                 with ui.step('Review and Create'):
-                    ui.label('Review configuration and create views').classes('text-caption mb-4')
+                    ui.label('Review configuration and create restricted view').classes('text-caption mb-4')
                     
                     with ui.row().classes('w-full gap-4'):
-                        ui.button('GENERATE SQL', icon='code', on_click=self.generate_views_sql).props('color=blue')
-                        ui.button('CREATE VIEWS', icon='check_circle', on_click=self.create_views).props('color=positive')
+                        ui.button('GENERATE SQL', icon='code', on_click=self.generate_view_sql).props('color=blue')
+                        ui.button('CREATE VIEW', icon='check_circle', on_click=self.create_view).props('color=positive')
                     
                     with ui.stepper_navigation():
                         ui.button('BACK', icon='arrow_back', on_click=stepper.previous).props('flat')
