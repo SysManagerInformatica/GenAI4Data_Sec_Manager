@@ -50,16 +50,17 @@ class MaskStatus:
                 table_obj = client.get_table(table_ref)
                 
                 if table_obj.table_type == 'VIEW':
-                    # Detectar se é masked view (heurística: nome contém 'mask')
+                    # Detectar se é masked view
                     is_masked = self.detect_masked_view(table_obj)
                     
                     views.append({
                         'dataset': dataset_id,
                         'view_name': table.table_id,
-                        'is_masked': is_masked,
+                        'is_masked': '✅ Yes' if is_masked else '❌ No',
+                        'is_masked_bool': is_masked,
                         'created': table_obj.created.strftime('%Y-%m-%d %H:%M:%S') if table_obj.created else 'N/A',
                         'modified': table_obj.modified.strftime('%Y-%m-%d %H:%M:%S') if table_obj.modified else 'N/A',
-                        'num_rows': table_obj.num_rows if table_obj.num_rows else 0,
+                        'num_rows': str(table_obj.num_rows) if table_obj.num_rows else '0',
                         'view_query': table_obj.view_query[:100] + '...' if table_obj.view_query and len(table_obj.view_query) > 100 else table_obj.view_query,
                         'full_view_query': table_obj.view_query
                     })
@@ -81,12 +82,11 @@ class MaskStatus:
             'sha256',
             'to_base64',
             'hash',
-            'mask',
             'round(',
             'concat(substr',
             '***',
             'confidential',
-            'masked'
+            '_masked'
         ]
         
         for pattern in masking_patterns:
@@ -100,8 +100,6 @@ class MaskStatus:
         self.selected_dataset = dataset_id
         self.all_views = self.get_views_in_dataset(dataset_id)
         self.refresh_views_grid()
-        
-        # Atualizar estatísticas
         self.update_statistics()
     
     def refresh_views_grid(self):
@@ -113,7 +111,7 @@ class MaskStatus:
     def update_statistics(self):
         """Atualiza cards de estatísticas"""
         total_views = len(self.all_views)
-        masked_views = len([v for v in self.all_views if v['is_masked']])
+        masked_views = len([v for v in self.all_views if v['is_masked_bool']])
         regular_views = total_views - masked_views
         
         # Atualizar labels dos cards
@@ -146,10 +144,7 @@ class MaskStatus:
                 ui.label(view['view_name'])
                 
                 ui.label('Is Masked:').classes('font-bold')
-                if view['is_masked']:
-                    ui.label('✅ Yes (Detected masking patterns)').classes('text-green-600')
-                else:
-                    ui.label('❌ No (Regular view)').classes('text-grey-600')
+                ui.label(view['is_masked'])
                 
                 ui.label('Created:').classes('font-bold')
                 ui.label(view['created'])
@@ -158,7 +153,7 @@ class MaskStatus:
                 ui.label(view['modified'])
                 
                 ui.label('Approximate Rows:').classes('font-bold')
-                ui.label(f"{view['num_rows']:,}" if view['num_rows'] else 'N/A')
+                ui.label(view['num_rows'])
             
             # Schema
             ui.separator()
@@ -254,7 +249,7 @@ class MaskStatus:
                     details={
                         'dataset': view['dataset'],
                         'view_name': view['view_name'],
-                        'was_masked': view['is_masked']
+                        'was_masked': view['is_masked_bool']
                     }
                 )
                 
@@ -332,24 +327,7 @@ class MaskStatus:
                 self.views_grid = ui.aggrid({
                     'columnDefs': [
                         {'field': 'view_name', 'headerName': 'View Name', 'checkboxSelection': True, 'filter': 'agTextColumnFilter', 'minWidth': 250},
-                        {
-                            'field': 'is_masked',
-                            'headerName': 'Masked',
-                            'filter': 'agSetColumnFilter',
-                            'minWidth': 120,
-                            'cellRenderer': 'UI5CellRenderer',
-                            'cellRendererParams': {
-                                'jsFunction': '''
-                                    function(params) {
-                                        if (params.value) {
-                                            return '<span style="color: green;">✅ Yes</span>';
-                                        } else {
-                                            return '<span style="color: gray;">❌ No</span>';
-                                        }
-                                    }
-                                '''
-                            }
-                        },
+                        {'field': 'is_masked', 'headerName': 'Masked', 'filter': 'agSetColumnFilter', 'minWidth': 120},
                         {'field': 'created', 'headerName': 'Created', 'filter': 'agDateColumnFilter', 'minWidth': 180},
                         {'field': 'modified', 'headerName': 'Modified', 'filter': 'agDateColumnFilter', 'minWidth': 180},
                         {'field': 'num_rows', 'headerName': 'Rows', 'filter': 'agNumberColumnFilter', 'minWidth': 120},
@@ -372,46 +350,7 @@ class MaskStatus:
                         ui.label('• Views with SHA256, TO_BASE64, or hashing functions').classes('text-xs')
                         ui.label('• Views with masking patterns (e.g., ROUND, CONCAT, SUBSTR)').classes('text-xs')
                         ui.label('• Views with keywords like "masked", "confidential", or "***"').classes('text-xs')
-                        ui.label('• View names containing "mask" or "masked"').classes('text-xs')
+                        ui.label('• View names containing "_masked" suffix').classes('text-xs')
     
     def run(self):
         pass  # Já renderizado no __init__
-```
-
----
-
-## ✅ FUNCIONALIDADES IMPLEMENTADAS
-
-| Funcionalidade | Descrição |
-|----------------|-----------|
-| 📊 **Listar Views** | Lista todas as views de um dataset |
-| 🎭 **Detectar Masked Views** | Identifica automaticamente views mascaradas |
-| 📈 **Estatísticas** | Cards com total, masked, e regular views |
-| 🔍 **View Details** | Dialog com schema, query, e metadata completa |
-| 🗑️ **Delete Views** | Deleta views selecionadas com confirmação |
-| 📋 **Copy Query** | Copia SQL da view para clipboard |
-| 🔄 **Refresh** | Atualiza lista de views |
-| ✅ **Seleção Múltipla** | Selecionar múltiplas views para deletar |
-| 📝 **Audit Log** | Log completo de todas operações |
-
----
-
-## 🎨 INTERFACE
-
-### **Cards de Estatísticas:**
-```
-┌─────────────┬─────────────┬─────────────┐
-│ Total Views │Masked Views │Regular Views│
-│     12      │      5      │      7      │
-└─────────────┴─────────────┴─────────────┘
-```
-
-### **Grid de Views:**
-```
-┌──────────────────────────────────────────────────┐
-│ View Name        │Masked│Created     │Modified   │
-├──────────────────┼──────┼────────────┼───────────┤
-│ vw_headcount_mask│✅ Yes│2024-11-26  │2024-11-26 │
-│ vw_sales_data    │❌ No │2024-11-25  │2024-11-26 │
-│ vw_cpf_masked    │✅ Yes│2024-11-26  │2024-11-26 │
-└──────────────────┴──────┴────────────┴───────────┘
