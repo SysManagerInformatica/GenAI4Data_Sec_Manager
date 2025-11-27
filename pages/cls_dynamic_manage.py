@@ -3,6 +3,7 @@ from config import Config
 from nicegui import ui
 from google.cloud import bigquery
 from services.audit_service import AuditService
+import re
 
 config = Config()
 client = bigquery.Client(project=config.PROJECT_ID)
@@ -91,7 +92,7 @@ class DynamicColumnManage:
                         'users_full': users_full,
                         'users_masked': users_masked,
                         'users_public': users_public,
-                        'total_users': len(users_full) + len(users_masked) + len(users_public)
+                        'total_users': len(set(users_full + users_masked + users_public))
                     })
             
             return views
@@ -100,29 +101,45 @@ class DynamicColumnManage:
             return []
     
     def get_rls_users(self, dataset_id, view_name):
-        """Obtém usuários com acesso RLS em uma view"""
+        """Obtém usuários com acesso RLS em uma view - VERSÃO CORRIGIDA"""
         if not view_name:
             return []
         
         try:
-            # Query para listar RLS policies
+            # Query melhorada para buscar RLS policies
             query = f"""
             SELECT filter_predicate
             FROM `{self.project_id}.{dataset_id}.INFORMATION_SCHEMA.ROW_ACCESS_POLICIES`
             WHERE table_name = '{view_name}'
+            LIMIT 1
             """
             
             result = client.query(query).result()
+            
             for row in result:
                 if row.filter_predicate:
-                    # Extrair emails do FILTER USING clause
-                    # Formato: SESSION_USER() IN ('email1', 'email2')
-                    import re
-                    emails = re.findall(r"'([^']+@[^']+)'", row.filter_predicate)
-                    return emails
+                    filter_text = row.filter_predicate
+                    
+                    # Debug: mostrar o que foi retornado
+                    print(f"[DEBUG] Filter predicate for {view_name}: {filter_text}")
+                    
+                    # Extrair emails com regex melhorado
+                    # Procura por padrões: 'email@domain.com' ou "email@domain.com"
+                    email_pattern = r"['\"]([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})['\"]"
+                    emails = re.findall(email_pattern, filter_text)
+                    
+                    if emails:
+                        print(f"[DEBUG] Found emails: {emails}")
+                        return emails
+                    else:
+                        print(f"[DEBUG] No emails found in filter")
+                        return []
             
+            print(f"[DEBUG] No RLS policy found for {view_name}")
             return []
+            
         except Exception as e:
+            print(f"[ERROR] Error getting RLS users for {view_name}: {e}")
             return []
     
     def on_dataset_change(self, dataset_id):
@@ -208,6 +225,11 @@ class DynamicColumnManage:
             'public': list(view_group.get('users_public', []))
         }
         
+        # Criar containers para cada nível
+        full_container = None
+        masked_container = None
+        public_container = None
+        
         with ui.dialog() as manage_dialog, ui.card().classes('w-full max-w-5xl'):
             ui.label(f'Manage Users: {view_group["base_name"]}').classes('text-h5 font-bold mb-4')
             
@@ -223,12 +245,12 @@ class DynamicColumnManage:
                         ui.button(
                             'ADD',
                             icon='add',
-                            on_click=lambda: self.add_user_to_level('full', full_input, full_users_container)
+                            on_click=lambda: self.add_user_to_level_dialog('full', full_input, full_container)
                         ).props('flat color=positive size=sm')
                     
                     # Lista de usuários
-                    full_users_container = ui.column().classes('w-full gap-1')
-                    self.render_user_list('full', full_users_container)
+                    full_container = ui.column().classes('w-full gap-1')
+                    self.render_user_list_dialog('full', full_container)
                 
                 # COLUNA 2: MASKED ACCESS
                 with ui.card().classes('flex-1 bg-purple-50 p-4'):
@@ -241,12 +263,12 @@ class DynamicColumnManage:
                         ui.button(
                             'ADD',
                             icon='add',
-                            on_click=lambda: self.add_user_to_level('masked', masked_input, masked_users_container)
+                            on_click=lambda: self.add_user_to_level_dialog('masked', masked_input, masked_container)
                         ).props('flat color=purple size=sm')
                     
                     # Lista de usuários
-                    masked_users_container = ui.column().classes('w-full gap-1')
-                    self.render_user_list('masked', masked_users_container)
+                    masked_container = ui.column().classes('w-full gap-1')
+                    self.render_user_list_dialog('masked', masked_container)
                 
                 # COLUNA 3: PUBLIC ACCESS
                 with ui.card().classes('flex-1 bg-blue-50 p-4'):
@@ -259,12 +281,12 @@ class DynamicColumnManage:
                         ui.button(
                             'ADD',
                             icon='add',
-                            on_click=lambda: self.add_user_to_level('public', public_input, public_users_container)
+                            on_click=lambda: self.add_user_to_level_dialog('public', public_input, public_container)
                         ).props('flat color=blue size=sm')
                     
                     # Lista de usuários
-                    public_users_container = ui.column().classes('w-full gap-1')
-                    self.render_user_list('public', public_users_container)
+                    public_container = ui.column().classes('w-full gap-1')
+                    self.render_user_list_dialog('public', public_container)
             
             # Info box
             with ui.card().classes('w-full bg-orange-50 p-3 mt-4'):
@@ -284,8 +306,8 @@ class DynamicColumnManage:
         
         manage_dialog.open()
     
-    def render_user_list(self, level, container):
-        """Renderiza lista de usuários de um nível"""
+    def render_user_list_dialog(self, level, container):
+        """Renderiza lista de usuários de um nível no dialog"""
         container.clear()
         
         with container:
@@ -298,11 +320,11 @@ class DynamicColumnManage:
                         ui.label(user).classes('text-xs flex-1')
                         ui.button(
                             icon='delete',
-                            on_click=lambda u=user, l=level, c=container: self.remove_user_from_level(l, u, c)
+                            on_click=lambda u=user, l=level, c=container: self.remove_user_from_level_dialog(l, u, c)
                         ).props('flat dense size=sm color=negative')
     
-    def add_user_to_level(self, level, input_field, container):
-        """Adiciona usuário a um nível"""
+    def add_user_to_level_dialog(self, level, input_field, container):
+        """Adiciona usuário a um nível no dialog"""
         email = input_field.value.strip()
         
         if not email or '@' not in email:
@@ -318,14 +340,14 @@ class DynamicColumnManage:
         # Adicionar
         self.user_assignments[level].append(email)
         input_field.value = ''
-        self.render_user_list(level, container)
+        self.render_user_list_dialog(level, container)
         ui.notify(f'User added to {level.upper()} level', type="positive")
     
-    def remove_user_from_level(self, level, email, container):
-        """Remove usuário de um nível"""
+    def remove_user_from_level_dialog(self, level, email, container):
+        """Remove usuário de um nível no dialog"""
         if email in self.user_assignments[level]:
             self.user_assignments[level].remove(email)
-            self.render_user_list(level, container)
+            self.render_user_list_dialog(level, container)
             ui.notify(f'User removed from {level.upper()} level', type="info")
     
     def save_user_changes(self, dialog):
@@ -338,9 +360,10 @@ class DynamicColumnManage:
             base_name = view_group['base_name']
             
             # Atualizar RLS para cada view
+            # Lembrar: FULL users acessam todas as views
             sqls = []
             
-            # FULL VIEW
+            # FULL VIEW - apenas FULL users
             if view_group['full_view'] and self.user_assignments['full']:
                 users_str = "', '".join(self.user_assignments['full'])
                 sql_full = f"""
@@ -352,9 +375,10 @@ FILTER USING (
 );"""
                 sqls.append(sql_full)
             
-            # MASKED VIEW
-            if view_group['masked_view'] and self.user_assignments['masked']:
-                users_str = "', '".join(self.user_assignments['masked'])
+            # MASKED VIEW - FULL + MASKED users
+            masked_allowed = list(self.user_assignments['full']) + list(self.user_assignments['masked'])
+            if view_group['masked_view'] and masked_allowed:
+                users_str = "', '".join(masked_allowed)
                 sql_masked = f"""
 CREATE OR REPLACE ROW ACCESS POLICY rap_{base_name}_masked
 ON `{self.project_id}.{self.selected_dataset}.{view_group['masked_view']}`
@@ -364,9 +388,10 @@ FILTER USING (
 );"""
                 sqls.append(sql_masked)
             
-            # PUBLIC VIEW
-            if view_group['public_view'] and self.user_assignments['public']:
-                users_str = "', '".join(self.user_assignments['public'])
+            # PUBLIC VIEW - FULL + PUBLIC users
+            public_allowed = list(self.user_assignments['full']) + list(self.user_assignments['public'])
+            if view_group['public_view'] and public_allowed:
+                users_str = "', '".join(public_allowed)
                 sql_public = f"""
 CREATE OR REPLACE ROW ACCESS POLICY rap_{base_name}_public
 ON `{self.project_id}.{self.selected_dataset}.{view_group['public_view']}`
@@ -378,6 +403,7 @@ FILTER USING (
             
             # Executar todos os SQLs
             for sql in sqls:
+                print(f"[DEBUG] Executing SQL: {sql}")
                 query_job = client.query(sql)
                 query_job.result()
             
@@ -400,6 +426,7 @@ FILTER USING (
             self.refresh_views_grid()
             
         except Exception as e:
+            print(f"[ERROR] Failed to update users: {e}")
             self.audit_service.log_action(
                 action='UPDATE_DYNAMIC_VIEW_USERS',
                 resource_type='DYNAMIC_VIEWS',
