@@ -64,7 +64,7 @@ class DynamicColumnManage:
                         
                         # Tentar descobrir colunas ocultas
                         hidden_cols = []
-                        if source_table:
+                        if source_table and source_table != 'Unknown':
                             hidden_cols = self.get_hidden_columns(dataset_id, table.table_id, source_table)
                         
                         views.append({
@@ -85,13 +85,30 @@ class DynamicColumnManage:
     def extract_source_table(self, view_query):
         """Extrai nome da tabela origem da query da view"""
         try:
-            # Regex para encontrar FROM `project.dataset.table`
-            pattern = r'FROM\s+`[^`]+\.([^`]+)`'
-            match = re.search(pattern, view_query, re.IGNORECASE)
-            if match:
-                return match.group(1)
+            # Remover quebras de linha e espaços extras
+            view_query = ' '.join(view_query.split())
+            
+            # Debug
+            print(f"[DEBUG] View query: {view_query[:200]}...")
+            
+            # Tentar vários padrões de regex
+            patterns = [
+                r'FROM\s+`[^`]*\.([^`\.]+)`',  # FROM `project.dataset.table`
+                r'FROM\s+`([^`]+)`',             # FROM `table`
+                r'FROM\s+(\w+)',                 # FROM table
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, view_query, re.IGNORECASE)
+                if match:
+                    table_name = match.group(1)
+                    print(f"[DEBUG] Extracted source table: {table_name}")
+                    return table_name
+            
+            print("[DEBUG] Could not extract source table")
             return 'Unknown'
-        except:
+        except Exception as e:
+            print(f"[ERROR] Error extracting source table: {e}")
             return 'Unknown'
     
     def get_hidden_columns(self, dataset_id, view_name, source_table):
@@ -184,7 +201,19 @@ class DynamicColumnManage:
         
         # Carregar todas as colunas da tabela origem
         try:
-            table_ref = client.dataset(self.selected_dataset).table(view_info['source_table'])
+            source_table = view_info['source_table']
+            
+            # Debug
+            print(f"[DEBUG] Loading source table: {source_table}")
+            print(f"[DEBUG] Dataset: {self.selected_dataset}")
+            
+            if source_table == 'Unknown' or not source_table:
+                ui.notify("⚠️ Cannot determine source table from view definition", type="warning")
+                # Tentar perguntar ao usuário
+                self.ask_source_table(view_info)
+                return
+            
+            table_ref = client.dataset(self.selected_dataset).table(source_table)
             table_obj = client.get_table(table_ref)
             
             self.source_table_columns = []
@@ -197,8 +226,12 @@ class DynamicColumnManage:
             
             self.hidden_columns = list(view_info['hidden_columns'])
             
+            print(f"[DEBUG] Loaded {len(self.source_table_columns)} columns")
+            print(f"[DEBUG] Hidden columns: {self.hidden_columns}")
+            
         except Exception as e:
-            ui.notify(f"Error loading source table columns: {e}", type="negative")
+            print(f"[ERROR] Error loading source table: {e}")
+            ui.notify(f"Error loading source table: {e}", type="negative")
             return
         
         # Dialog para gerenciar
@@ -212,43 +245,48 @@ class DynamicColumnManage:
                 ui.label('• Click SAVE CHANGES to recreate the view with new configuration').classes('text-xs')
             
             # Lista de colunas
-            columns_container = ui.column().classes('w-full')
+            ui.label(f'Source table: {view_info["source_table"]} ({len(self.source_table_columns)} columns)').classes('text-sm font-bold mb-2')
             
-            with columns_container:
-                ui.label(f'Source table: {view_info["source_table"]} ({len(self.source_table_columns)} columns)').classes('text-sm font-bold mb-2')
-                
-                with ui.scroll_area().classes('w-full h-96 border rounded p-2'):
-                    for col in self.source_table_columns:
-                        with ui.card().classes('w-full p-3 mb-2'):
-                            with ui.row().classes('w-full items-center gap-4'):
-                                # Checkbox
-                                is_hidden = col['name'] in self.hidden_columns
-                                checkbox = ui.checkbox(
-                                    text='Hide',
-                                    value=is_hidden,
-                                    on_change=lambda e, c=col['name']: self.toggle_column_visibility(c, e.value, columns_container)
-                                )
-                                
-                                # Nome e tipo
-                                with ui.column().classes('flex-1'):
-                                    ui.label(col['name']).classes('font-bold text-base')
-                                    ui.label(f"Type: {col['type']}").classes('text-xs text-grey-6')
-                                
-                                # Status
-                                status = 'HIDDEN' if is_hidden else 'VISIBLE'
-                                status_label = ui.label(status).classes('text-sm px-3 py-1 rounded')
-                                if is_hidden:
-                                    status_label.classes('bg-red-100 text-red-600')
-                                else:
-                                    status_label.classes('bg-green-100 text-green-600')
+            with ui.scroll_area().classes('w-full h-96 border rounded p-2'):
+                for col in self.source_table_columns:
+                    with ui.card().classes('w-full p-3 mb-2'):
+                        with ui.row().classes('w-full items-center gap-4'):
+                            # Checkbox com closure correta
+                            is_hidden = col['name'] in self.hidden_columns
+                            
+                            def make_toggle(column_name):
+                                def toggle(e):
+                                    if e.value and column_name not in self.hidden_columns:
+                                        self.hidden_columns.append(column_name)
+                                        print(f"[DEBUG] Hidden: {column_name}")
+                                    elif not e.value and column_name in self.hidden_columns:
+                                        self.hidden_columns.remove(column_name)
+                                        print(f"[DEBUG] Visible: {column_name}")
+                                return toggle
+                            
+                            checkbox = ui.checkbox(
+                                text='Hide',
+                                value=is_hidden,
+                                on_change=make_toggle(col['name'])
+                            )
+                            
+                            # Nome e tipo
+                            with ui.column().classes('flex-1'):
+                                ui.label(col['name']).classes('font-bold text-base')
+                                ui.label(f"Type: {col['type']}").classes('text-xs text-grey-6')
+                            
+                            # Status
+                            status = 'HIDDEN' if is_hidden else 'VISIBLE'
+                            status_label = ui.label(status).classes('text-sm px-3 py-1 rounded')
+                            if is_hidden:
+                                status_label.classes('bg-red-100 text-red-600')
+                            else:
+                                status_label.classes('bg-green-100 text-green-600')
             
             # Resumo
+            visible_count = len(self.source_table_columns) - len(self.hidden_columns)
             with ui.card().classes('w-full bg-purple-50 p-3 mt-4'):
-                visible_count = len(self.source_table_columns) - len(self.hidden_columns)
-                ui.label(f'📊 Current configuration:').classes('font-bold text-sm mb-2')
-                ui.label(f'  • Total columns: {len(self.source_table_columns)}').classes('text-xs')
-                ui.label(f'  • Visible in view: {visible_count}').classes('text-xs')
-                ui.label(f'  • Hidden from view: {len(self.hidden_columns)}').classes('text-xs')
+                ui.label(f'📊 Total: {len(self.source_table_columns)} columns | Visible: {visible_count} | Hidden: {len(self.hidden_columns)}').classes('text-sm font-bold')
             
             # Botões
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
@@ -260,6 +298,58 @@ class DynamicColumnManage:
                 ).props('color=positive')
         
         manage_dialog.open()
+    
+    def ask_source_table(self, view_info):
+        """Pergunta ao usuário qual é a tabela origem"""
+        with ui.dialog() as ask_dialog, ui.card().classes('w-full max-w-2xl'):
+            ui.label('⚠️ Source Table Not Found').classes('text-h6 font-bold text-orange-600 mb-4')
+            ui.label('Could not automatically detect the source table from the view definition.').classes('mb-2')
+            ui.label('Please select the source table manually:').classes('mb-4')
+            
+            # Lista de tabelas disponíveis
+            try:
+                tables = client.list_tables(self.selected_dataset)
+                table_names = [t.table_id for t in tables if not t.table_id.endswith('_restricted')]
+                
+                if not table_names:
+                    ui.label('No tables found in dataset').classes('text-red-600')
+                    ui.button('Close', on_click=ask_dialog.close).props('color=primary')
+                    ask_dialog.open()
+                    return
+                
+                table_select = ui.select(
+                    options=table_names,
+                    label='Source Table',
+                    value=table_names[0] if table_names else None
+                ).classes('w-full')
+                
+            except Exception as e:
+                ui.notify(f"Error listing tables: {e}", type="negative")
+                ask_dialog.close()
+                return
+            
+            with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                ui.button('Cancel', on_click=ask_dialog.close).props('flat')
+                ui.button(
+                    'Continue',
+                    on_click=lambda: self.continue_with_source_table(view_info, table_select.value, ask_dialog)
+                ).props('color=primary')
+        
+        ask_dialog.open()
+    
+    def continue_with_source_table(self, view_info, source_table, dialog):
+        """Continua com a tabela origem selecionada manualmente"""
+        if not source_table:
+            ui.notify("Please select a source table", type="warning")
+            return
+        
+        dialog.close()
+        
+        # Atualizar view_info
+        view_info['source_table'] = source_table
+        
+        # Tentar novamente
+        self.manage_columns(view_info)
     
     def toggle_column_visibility(self, column_name, is_hidden, container):
         """Toggle visibilidade da coluna"""
@@ -284,11 +374,17 @@ class DynamicColumnManage:
             view_name = self.current_view['view_name']
             source_table = self.current_view['source_table']
             
+            print(f"[DEBUG] Updating view: {view_name}")
+            print(f"[DEBUG] Visible columns: {visible_columns}")
+            print(f"[DEBUG] Hidden columns: {self.hidden_columns}")
+            
             # Gerar SQL da view
             sql = f"""CREATE OR REPLACE VIEW `{self.project_id}.{self.selected_dataset}.{view_name}` AS
 SELECT
   {(','+chr(10)+'  ').join(visible_columns)}
 FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
+            
+            print(f"[DEBUG] SQL: {sql}")
             
             # Executar
             query_job = client.query(sql)
@@ -316,6 +412,7 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
             self.update_statistics()
             
         except Exception as e:
+            print(f"[ERROR] Error updating view: {e}")
             self.audit_service.log_action(
                 action='UPDATE_RESTRICTED_VIEW',
                 resource_type='RESTRICTED_VIEW',
