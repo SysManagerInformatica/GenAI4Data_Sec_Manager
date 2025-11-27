@@ -71,12 +71,19 @@ def menu() -> None:
                 with ui.item_section():
                     ui.item_label('Policy Tag Permissions').classes(replace='text-primary text-bold').style('font-size:14px')
             
-            # 🆕 Dynamic Column Security
+            # Dynamic Column Security
             with ui.item(on_click=lambda: ui.navigate.to('/clsdynamiccolumns/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('visibility', color='green-500')
                 with ui.item_section():
                     ui.item_label('Dynamic Column Security').classes(replace='text-primary text-bold').style('font-size:14px')
+            
+            # 🆕 Manage Dynamic Views
+            with ui.item(on_click=lambda: ui.navigate.to('/clsdynamicmanage/')):
+                with ui.item_section().props('avatar'):
+                    ui.icon('settings', color='green-500')
+                with ui.item_section():
+                    ui.item_label('Manage Dynamic Views').classes(replace='text-primary text-bold').style('font-size:14px')
         
         # DATA MASKING
         with ui.expansion('Data Masking', caption='Click to Expand', icon='masks').classes('w-full text-primary text-bold').style('font-size:16px'):
