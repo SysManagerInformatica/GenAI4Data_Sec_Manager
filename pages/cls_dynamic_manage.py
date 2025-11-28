@@ -4,6 +4,7 @@ from nicegui import ui
 from google.cloud import bigquery
 from services.audit_service import AuditService
 import re
+import traceback
 
 config = Config()
 client = bigquery.Client(project=config.PROJECT_ID)
@@ -185,18 +186,30 @@ class DynamicColumnManage:
                 ui.label('📝 Query Example:').classes('font-bold text-sm mb-2')
                 ui.code(f"SELECT * FROM `{self.selected_dataset}.{view_info['view_name']}`;", language='sql').classes('w-full text-xs')
             
+            # --- FUNÇÃO INTERNA PARA ABRIR O EDITOR COM SEGURANÇA ---
+            async def open_editor():
+                # Spinner indicando carregamento
+                n = ui.notification('Loading view schema...', type='info', spinner=True, timeout=None)
+                try:
+                    # Chama o edit_view passando o dialog atual para fechar apenas se sucesso
+                    await self.edit_view(view_info, parent_dialog=details_dialog)
+                except Exception as e:
+                    ui.notify(f"Error opening editor: {e}", type="negative")
+                    print(e)
+                finally:
+                    n.dismiss() # Remove o spinner
+
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('Close', on_click=details_dialog.close).props('flat')
-                ui.button('EDIT VIEW', icon='edit', on_click=lambda: [details_dialog.close(), self.edit_view(view_info)]).props('color=primary')
+                # Chama a função async open_editor ao invés do lambda
+                ui.button('EDIT VIEW', icon='edit', on_click=open_editor).props('color=primary')
         
         details_dialog.open()
     
-    def edit_view(self, view_info):
+    async def edit_view(self, view_info, parent_dialog=None):
         """Editor completo da view com abas para colunas e usuários"""
         print(f"[DEBUG] ===== EDIT_VIEW CALLED =====")
         print(f"[DEBUG] View name: {view_info['view_name']}")
-        print(f"[DEBUG] Source table: {view_info['source_table']}")
-        print(f"[DEBUG] Dataset: {self.selected_dataset}")
         
         self.current_view = view_info
         
@@ -207,10 +220,13 @@ class DynamicColumnManage:
             if source_table == 'Unknown' or not source_table:
                 print("[DEBUG] Source table is Unknown - asking user")
                 ui.notify("⚠️ Cannot determine source table", type="warning")
+                # Se não sabemos a tabela, fechamos o dialog anterior para perguntar
+                if parent_dialog: parent_dialog.close()
                 self.ask_source_table(view_info)
                 return
             
             print(f"[DEBUG] Getting table reference for: {source_table}")
+            # Operação síncrona do BigQuery (o spinner da função anterior segura a ansiedade do usuário)
             table_ref = client.dataset(self.selected_dataset).table(source_table)
             table_obj = client.get_table(table_ref)
             
@@ -225,22 +241,22 @@ class DynamicColumnManage:
             print(f"[DEBUG] Loaded {len(self.source_table_columns)} columns")
             
             self.hidden_columns = list(view_info['hidden_columns'])
-            print(f"[DEBUG] Hidden columns: {self.hidden_columns}")
             
-            # Carregar usuários documentados (da descrição da view)
-            print(f"[DEBUG] Loading view metadata")
+            # Carregar usuários documentados
             view_ref = client.dataset(self.selected_dataset).table(view_info['view_name'])
             view_obj = client.get_table(view_ref)
             self.documented_users = self.parse_users_from_description(view_obj.description)
-            print(f"[DEBUG] Documented users: {self.documented_users}")
             
         except Exception as e:
             print(f"[ERROR] Error loading view data: {e}")
-            import traceback
             traceback.print_exc()
             ui.notify(f"Error loading view: {e}", type="negative")
             return
         
+        # SUCESSO NO CARREGAMENTO: Agora podemos fechar o dialog anterior com segurança
+        if parent_dialog:
+            parent_dialog.close()
+
         print("[DEBUG] Creating edit dialog...")
         
         # Dialog com tabs
@@ -267,6 +283,7 @@ class DynamicColumnManage:
                                 with ui.row().classes('w-full items-center gap-4'):
                                     is_hidden = col['name'] in self.hidden_columns
                                     
+                                    # Factory para o toggle
                                     def make_toggle(column_name):
                                         def toggle(e):
                                             if e.value and column_name not in self.hidden_columns:
@@ -364,9 +381,7 @@ class DynamicColumnManage:
                     on_click=lambda: self.save_view_changes(edit_dialog)
                 ).props('color=positive')
         
-        print("[DEBUG] Opening dialog...")
         edit_dialog.open()
-        print("[DEBUG] Dialog opened!")
     
     def parse_users_from_description(self, description):
         """Extrai lista de usuários da descrição da view"""
@@ -502,8 +517,11 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
         # Atualizar view_info
         view_info['source_table'] = source_table
         
-        # Tentar novamente
-        self.edit_view(view_info)
+        # Tentar novamente (agora chamando de forma síncrona ou convertendo para tarefa, 
+        # mas como está dentro de um callback, pode ser chamada diretamente se não usarmos await)
+        # Nota: Como edit_view agora é async, precisamos agendar a tarefa
+        import asyncio
+        asyncio.create_task(self.edit_view(view_info))
     
     async def delete_selected_views(self):
         """Deleta views selecionadas"""
