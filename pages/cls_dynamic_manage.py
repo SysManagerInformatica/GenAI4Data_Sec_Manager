@@ -1,6 +1,6 @@
 import theme
 from config import Config
-from nicegui import ui
+from nicegui import ui, run  # <--- IMPORTANTE: Adicionado 'run' aqui
 from google.cloud import bigquery
 from services.audit_service import AuditService
 import re
@@ -195,7 +195,8 @@ class DynamicColumnManage:
                     await self.edit_view(view_info, parent_dialog=details_dialog)
                 except Exception as e:
                     ui.notify(f"Error opening editor: {e}", type="negative")
-                    print(e)
+                    print(f"Error executing edit_view: {e}")
+                    traceback.print_exc()
                 finally:
                     n.dismiss() # Remove o spinner
 
@@ -207,7 +208,7 @@ class DynamicColumnManage:
         details_dialog.open()
     
     async def edit_view(self, view_info, parent_dialog=None):
-        """Editor completo da view com abas para colunas e usuários"""
+        """Editor completo da view com abas para colunas e usuários (VERSÃO ASYNC/NON-BLOCKING)"""
         print(f"[DEBUG] ===== EDIT_VIEW CALLED =====")
         print(f"[DEBUG] View name: {view_info['view_name']}")
         
@@ -220,15 +221,16 @@ class DynamicColumnManage:
             if source_table == 'Unknown' or not source_table:
                 print("[DEBUG] Source table is Unknown - asking user")
                 ui.notify("⚠️ Cannot determine source table", type="warning")
-                # Se não sabemos a tabela, fechamos o dialog anterior para perguntar
                 if parent_dialog: parent_dialog.close()
                 self.ask_source_table(view_info)
                 return
             
             print(f"[DEBUG] Getting table reference for: {source_table}")
-            # Operação síncrona do BigQuery (o spinner da função anterior segura a ansiedade do usuário)
+            ui.notify(f"Fetching schema for {source_table}...", type="ongoing", timeout=2000)
+            
+            # --- CRÍTICO: USANDO RUN.IO_BOUND PARA NÃO TRAVAR A TELA ---
             table_ref = client.dataset(self.selected_dataset).table(source_table)
-            table_obj = client.get_table(table_ref)
+            table_obj = await run.io_bound(client.get_table, table_ref)
             
             self.source_table_columns = []
             for field in table_obj.schema:
@@ -244,13 +246,16 @@ class DynamicColumnManage:
             
             # Carregar usuários documentados
             view_ref = client.dataset(self.selected_dataset).table(view_info['view_name'])
-            view_obj = client.get_table(view_ref)
+            view_obj = await run.io_bound(client.get_table, view_ref)
+            
             self.documented_users = self.parse_users_from_description(view_obj.description)
+            
+            ui.notify("Schema loaded. Opening editor...", type="positive", timeout=1000)
             
         except Exception as e:
             print(f"[ERROR] Error loading view data: {e}")
             traceback.print_exc()
-            ui.notify(f"Error loading view: {e}", type="negative")
+            ui.notify(f"Error loading view data: {e}", type="negative", close_button=True, timeout=None)
             return
         
         # SUCESSO NO CARREGAMENTO: Agora podemos fechar o dialog anterior com segurança
@@ -288,10 +293,10 @@ class DynamicColumnManage:
                                         def toggle(e):
                                             if e.value and column_name not in self.hidden_columns:
                                                 self.hidden_columns.append(column_name)
-                                                print(f"[DEBUG] Hiding column: {column_name}")
+                                                # print(f"[DEBUG] Hiding column: {column_name}")
                                             elif not e.value and column_name in self.hidden_columns:
                                                 self.hidden_columns.remove(column_name)
-                                                print(f"[DEBUG] Showing column: {column_name}")
+                                                # print(f"[DEBUG] Showing column: {column_name}")
                                         return toggle
                                     
                                     ui.checkbox(
@@ -411,6 +416,9 @@ class DynamicColumnManage:
             ui.notify("❌ Cannot hide ALL columns!", type="negative")
             return
         
+        # UI Feedback de salvamento (opcional, mas bom)
+        n = ui.notification('Saving changes to BigQuery...', spinner=True, timeout=None)
+        
         try:
             view_name = self.current_view['view_name']
             source_table = self.current_view['source_table']
@@ -421,6 +429,8 @@ SELECT
   {(','+chr(10)+'  ').join(visible_columns)}
 FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
             
+            # Nota: save_view_changes é síncrona pois é chamada por lambda, 
+            # mas podemos usar client.query diretamente aqui pois é o passo final
             query_job = client.query(sql)
             query_job.result()
             
@@ -449,6 +459,7 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
                 }
             )
             
+            n.dismiss()
             ui.notify(f"✅ View '{view_name}' updated successfully!", type="positive")
             dialog.close()
             
@@ -458,6 +469,7 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
             self.update_statistics()
             
         except Exception as e:
+            n.dismiss()
             print(f"[ERROR] Error saving changes: {e}")
             self.audit_service.log_action(
                 action='UPDATE_RESTRICTED_VIEW',
@@ -506,7 +518,7 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
         
         ask_dialog.open()
     
-    def continue_with_source_table(self, view_info, source_table, dialog):
+    async def continue_with_source_table(self, view_info, source_table, dialog):
         """Continua com a tabela origem selecionada manualmente"""
         if not source_table:
             ui.notify("Please select a source table", type="warning")
@@ -517,11 +529,8 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
         # Atualizar view_info
         view_info['source_table'] = source_table
         
-        # Tentar novamente (agora chamando de forma síncrona ou convertendo para tarefa, 
-        # mas como está dentro de um callback, pode ser chamada diretamente se não usarmos await)
-        # Nota: Como edit_view agora é async, precisamos agendar a tarefa
-        import asyncio
-        asyncio.create_task(self.edit_view(view_info))
+        # Tentar novamente abrindo o editor
+        await self.edit_view(view_info)
     
     async def delete_selected_views(self):
         """Deleta views selecionadas"""
