@@ -40,50 +40,54 @@ def menu() -> None:
         
         # COLUMN LEVEL SECURITY
         with ui.expansion('Column Level Security', caption='Click to Expand', icon='security').classes('w-full text-primary text-bold').style('font-size:16px'):
+            # 1. Manage Taxonomies
             with ui.item(on_click=lambda: ui.navigate.to('/clstaxonomies/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('folder', color='green-500')
                 with ui.item_section():
                     ui.item_label('Manage Taxonomies').classes(replace='text-primary text-bold').style('font-size:14px')
             
+            # 2. Manage Policy Tags
             with ui.item(on_click=lambda: ui.navigate.to('/clspolicytags/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('label', color='green-500')
                 with ui.item_section():
                     ui.item_label('Manage Policy Tags').classes(replace='text-primary text-bold').style('font-size:14px')
             
+            # 3. Apply Tags to Columns
             with ui.item(on_click=lambda: ui.navigate.to('/clsapplytags/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('build', color='green-500')
                 with ui.item_section():
                     ui.item_label('Apply Tags to Columns').classes(replace='text-primary text-bold').style('font-size:14px')
             
-            with ui.item(on_click=lambda: ui.navigate.to('/clsschemabrowser/')):
-                with ui.item_section().props('avatar'):
-                    ui.icon('search', color='green-500')
-                with ui.item_section():
-                    ui.item_label('Schema Browser').classes(replace='text-primary text-bold').style('font-size:14px')
-            
-            # Policy Tag Permissions
+            # 4. Policy Tag Permissions
             with ui.item(on_click=lambda: ui.navigate.to('/clsapplyiam/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('admin_panel_settings', color='green-500')
                 with ui.item_section():
                     ui.item_label('Policy Tag Permissions').classes(replace='text-primary text-bold').style('font-size:14px')
             
-            # Dynamic Column Security
+            # 5. Dynamic Column Security
             with ui.item(on_click=lambda: ui.navigate.to('/clsdynamiccolumns/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('visibility', color='green-500')
                 with ui.item_section():
                     ui.item_label('Dynamic Column Security').classes(replace='text-primary text-bold').style('font-size:14px')
             
-            # 🆕 Manage Dynamic Views
+            # 6. Manage Dynamic Views
             with ui.item(on_click=lambda: ui.navigate.to('/clsdynamicmanage/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('settings', color='green-500')
                 with ui.item_section():
                     ui.item_label('Manage Dynamic Views').classes(replace='text-primary text-bold').style('font-size:14px')
+            
+            # 7. Schema Browser
+            with ui.item(on_click=lambda: ui.navigate.to('/clsschemabrowser/')):
+                with ui.item_section().props('avatar'):
+                    ui.icon('search', color='green-500')
+                with ui.item_section():
+                    ui.item_label('Schema Browser').classes(replace='text-primary text-bold').style('font-size:14px')
         
         # DATA MASKING
         with ui.expansion('Data Masking', caption='Click to Expand', icon='masks').classes('w-full text-primary text-bold').style('font-size:16px'):
