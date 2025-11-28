@@ -1,4 +1,3 @@
-# Copyright 2024 Google LLC
 import theme
 from config import Config
 from nicegui import ui, run
@@ -6,7 +5,6 @@ from google.cloud import bigquery
 from services.audit_service import AuditService
 import re
 import traceback
-import asyncio  # ✅ ADICIONADO
 
 config = Config()
 client = bigquery.Client(project=config.PROJECT_ID)
@@ -188,27 +186,30 @@ class DynamicColumnManage:
                 ui.label('📝 Query Example:').classes('font-bold text-sm mb-2')
                 ui.code(f"SELECT * FROM `{self.selected_dataset}.{view_info['view_name']}`;", language='sql').classes('w-full text-xs')
             
-            # ✅ CORREÇÃO: Função async interna
+            # ✅ CORREÇÃO: Função async inline
             async def open_editor():
+                print("[DEBUG] open_editor() called!")
                 n = ui.notification('Loading view schema...', type='info', spinner=True, timeout=None)
                 try:
+                    print("[DEBUG] Calling edit_view()...")
                     await self.edit_view(view_info, parent_dialog=details_dialog)
+                    print("[DEBUG] edit_view() completed!")
                 except Exception as e:
                     ui.notify(f"Error opening editor: {e}", type="negative")
-                    print(f"Error executing edit_view: {e}")
+                    print(f"[ERROR] Exception in open_editor: {e}")
                     traceback.print_exc()
                 finally:
                     n.dismiss()
 
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('Close', on_click=details_dialog.close).props('flat')
-                # ✅ CORREÇÃO: Usar asyncio.create_task
-                ui.button('EDIT VIEW', icon='edit', on_click=lambda: asyncio.create_task(open_editor())).props('color=primary')
+                # ✅ CORREÇÃO: on_click DIRETAMENTE (NiceGUI detecta async automaticamente)
+                ui.button('EDIT VIEW', icon='edit', on_click=open_editor).props('color=primary')
         
         details_dialog.open()
     
     async def edit_view(self, view_info, parent_dialog=None):
-        """Editor completo da view com abas para colunas e usuários (VERSÃO ASYNC/NON-BLOCKING)"""
+        """Editor completo da view com abas para colunas e usuários"""
         print(f"[DEBUG] ===== EDIT_VIEW CALLED =====")
         print(f"[DEBUG] View name: {view_info['view_name']}")
         
@@ -374,17 +375,21 @@ class DynamicColumnManage:
                     
                     users_container()
             
+            # ✅ CORREÇÃO: Wrapper async para SAVE CHANGES
+            async def save_changes_action():
+                await self.save_view_changes(edit_dialog)
+            
             # Botões de ação
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('CANCEL', on_click=edit_dialog.close).props('flat')
-                # ✅ CORREÇÃO: Usar asyncio.create_task
                 ui.button(
                     'SAVE CHANGES',
                     icon='save',
-                    on_click=lambda: asyncio.create_task(self.save_view_changes(edit_dialog))
+                    on_click=save_changes_action  # ✅ Wrapper async
                 ).props('color=positive')
         
         edit_dialog.open()
+        print("[DEBUG] Dialog opened!")
     
     def parse_users_from_description(self, description):
         """Extrai lista de usuários da descrição da view"""
@@ -425,7 +430,7 @@ SELECT
   {(','+chr(10)+'  ').join(visible_columns)}
 FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
             
-            # ✅ CORREÇÃO: Usar run.io_bound para não bloquear
+            # ✅ Usar run.io_bound para não bloquear
             query_job = await run.io_bound(client.query, sql)
             await run.io_bound(query_job.result)
             
@@ -505,13 +510,13 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
                 ask_dialog.close()
                 return
             
+            # ✅ CORREÇÃO: Wrapper async para CONTINUE
+            async def continue_action():
+                await self.continue_with_source_table(view_info, table_select.value, ask_dialog)
+            
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('Cancel', on_click=ask_dialog.close).props('flat')
-                # ✅ CORREÇÃO: Usar asyncio.create_task
-                ui.button(
-                    'Continue',
-                    on_click=lambda: asyncio.create_task(self.continue_with_source_table(view_info, table_select.value, ask_dialog))
-                ).props('color=primary')
+                ui.button('Continue', on_click=continue_action).props('color=primary')
         
         ask_dialog.open()
     
