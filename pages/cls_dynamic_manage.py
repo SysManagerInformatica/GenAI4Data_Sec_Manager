@@ -1,10 +1,12 @@
+# Copyright 2024 Google LLC
 import theme
 from config import Config
-from nicegui import ui, run  # <--- IMPORTANTE: Adicionado 'run' aqui
+from nicegui import ui, run
 from google.cloud import bigquery
 from services.audit_service import AuditService
 import re
 import traceback
+import asyncio  # ✅ ADICIONADO
 
 config = Config()
 client = bigquery.Client(project=config.PROJECT_ID)
@@ -186,24 +188,22 @@ class DynamicColumnManage:
                 ui.label('📝 Query Example:').classes('font-bold text-sm mb-2')
                 ui.code(f"SELECT * FROM `{self.selected_dataset}.{view_info['view_name']}`;", language='sql').classes('w-full text-xs')
             
-            # --- FUNÇÃO INTERNA PARA ABRIR O EDITOR COM SEGURANÇA ---
+            # ✅ CORREÇÃO: Função async interna
             async def open_editor():
-                # Spinner indicando carregamento
                 n = ui.notification('Loading view schema...', type='info', spinner=True, timeout=None)
                 try:
-                    # Chama o edit_view passando o dialog atual para fechar apenas se sucesso
                     await self.edit_view(view_info, parent_dialog=details_dialog)
                 except Exception as e:
                     ui.notify(f"Error opening editor: {e}", type="negative")
                     print(f"Error executing edit_view: {e}")
                     traceback.print_exc()
                 finally:
-                    n.dismiss() # Remove o spinner
+                    n.dismiss()
 
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('Close', on_click=details_dialog.close).props('flat')
-                # Chama a função async open_editor ao invés do lambda
-                ui.button('EDIT VIEW', icon='edit', on_click=open_editor).props('color=primary')
+                # ✅ CORREÇÃO: Usar asyncio.create_task
+                ui.button('EDIT VIEW', icon='edit', on_click=lambda: asyncio.create_task(open_editor())).props('color=primary')
         
         details_dialog.open()
     
@@ -228,7 +228,7 @@ class DynamicColumnManage:
             print(f"[DEBUG] Getting table reference for: {source_table}")
             ui.notify(f"Fetching schema for {source_table}...", type="ongoing", timeout=2000)
             
-            # --- CRÍTICO: USANDO RUN.IO_BOUND PARA NÃO TRAVAR A TELA ---
+            # ✅ USANDO RUN.IO_BOUND PARA NÃO TRAVAR
             table_ref = client.dataset(self.selected_dataset).table(source_table)
             table_obj = await run.io_bound(client.get_table, table_ref)
             
@@ -258,7 +258,7 @@ class DynamicColumnManage:
             ui.notify(f"Error loading view data: {e}", type="negative", close_button=True, timeout=None)
             return
         
-        # SUCESSO NO CARREGAMENTO: Agora podemos fechar o dialog anterior com segurança
+        # Fechar dialog anterior com segurança
         if parent_dialog:
             parent_dialog.close()
 
@@ -288,15 +288,12 @@ class DynamicColumnManage:
                                 with ui.row().classes('w-full items-center gap-4'):
                                     is_hidden = col['name'] in self.hidden_columns
                                     
-                                    # Factory para o toggle
                                     def make_toggle(column_name):
                                         def toggle(e):
                                             if e.value and column_name not in self.hidden_columns:
                                                 self.hidden_columns.append(column_name)
-                                                # print(f"[DEBUG] Hiding column: {column_name}")
                                             elif not e.value and column_name in self.hidden_columns:
                                                 self.hidden_columns.remove(column_name)
-                                                # print(f"[DEBUG] Showing column: {column_name}")
                                         return toggle
                                     
                                     ui.checkbox(
@@ -380,10 +377,11 @@ class DynamicColumnManage:
             # Botões de ação
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('CANCEL', on_click=edit_dialog.close).props('flat')
+                # ✅ CORREÇÃO: Usar asyncio.create_task
                 ui.button(
                     'SAVE CHANGES',
                     icon='save',
-                    on_click=lambda: self.save_view_changes(edit_dialog)
+                    on_click=lambda: asyncio.create_task(self.save_view_changes(edit_dialog))
                 ).props('color=positive')
         
         edit_dialog.open()
@@ -394,7 +392,6 @@ class DynamicColumnManage:
             return []
         
         try:
-            # Procura por padrão: USERS: email1@..., email2@...
             if 'USERS:' in description:
                 users_text = description.split('USERS:')[1].split('\n')[0]
                 emails = [email.strip() for email in users_text.split(',')]
@@ -404,8 +401,8 @@ class DynamicColumnManage:
         
         return []
     
-    def save_view_changes(self, dialog):
-        """Salva todas as mudanças (colunas + usuários)"""
+    async def save_view_changes(self, dialog):
+        """Salva todas as mudanças (colunas + usuários) - VERSÃO ASYNC"""
         if not self.current_view:
             return
         
@@ -416,7 +413,6 @@ class DynamicColumnManage:
             ui.notify("❌ Cannot hide ALL columns!", type="negative")
             return
         
-        # UI Feedback de salvamento (opcional, mas bom)
         n = ui.notification('Saving changes to BigQuery...', spinner=True, timeout=None)
         
         try:
@@ -429,10 +425,9 @@ SELECT
   {(','+chr(10)+'  ').join(visible_columns)}
 FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
             
-            # Nota: save_view_changes é síncrona pois é chamada por lambda, 
-            # mas podemos usar client.query diretamente aqui pois é o passo final
-            query_job = client.query(sql)
-            query_job.result()
+            # ✅ CORREÇÃO: Usar run.io_bound para não bloquear
+            query_job = await run.io_bound(client.query, sql)
+            await run.io_bound(query_job.result)
             
             # 2. Atualizar descrição com usuários documentados
             if self.documented_users:
@@ -441,9 +436,9 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
                 description = f"Restricted view from {source_table}\nHidden columns: {', '.join(self.hidden_columns)}"
             
             table_ref = client.dataset(self.selected_dataset).table(view_name)
-            table = client.get_table(table_ref)
+            table = await run.io_bound(client.get_table, table_ref)
             table.description = description
-            client.update_table(table, ['description'])
+            await run.io_bound(client.update_table, table, ['description'])
             
             # Log audit
             self.audit_service.log_action(
@@ -471,6 +466,7 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
         except Exception as e:
             n.dismiss()
             print(f"[ERROR] Error saving changes: {e}")
+            traceback.print_exc()
             self.audit_service.log_action(
                 action='UPDATE_RESTRICTED_VIEW',
                 resource_type='RESTRICTED_VIEW',
@@ -511,9 +507,10 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
             
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('Cancel', on_click=ask_dialog.close).props('flat')
+                # ✅ CORREÇÃO: Usar asyncio.create_task
                 ui.button(
                     'Continue',
-                    on_click=lambda: self.continue_with_source_table(view_info, table_select.value, ask_dialog)
+                    on_click=lambda: asyncio.create_task(self.continue_with_source_table(view_info, table_select.value, ask_dialog))
                 ).props('color=primary')
         
         ask_dialog.open()
@@ -529,7 +526,7 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
         # Atualizar view_info
         view_info['source_table'] = source_table
         
-        # Tentar novamente abrindo o editor
+        # Tentar novamente
         await self.edit_view(view_info)
     
     async def delete_selected_views(self):
