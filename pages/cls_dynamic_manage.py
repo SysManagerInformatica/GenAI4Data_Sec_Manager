@@ -11,23 +11,62 @@ client = bigquery.Client(project=config.PROJECT_ID)
 
 
 class DynamicColumnManage:
+    
+    # ✅ TIPOS DE PROTEÇÃO UNIFICADOS (CLS + MASKING)
+    PROTECTION_TYPES = {
+        'VISIBLE': {
+            'label': '👁️ Visible',
+            'description': 'Real data shown',
+            'color': 'bg-green-100 text-green-700'
+        },
+        'HIDDEN': {
+            'label': '🚫 Hidden',
+            'description': 'Column excluded (CLS)',
+            'color': 'bg-red-100 text-red-700'
+        },
+        'PARTIAL_MASK': {
+            'label': '🎭 Partial Mask',
+            'description': 'First/last chars (123.XXX.XX-45)',
+            'color': 'bg-purple-100 text-purple-700'
+        },
+        'HASH': {
+            'label': '🔒 Hash',
+            'description': 'SHA256 hash',
+            'color': 'bg-blue-100 text-blue-700'
+        },
+        'NULLIFY': {
+            'label': '∅ Nullify',
+            'description': 'Replace with NULL',
+            'color': 'bg-gray-100 text-gray-700'
+        },
+        'ROUND': {
+            'label': '🔢 Round',
+            'description': 'Round to 10,000',
+            'color': 'bg-yellow-100 text-yellow-700'
+        },
+        'REDACT': {
+            'label': '📝 Redact',
+            'description': '[REDACTED]',
+            'color': 'bg-orange-100 text-orange-700'
+        }
+    }
 
     def __init__(self):
         self.project_id = config.PROJECT_ID
         self.audit_service = AuditService(config.PROJECT_ID)
-        self.page_title = "Manage Dynamic Views"
+        self.page_title = "Manage Protected Views"
         
         self.selected_dataset = None
-        self.restricted_views = []
+        self.protected_views = []
         self.views_grid = None
         
-        # Para gerenciamento de colunas e usuários
+        # ✅ NOVA ESTRUTURA: {column_name: protection_type}
         self.current_view = None
         self.source_table_columns = []
-        self.hidden_columns = []
+        self.column_protection = {}  # {'cpf': 'PARTIAL_MASK', 'rg': 'HIDDEN', etc}
         self.documented_users = []
         
-        # ✅ Criar dialog de edição UMA VEZ no init
+        # Criar dialog de edição UMA VEZ
         self.create_edit_dialog()
         
         self.headers()
@@ -35,36 +74,37 @@ class DynamicColumnManage:
     
     def headers(self):
         ui.page_title(self.page_title)
-        ui.label('Manage Restricted Views').classes('text-primary text-center text-bold')
+        ui.label('Manage Protected Views (Unified CLS + Masking)').classes('text-primary text-center text-bold')
     
     def create_edit_dialog(self):
         """Cria dialog de edição UMA VEZ - será reutilizado"""
-        print("[DEBUG] Creating edit dialog in __init__")
-        
-        with ui.dialog() as self.edit_dialog, ui.card().classes('w-full max-w-6xl'):
-            # Título (será atualizado dinamicamente)
+        with ui.dialog() as self.edit_dialog, ui.card().classes('w-full max-w-7xl'):
             self.edit_title = ui.label('').classes('text-h5 font-bold mb-4')
             
             with ui.tabs().classes('w-full') as tabs:
-                tab_columns = ui.tab('Hidden Columns', icon='visibility_off')
+                tab_columns = ui.tab('Column Protection', icon='security')
                 tab_users = ui.tab('User Documentation', icon='people')
             
             with ui.tab_panels(tabs, value=tab_columns).classes('w-full'):
-                # TAB 1: Hidden Columns
+                # TAB 1: Column Protection
                 with ui.tab_panel(tab_columns):
                     with ui.card().classes('w-full bg-blue-50 p-3 mb-4'):
-                        ui.label('ℹ️ Manage which columns are hidden from this view').classes('font-bold text-sm mb-2')
-                        ui.label('• Check to HIDE, uncheck to SHOW').classes('text-xs')
-                        ui.label('• Changes take effect after clicking SAVE CHANGES').classes('text-xs')
+                        ui.label('ℹ️ Configure protection type for each column').classes('font-bold text-sm mb-2')
+                        ui.label('• VISIBLE: Real data shown without changes').classes('text-xs')
+                        ui.label('• HIDDEN: Column excluded from view (CLS)').classes('text-xs')
+                        ui.label('• PARTIAL_MASK: Show first/last chars (123.XXX.XX-45)').classes('text-xs')
+                        ui.label('• HASH: Replace with SHA256 hash').classes('text-xs')
+                        ui.label('• NULLIFY: Replace with NULL').classes('text-xs')
+                        ui.label('• ROUND: Round numbers to 10,000').classes('text-xs')
+                        ui.label('• REDACT: Replace with [REDACTED]').classes('text-xs')
                     
-                    # Label de source (será atualizado)
                     self.source_label = ui.label('').classes('text-sm font-bold mb-2')
                     
-                    # Container para colunas (será populado dinamicamente)
-                    with ui.scroll_area().classes('w-full h-96 border rounded p-2') as self.columns_scroll:
+                    # Container para colunas
+                    with ui.scroll_area().classes('w-full h-96 border rounded p-2'):
                         self.columns_container = ui.column().classes('w-full')
                     
-                    # Resumo (será atualizado)
+                    # Resumo
                     with ui.card().classes('w-full bg-purple-50 p-3 mt-4'):
                         self.summary_label = ui.label('').classes('text-sm font-bold')
                 
@@ -73,132 +113,122 @@ class DynamicColumnManage:
                     with ui.card().classes('w-full bg-orange-50 p-3 mb-4'):
                         ui.label('ℹ️ Document which users should access this view').classes('font-bold text-sm mb-2')
                         ui.label('• This is DOCUMENTATION ONLY (not access control)').classes('text-xs')
-                        ui.label('• Helps team know who should use this view').classes('text-xs')
                         ui.label('• Saved in view description metadata').classes('text-xs')
                     
                     ui.label('Recommended Users:').classes('text-sm font-bold mb-2')
-                    
-                    # Container para input de usuário (será recriado a cada abertura)
                     self.users_input_container = ui.column().classes('w-full')
-                    
-                    # Container para lista de usuários (será populado dinamicamente)
                     self.users_list_container = ui.column().classes('w-full')
             
             # Botões
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                ui.button('PREVIEW SQL', icon='code', on_click=self.preview_sql).props('flat color=blue')
                 ui.button('CANCEL', on_click=self.close_edit_dialog).props('flat')
                 ui.button('SAVE CHANGES', icon='save', on_click=self.save_changes_wrapper).props('color=positive')
     
     def close_edit_dialog(self):
-        """Fecha o dialog de edição"""
         self.edit_dialog.close()
     
     async def save_changes_wrapper(self):
-        """Wrapper para salvar mudanças"""
         await self.save_view_changes()
     
     def get_datasets(self):
-        """Lista datasets"""
         try:
             datasets = list(client.list_datasets())
             return [dataset.dataset_id for dataset in datasets]
         except Exception as e:
-            ui.notify(f"Error listing datasets: {e}", type="negative")
+            ui.notify(f"Error: {e}", type="negative")
             return []
     
-    def get_restricted_views(self, dataset_id):
-        """Lista views restritas (terminam com _restricted)"""
+    def get_protected_views(self, dataset_id):
+        """Lista views protegidas (_restricted, _masked, _protected)"""
         try:
             tables = client.list_tables(dataset_id)
             views = []
             
             for table in tables:
-                if table.table_id.endswith('_restricted'):
+                if any(table.table_id.endswith(suffix) for suffix in ['_restricted', '_masked', '_protected']):
                     table_ref = client.dataset(dataset_id).table(table.table_id)
                     table_obj = client.get_table(table_ref)
                     
                     if table_obj.table_type == 'VIEW':
                         view_definition = table_obj.view_query
                         source_table = self.extract_source_table(view_definition)
-                        view_columns = len(table_obj.schema)
                         
-                        hidden_cols = []
-                        if source_table and source_table != 'Unknown':
-                            hidden_cols = self.get_hidden_columns(dataset_id, table.table_id, source_table)
+                        # Analisar proteções
+                        protection_summary = self.analyze_protection(table_obj.description, table_obj.view_query, len(table_obj.schema))
                         
                         views.append({
                             'view_name': table.table_id,
                             'source_table': source_table,
-                            'visible_columns': view_columns,
-                            'hidden_columns_count': len(hidden_cols),
-                            'hidden_columns': hidden_cols,
+                            'visible_columns': len(table_obj.schema),
+                            'hidden_count': protection_summary['hidden'],
+                            'masked_count': protection_summary['masked'],
                             'created': table_obj.created.strftime('%Y-%m-%d %H:%M') if table_obj.created else 'Unknown',
-                            'modified': table_obj.modified.strftime('%Y-%m-%d %H:%M') if table_obj.modified else 'Unknown'
+                            'modified': table_obj.modified.strftime('%Y-%m-%d %H:%M') if table_obj.modified else 'Unknown',
+                            'description': table_obj.description or ''
                         })
             
             return views
         except Exception as e:
-            ui.notify(f"Error getting restricted views: {e}", type="negative")
+            ui.notify(f"Error: {e}", type="negative")
             return []
     
+    def analyze_protection(self, description, view_query, visible_count):
+        """Analisa tipos de proteção"""
+        summary = {'hidden': 0, 'masked': 0}
+        
+        if description and 'COLUMN_PROTECTION:' in description:
+            lines = description.split('\n')
+            for line in lines:
+                if ':' in line and not line.startswith(('Restricted', 'Hidden columns:', 'USERS:', 'COLUMN_PROTECTION:')):
+                    parts = line.split(':')
+                    if len(parts) >= 2:
+                        protection = parts[1].strip()
+                        if protection == 'HIDDEN':
+                            summary['hidden'] += 1
+                        elif protection in ['PARTIAL_MASK', 'HASH', 'NULLIFY', 'ROUND', 'REDACT']:
+                            summary['masked'] += 1
+        
+        # Fallback: detectar na query
+        if summary['hidden'] == 0 and summary['masked'] == 0 and view_query:
+            query_lower = view_query.lower()
+            if any(kw in query_lower for kw in ['sha256', 'concat(substr', 'round(', '[redacted]']):
+                summary['masked'] = 1
+        
+        return summary
+    
     def extract_source_table(self, view_query):
-        """Extrai nome da tabela origem da query da view"""
         try:
-            view_query = ' '.join(view_query.split())
             patterns = [
                 r'FROM\s+`[^`]*\.([^`\.]+)`',
                 r'FROM\s+`([^`]+)`',
                 r'FROM\s+(\w+)',
             ]
-            
             for pattern in patterns:
                 match = re.search(pattern, view_query, re.IGNORECASE)
                 if match:
                     return match.group(1)
-            
             return 'Unknown'
-        except Exception as e:
-            print(f"[ERROR] Error extracting source table: {e}")
+        except:
             return 'Unknown'
-    
-    def get_hidden_columns(self, dataset_id, view_name, source_table):
-        """Descobre quais colunas estão ocultas"""
-        try:
-            view_ref = client.dataset(dataset_id).table(view_name)
-            view_obj = client.get_table(view_ref)
-            view_cols = {field.name for field in view_obj.schema}
-            
-            table_ref = client.dataset(dataset_id).table(source_table)
-            table_obj = client.get_table(table_ref)
-            table_cols = {field.name for field in table_obj.schema}
-            
-            hidden = list(table_cols - view_cols)
-            return hidden
-        except Exception as e:
-            print(f"Error getting hidden columns: {e}")
-            return []
     
     def on_dataset_change(self, dataset_id):
-        """Quando seleciona dataset"""
         self.selected_dataset = dataset_id
-        self.restricted_views = self.get_restricted_views(dataset_id)
+        self.protected_views = self.get_protected_views(dataset_id)
         self.refresh_views_grid()
         self.update_statistics()
     
     def refresh_views_grid(self):
-        """Atualiza grid"""
-        if self.views_grid and self.restricted_views:
-            self.views_grid.options['rowData'] = self.restricted_views
+        if self.views_grid and self.protected_views:
+            self.views_grid.options['rowData'] = self.protected_views
             self.views_grid.update()
     
     def update_statistics(self):
-        """Atualiza estatísticas"""
-        total = len(self.restricted_views)
+        total = len(self.protected_views)
         if hasattr(self, 'total_views_label'):
             self.total_views_label.set_text(str(total))
     
     async def view_details(self):
-        """Mostra detalhes da view"""
         rows = await self.views_grid.get_selected_rows()
         if not rows:
             ui.notify('No view selected', type="warning")
@@ -211,38 +241,22 @@ class DynamicColumnManage:
             
             with ui.card().classes('w-full bg-blue-50 p-3 mb-2'):
                 ui.label('📊 General Information:').classes('font-bold text-sm mb-2')
-                ui.label(f'  • View name: {view_info["view_name"]}').classes('text-xs')
-                ui.label(f'  • Source table: {view_info["source_table"]}').classes('text-xs')
-                ui.label(f'  • Visible columns: {view_info["visible_columns"]}').classes('text-xs')
-                ui.label(f'  • Hidden columns: {view_info["hidden_columns_count"]}').classes('text-xs')
-                ui.label(f'  • Created: {view_info["created"]}').classes('text-xs')
-                ui.label(f'  • Modified: {view_info["modified"]}').classes('text-xs')
-            
-            if view_info['hidden_columns']:
-                with ui.card().classes('w-full bg-red-50 p-3 mb-2'):
-                    ui.label('🚫 Hidden Columns:').classes('font-bold text-sm mb-2')
-                    for col in view_info['hidden_columns']:
-                        ui.label(f'  • {col}').classes('text-xs')
-            else:
-                with ui.card().classes('w-full bg-yellow-50 p-3 mb-2'):
-                    ui.label('⚠️ No columns hidden').classes('text-sm')
-            
-            with ui.card().classes('w-full bg-green-50 p-3 mb-2'):
-                ui.label('📝 Query Example:').classes('font-bold text-sm mb-2')
-                ui.code(f"SELECT * FROM `{self.selected_dataset}.{view_info['view_name']}`;", language='sql').classes('w-full text-xs')
+                ui.label(f'  • View: {view_info["view_name"]}').classes('text-xs')
+                ui.label(f'  • Source: {view_info["source_table"]}').classes('text-xs')
+                ui.label(f'  • Visible: {view_info["visible_columns"]}').classes('text-xs')
+                ui.label(f'  • Hidden: {view_info["hidden_count"]}').classes('text-xs')
+                ui.label(f'  • Masked: {view_info["masked_count"]}').classes('text-xs')
             
             async def open_editor():
-                print("[DEBUG] open_editor() called!")
-                n = ui.notification('Loading view schema...', type='info', spinner=True, timeout=None)
+                n = ui.notification('Loading schema...', type='info', spinner=True, timeout=None)
                 try:
                     await self.edit_view(view_info, parent_dialog=details_dialog)
                 except Exception as e:
-                    ui.notify(f"Error opening editor: {e}", type="negative")
-                    print(f"[ERROR] {e}")
+                    ui.notify(f"Error: {e}", type="negative")
                     traceback.print_exc()
                 finally:
                     n.dismiss()
-
+            
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('Close', on_click=details_dialog.close).props('flat')
                 ui.button('EDIT VIEW', icon='edit', on_click=open_editor).props('color=primary')
@@ -250,26 +264,20 @@ class DynamicColumnManage:
         details_dialog.open()
     
     async def edit_view(self, view_info, parent_dialog=None):
-        """Carrega dados e abre o dialog de edição"""
-        print(f"[DEBUG] ===== EDIT_VIEW CALLED =====")
-        print(f"[DEBUG] View: {view_info['view_name']}")
-        
+        """Carrega view e abre editor"""
         self.current_view = view_info
         
         try:
             source_table = view_info['source_table']
             
-            if source_table == 'Unknown' or not source_table:
+            if source_table == 'Unknown':
                 ui.notify("⚠️ Cannot determine source table", type="warning")
                 if parent_dialog:
                     parent_dialog.close()
                 self.ask_source_table(view_info)
                 return
             
-            print(f"[DEBUG] Loading schema for: {source_table}")
-            ui.notify(f"Fetching schema...", type="ongoing", timeout=2000)
-            
-            # Carregar schema
+            # Carregar schema da tabela origem
             table_ref = client.dataset(self.selected_dataset).table(source_table)
             table_obj = await run.io_bound(client.get_table, table_ref)
             
@@ -281,105 +289,163 @@ class DynamicColumnManage:
                     'mode': field.mode
                 })
             
-            self.hidden_columns = list(view_info['hidden_columns'])
-            
-            # Carregar usuários
+            # Carregar proteções atuais
             view_ref = client.dataset(self.selected_dataset).table(view_info['view_name'])
             view_obj = await run.io_bound(client.get_table, view_ref)
+            
+            self.column_protection = self.parse_protection_from_description(
+                view_obj.description,
+                view_obj.view_query,
+                self.source_table_columns
+            )
+            
             self.documented_users = self.parse_users_from_description(view_obj.description)
             
-            print(f"[DEBUG] Loaded {len(self.source_table_columns)} columns")
             ui.notify("Schema loaded!", type="positive", timeout=1000)
             
         except Exception as e:
-            print(f"[ERROR] {e}")
-            traceback.print_exc()
             ui.notify(f"Error: {e}", type="negative")
+            traceback.print_exc()
             return
         
-        # Fechar dialog anterior
         if parent_dialog:
             parent_dialog.close()
         
-        # Popular dialog
-        print("[DEBUG] Populating dialog...")
         self.populate_edit_dialog(view_info['view_name'], source_table)
-        
-        # Abrir dialog
-        print("[DEBUG] Opening dialog...")
         self.edit_dialog.open()
-        print("[DEBUG] Dialog opened!")
+    
+    def parse_protection_from_description(self, description, view_query, all_columns):
+        """Parse proteção do metadata ou inferir da query"""
+        protection = {}
+        
+        # Tentar parsear do metadata COLUMN_PROTECTION
+        if description and 'COLUMN_PROTECTION:' in description:
+            lines = description.split('\n')
+            in_section = False
+            for line in lines:
+                if 'COLUMN_PROTECTION:' in line:
+                    in_section = True
+                    continue
+                if in_section:
+                    if line.startswith('USERS:') or not line.strip():
+                        break
+                    if ':' in line:
+                        parts = line.strip().split(':')
+                        if len(parts) >= 2:
+                            col_name = parts[0]
+                            prot_type = parts[1]
+                            protection[col_name] = prot_type
+        
+        # Fallback: inferir colunas ocultas
+        if not protection:
+            view_ref = client.dataset(self.selected_dataset).table(self.current_view['view_name'])
+            view_obj = client.get_table(view_ref)
+            view_cols = {field.name for field in view_obj.schema}
+            
+            for col in all_columns:
+                if col['name'] in view_cols:
+                    # Tentar detectar se tem máscara na query
+                    if view_query and f"sha256({col['name'].lower()}" in view_query.lower():
+                        protection[col['name']] = 'HASH'
+                    elif view_query and f"null as {col['name'].lower()}" in view_query.lower():
+                        protection[col['name']] = 'NULLIFY'
+                    elif view_query and f"concat(substr" in view_query.lower() and col['name'].lower() in view_query.lower():
+                        protection[col['name']] = 'PARTIAL_MASK'
+                    else:
+                        protection[col['name']] = 'VISIBLE'
+                else:
+                    protection[col['name']] = 'HIDDEN'
+        
+        # Garantir que todas as colunas tenham proteção
+        for col in all_columns:
+            if col['name'] not in protection:
+                protection[col['name']] = 'VISIBLE'
+        
+        return protection
     
     def populate_edit_dialog(self, view_name, source_table):
-        """Popula o dialog com os dados carregados"""
-        print("[DEBUG] populate_edit_dialog() called")
-        
-        # Atualizar título
+        """Popula dialog com dados"""
         self.edit_title.set_text(f'Edit View: {view_name}')
-        
-        # Atualizar source label
         self.source_label.set_text(f'Source: {source_table} ({len(self.source_table_columns)} columns)')
         
-        # Limpar e popular colunas
         self.columns_container.clear()
         
         with self.columns_container:
             for col in self.source_table_columns:
                 with ui.card().classes('w-full p-3 mb-2'):
                     with ui.row().classes('w-full items-center gap-4'):
-                        is_hidden = col['name'] in self.hidden_columns
-                        
-                        # Factory para toggle
-                        def make_toggle(column_name):
-                            def toggle(e):
-                                if e.value and column_name not in self.hidden_columns:
-                                    self.hidden_columns.append(column_name)
-                                    self.update_summary()
-                                elif not e.value and column_name in self.hidden_columns:
-                                    self.hidden_columns.remove(column_name)
-                                    self.update_summary()
-                            return toggle
-                        
-                        ui.checkbox(
-                            text='Hide',
-                            value=is_hidden,
-                            on_change=make_toggle(col['name'])
-                        ).classes('w-20')
-                        
-                        with ui.column().classes('flex-1'):
+                        # Nome da coluna
+                        with ui.column().classes('w-48'):
                             ui.label(col['name']).classes('font-bold text-base')
-                            ui.label(f"Type: {col['type']}").classes('text-xs text-grey-6')
+                            ui.label(f"{col['type']}").classes('text-xs text-grey-6')
                         
-                        status = 'HIDDEN' if is_hidden else 'VISIBLE'
-                        status_color = 'bg-red-100 text-red-600' if is_hidden else 'bg-green-100 text-green-600'
-                        ui.label(status).classes(f'text-sm px-3 py-1 rounded {status_color}')
+                        # Dropdown de proteção
+                        current_protection = self.column_protection.get(col['name'], 'VISIBLE')
+                        
+                        def make_change_handler(col_name):
+                            def handler(e):
+                                self.column_protection[col_name] = e.value
+                                self.update_summary()
+                                self.populate_edit_dialog(view_name, source_table)  # Refresh para atualizar cores
+                            return handler
+                        
+                        protection_select = ui.select(
+                            options=list(self.PROTECTION_TYPES.keys()),
+                            value=current_protection,
+                            on_change=make_change_handler(col['name'])
+                        ).classes('w-48').props('dense')
+                        
+                        # Label de status
+                        prot_info = self.PROTECTION_TYPES[current_protection]
+                        status_label = ui.label(prot_info['label'])
+                        status_label.classes(f'text-sm px-3 py-1 rounded {prot_info["color"]}')
+                        
+                        # Preview
+                        preview = self.get_protection_preview(col['name'], col['type'], current_protection)
+                        ui.label(preview).classes('flex-1 text-xs text-grey-7 italic')
         
-        # Atualizar resumo
         self.update_summary()
-        
-        # Popular usuários
         self.populate_users_section()
-        
-        print("[DEBUG] Dialog populated!")
+    
+    def get_protection_preview(self, col_name, col_type, protection):
+        """Preview do resultado da proteção"""
+        if protection == 'VISIBLE':
+            return '→ John Doe (real data)'
+        elif protection == 'HIDDEN':
+            return '→ (not in view)'
+        elif protection == 'PARTIAL_MASK':
+            return '→ 123.XXX.XX-45'
+        elif protection == 'HASH':
+            return '→ a3f5e9d8b2c1...'
+        elif protection == 'NULLIFY':
+            return '→ NULL'
+        elif protection == 'ROUND':
+            return '→ 80000.00'
+        elif protection == 'REDACT':
+            return '→ [REDACTED]'
+        return ''
     
     def update_summary(self):
-        """Atualiza resumo de colunas"""
-        visible = len(self.source_table_columns) - len(self.hidden_columns)
-        self.summary_label.set_text(f'📊 Total: {len(self.source_table_columns)} | Visible: {visible} | Hidden: {len(self.hidden_columns)}')
+        """Atualiza resumo"""
+        visible = len([p for p in self.column_protection.values() if p == 'VISIBLE'])
+        hidden = len([p for p in self.column_protection.values() if p == 'HIDDEN'])
+        masked = len([p for p in self.column_protection.values() if p not in ['VISIBLE', 'HIDDEN']])
+        
+        self.summary_label.set_text(
+            f'📊 Total: {len(self.source_table_columns)} | '
+            f'Visible: {visible} | '
+            f'Hidden: {hidden} | '
+            f'Masked: {masked}'
+        )
     
     def populate_users_section(self):
         """Popula seção de usuários"""
-        # Limpar containers
         self.users_input_container.clear()
         self.users_list_container.clear()
         
-        # Input para adicionar
         with self.users_input_container:
             with ui.row().classes('w-full gap-2 mb-4'):
-                user_input = ui.input(
-                    placeholder='user@company.com',
-                    label='Add user email'
-                ).classes('flex-1')
+                user_input = ui.input(placeholder='user@company.com', label='Add user').classes('flex-1')
                 
                 def add_user():
                     email = user_input.value.strip()
@@ -390,19 +456,18 @@ class DynamicColumnManage:
                             self.populate_users_section()
                             ui.notify(f"Added: {email}", type="positive")
                         else:
-                            ui.notify("User already in list", type="warning")
+                            ui.notify("Already in list", type="warning")
                     else:
                         ui.notify("Invalid email", type="warning")
                 
                 ui.button('ADD', icon='add', on_click=add_user).props('color=positive')
         
-        # Lista de usuários
         with self.users_list_container:
             if not self.documented_users:
-                ui.label('No users documented yet').classes('text-grey-5 italic')
+                ui.label('No users yet').classes('text-grey-5 italic')
             else:
                 for email in self.documented_users:
-                    with ui.row().classes('w-full items-center justify-between p-2 border rounded mb-1 bg-white'):
+                    with ui.row().classes('w-full items-center justify-between p-2 border rounded mb-1'):
                         ui.label(email).classes('text-sm')
                         
                         def make_remove(user_email):
@@ -415,7 +480,7 @@ class DynamicColumnManage:
                         ui.button(icon='delete', on_click=make_remove(email)).props('flat dense size=sm color=negative')
     
     def parse_users_from_description(self, description):
-        """Extrai usuários da descrição"""
+        """Extrai usuários"""
         if not description:
             return []
         try:
@@ -427,14 +492,96 @@ class DynamicColumnManage:
             pass
         return []
     
+    def generate_column_sql(self, col_name, col_type, protection):
+        """Gera SQL para uma coluna baseado na proteção"""
+        if protection == 'VISIBLE':
+            return col_name
+        
+        elif protection == 'HIDDEN':
+            return None  # Não incluir
+        
+        elif protection == 'PARTIAL_MASK':
+            return f"CONCAT(SUBSTR(CAST({col_name} AS STRING), 1, 3), '.XXX.XXX-', SUBSTR(CAST({col_name} AS STRING), -2)) AS {col_name}"
+        
+        elif protection == 'HASH':
+            return f"TO_BASE64(SHA256(CAST({col_name} AS STRING))) AS {col_name}"
+        
+        elif protection == 'NULLIFY':
+            return f"NULL AS {col_name}"
+        
+        elif protection == 'ROUND':
+            if col_type in ['INTEGER', 'FLOAT', 'NUMERIC', 'BIGNUMERIC', 'INT64', 'FLOAT64']:
+                return f"ROUND({col_name} / 10000) * 10000 AS {col_name}"
+            else:
+                return col_name  # Não pode arredondar não-numéricos
+        
+        elif protection == 'REDACT':
+            return f"'[REDACTED]' AS {col_name}"
+        
+        return col_name
+    
+    def preview_sql(self):
+        """Preview do SQL"""
+        if not self.current_view:
+            return
+        
+        sql = self.generate_view_sql()
+        if not sql:
+            ui.notify("Error generating SQL", type="negative")
+            return
+        
+        with ui.dialog() as sql_dialog, ui.card().classes('w-full max-w-5xl'):
+            ui.label('SQL Preview').classes('text-h6 font-bold mb-4')
+            
+            with ui.card().classes('w-full bg-blue-50 p-3 mb-4'):
+                visible = len([p for p in self.column_protection.values() if p not in ['HIDDEN']])
+                hidden = len([p for p in self.column_protection.values() if p == 'HIDDEN'])
+                masked = len([p for p in self.column_protection.values() if p not in ['VISIBLE', 'HIDDEN']])
+                
+                ui.label(f'✅ Visible: {visible} | 🚫 Hidden: {hidden} | 🎭 Masked: {masked}').classes('text-sm font-bold')
+            
+            with ui.scroll_area().classes('w-full h-96 bg-grey-9 p-4 rounded'):
+                ui.code(sql, language='sql').classes('text-white')
+            
+            with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                ui.button('Close', on_click=sql_dialog.close).props('flat')
+                ui.button('COPY', icon='content_copy', on_click=lambda: ui.clipboard.write(sql)).props('color=primary')
+        
+        sql_dialog.open()
+    
+    def generate_view_sql(self):
+        """Gera SQL completo da view"""
+        if not self.current_view:
+            return None
+        
+        view_name = self.current_view['view_name']
+        source_table = self.current_view['source_table']
+        
+        # Gerar colunas
+        select_columns = []
+        for col in self.source_table_columns:
+            sql_expr = self.generate_column_sql(col['name'], col['type'], self.column_protection.get(col['name'], 'VISIBLE'))
+            if sql_expr:
+                select_columns.append(sql_expr)
+        
+        if not select_columns:
+            return None
+        
+        sql = f"""CREATE OR REPLACE VIEW `{self.project_id}.{self.selected_dataset}.{view_name}` AS
+SELECT
+  {(','+chr(10)+'  ').join(select_columns)}
+FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
+        
+        return sql
+    
     async def save_view_changes(self):
         """Salva mudanças"""
         if not self.current_view:
             return
         
-        visible_columns = [col['name'] for col in self.source_table_columns if col['name'] not in self.hidden_columns]
-        
-        if not visible_columns:
+        # Validar: pelo menos 1 coluna visível
+        visible_count = len([p for p in self.column_protection.values() if p != 'HIDDEN'])
+        if visible_count == 0:
             ui.notify("❌ Cannot hide ALL columns!", type="negative")
             return
         
@@ -444,56 +591,64 @@ class DynamicColumnManage:
             view_name = self.current_view['view_name']
             source_table = self.current_view['source_table']
             
-            # Recriar view
-            sql = f"""CREATE OR REPLACE VIEW `{self.project_id}.{self.selected_dataset}.{view_name}` AS
-SELECT
-  {(','+chr(10)+'  ').join(visible_columns)}
-FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
-            
+            # Gerar e executar SQL
+            sql = self.generate_view_sql()
             query_job = await run.io_bound(client.query, sql)
             await run.io_bound(query_job.result)
             
-            # Atualizar descrição
+            # Atualizar descrição com metadata
+            description_lines = [
+                f"Restricted view from {source_table}",
+                "",
+                "COLUMN_PROTECTION:"
+            ]
+            
+            for col_name, protection in self.column_protection.items():
+                if protection != 'VISIBLE':
+                    description_lines.append(f"{col_name}:{protection}")
+            
             if self.documented_users:
-                description = f"Restricted view from {source_table}\nHidden columns: {', '.join(self.hidden_columns)}\nUSERS: {', '.join(self.documented_users)}"
-            else:
-                description = f"Restricted view from {source_table}\nHidden columns: {', '.join(self.hidden_columns)}"
+                description_lines.append("")
+                description_lines.append(f"USERS: {', '.join(self.documented_users)}")
+            
+            description = '\n'.join(description_lines)
             
             table_ref = client.dataset(self.selected_dataset).table(view_name)
             table = await run.io_bound(client.get_table, table_ref)
             table.description = description
             await run.io_bound(client.update_table, table, ['description'])
             
-            # Log audit
+            # Audit log
             self.audit_service.log_action(
-                action='UPDATE_RESTRICTED_VIEW',
-                resource_type='RESTRICTED_VIEW',
+                action='UPDATE_PROTECTED_VIEW',
+                resource_type='PROTECTED_VIEW',
                 resource_name=f"{self.selected_dataset}.{view_name}",
                 status='SUCCESS',
                 details={
-                    'hidden_columns': self.hidden_columns,
-                    'visible_columns': visible_columns,
+                    'column_protection': self.column_protection,
                     'documented_users': self.documented_users,
-                    'total_columns': len(self.source_table_columns)
+                    'total_columns': len(self.source_table_columns),
+                    'visible': len([p for p in self.column_protection.values() if p not in ['HIDDEN']]),
+                    'hidden': len([p for p in self.column_protection.values() if p == 'HIDDEN']),
+                    'masked': len([p for p in self.column_protection.values() if p not in ['VISIBLE', 'HIDDEN']])
                 }
             )
             
             n.dismiss()
-            ui.notify(f"✅ View updated successfully!", type="positive")
+            ui.notify("✅ View updated successfully!", type="positive")
             self.edit_dialog.close()
             
             # Refresh
-            self.restricted_views = self.get_restricted_views(self.selected_dataset)
+            self.protected_views = self.get_protected_views(self.selected_dataset)
             self.refresh_views_grid()
             self.update_statistics()
             
         except Exception as e:
             n.dismiss()
-            print(f"[ERROR] {e}")
             traceback.print_exc()
             self.audit_service.log_action(
-                action='UPDATE_RESTRICTED_VIEW',
-                resource_type='RESTRICTED_VIEW',
+                action='UPDATE_PROTECTED_VIEW',
+                resource_type='PROTECTED_VIEW',
                 resource_name=f"{self.selected_dataset}.{view_name}",
                 status='FAILED',
                 error_message=str(e)
@@ -501,14 +656,14 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
             ui.notify(f"Error: {e}", type="negative")
     
     def ask_source_table(self, view_info):
-        """Pergunta tabela origem"""
+        """Dialog para selecionar tabela origem manualmente"""
         with ui.dialog() as ask_dialog, ui.card().classes('w-full max-w-2xl'):
             ui.label('⚠️ Source Table Not Found').classes('text-h6 font-bold text-orange-600 mb-4')
             ui.label('Select source table manually:').classes('mb-4')
             
             try:
                 tables = client.list_tables(self.selected_dataset)
-                table_names = [t.table_id for t in tables if not t.table_id.endswith('_restricted')]
+                table_names = [t.table_id for t in tables if not any(t.table_id.endswith(s) for s in ['_restricted', '_masked', '_protected'])]
                 
                 if not table_names:
                     ui.label('No tables found').classes('text-red-600')
@@ -516,11 +671,7 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
                     ask_dialog.open()
                     return
                 
-                table_select = ui.select(
-                    options=table_names,
-                    label='Source Table',
-                    value=table_names[0] if table_names else None
-                ).classes('w-full')
+                table_select = ui.select(options=table_names, label='Source Table', value=table_names[0]).classes('w-full')
                 
             except Exception as e:
                 ui.notify(f"Error: {e}", type="negative")
@@ -542,20 +693,22 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
         ask_dialog.open()
     
     async def delete_selected_views(self):
-        """Deleta views"""
+        """Deleta views selecionadas"""
         rows = await self.views_grid.get_selected_rows()
         if not rows:
             ui.notify('No views selected', type="warning")
             return
         
         view_names = [row['view_name'] for row in rows]
-        view_list = '\n'.join([f"• {name}" for name in view_names])
         
         with ui.dialog() as confirm_dialog, ui.card():
             ui.label('⚠️ Confirm Deletion').classes('text-h6 font-bold text-orange-600 mb-4')
             ui.label(f'Delete {len(view_names)} view(s)?').classes('mb-2')
-            ui.label(view_list).classes('text-sm whitespace-pre mb-4')
-            ui.label('This cannot be undone!').classes('text-red-600 font-bold')
+            for name in view_names[:10]:
+                ui.label(f'  • {name}').classes('text-sm')
+            if len(view_names) > 10:
+                ui.label(f'  ... and {len(view_names)-10} more').classes('text-sm')
+            ui.label('This cannot be undone!').classes('text-red-600 font-bold mt-4')
             
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('Cancel', on_click=confirm_dialog.close).props('flat')
@@ -574,16 +727,16 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
                 client.delete_table(table_ref)
                 
                 self.audit_service.log_action(
-                    action='DELETE_RESTRICTED_VIEW',
-                    resource_type='RESTRICTED_VIEW',
+                    action='DELETE_PROTECTED_VIEW',
+                    resource_type='PROTECTED_VIEW',
                     resource_name=f"{self.selected_dataset}.{view['view_name']}",
                     status='SUCCESS'
                 )
                 success += 1
             except Exception as e:
                 self.audit_service.log_action(
-                    action='DELETE_RESTRICTED_VIEW',
-                    resource_type='RESTRICTED_VIEW',
+                    action='DELETE_PROTECTED_VIEW',
+                    resource_type='PROTECTED_VIEW',
                     resource_name=f"{self.selected_dataset}.{view['view_name']}",
                     status='FAILED',
                     error_message=str(e)
@@ -597,14 +750,14 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
         if failed > 0:
             ui.notify(f"❌ {failed} failed", type="negative")
         
-        self.restricted_views = self.get_restricted_views(self.selected_dataset)
+        self.protected_views = self.get_protected_views(self.selected_dataset)
         self.refresh_views_grid()
         self.update_statistics()
     
     def refresh_all(self):
-        """Refresh"""
+        """Refresh completo"""
         if self.selected_dataset:
-            self.restricted_views = self.get_restricted_views(self.selected_dataset)
+            self.protected_views = self.get_protected_views(self.selected_dataset)
             self.refresh_views_grid()
             self.update_statistics()
             ui.notify("Refreshed", type="positive")
@@ -612,9 +765,9 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
             ui.notify("Select dataset first", type="warning")
     
     def render_ui(self):
-        with theme.frame('Manage Dynamic Views'):
+        with theme.frame('Manage Protected Views'):
             with ui.card().classes('w-full'):
-                ui.label("Manage Restricted Views").classes('text-h5 font-bold mb-4')
+                ui.label("Manage Protected Views (Unified CLS + Masking)").classes('text-h5 font-bold mb-4')
                 
                 with ui.row().classes('w-full gap-4 mb-4 items-center'):
                     datasets = self.get_datasets()
@@ -628,18 +781,19 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
                 
                 with ui.row().classes('w-full gap-4 mb-4'):
                     with ui.card().classes('flex-1 bg-blue-50'):
-                        ui.label('Restricted Views').classes('text-sm text-grey-7')
+                        ui.label('Protected Views').classes('text-sm text-grey-7')
                         self.total_views_label = ui.label('0').classes('text-3xl font-bold text-blue-600')
                 
                 ui.separator()
-                ui.label("Restricted Views").classes('text-h6 font-bold mt-4 mb-2')
+                ui.label("Protected Views (_restricted, _masked, _protected)").classes('text-h6 font-bold mt-4 mb-2')
                 
                 self.views_grid = ui.aggrid({
                     'columnDefs': [
                         {'field': 'view_name', 'headerName': 'View Name', 'checkboxSelection': True, 'filter': True, 'minWidth': 300},
                         {'field': 'source_table', 'headerName': 'Source Table', 'filter': True, 'minWidth': 250},
-                        {'field': 'visible_columns', 'headerName': 'Visible Columns', 'filter': True, 'minWidth': 140},
-                        {'field': 'hidden_columns_count', 'headerName': 'Hidden Columns', 'filter': True, 'minWidth': 140},
+                        {'field': 'visible_columns', 'headerName': 'Visible', 'filter': True, 'minWidth': 100},
+                        {'field': 'hidden_count', 'headerName': 'Hidden', 'filter': True, 'minWidth': 100},
+                        {'field': 'masked_count', 'headerName': 'Masked', 'filter': True, 'minWidth': 100},
                         {'field': 'created', 'headerName': 'Created', 'filter': True, 'minWidth': 150},
                         {'field': 'modified', 'headerName': 'Modified', 'filter': True, 'minWidth': 150},
                     ],
