@@ -140,60 +140,110 @@ class DynamicColumnManage:
             return []
     
     def get_protected_views(self, dataset_id):
-        """Lista views protegidas (_restricted, _masked, _protected)"""
+        """Lista views protegidas (detecta por sufixo OU por metadata)"""
         try:
             tables = client.list_tables(dataset_id)
             views = []
             
             for table in tables:
+                # ✅ MUDANÇA: Verificar se é VIEW primeiro
+                table_ref = client.dataset(dataset_id).table(table.table_id)
+                table_obj = client.get_table(table_ref)
+                
+                if table_obj.table_type != 'VIEW':
+                    continue
+                
+                # ✅ MUDANÇA: ACEITAR SE tem sufixo OU metadata
+                is_protected = False
+                
+                # Verificar sufixo
                 if any(table.table_id.endswith(suffix) for suffix in ['_restricted', '_masked', '_protected']):
-                    table_ref = client.dataset(dataset_id).table(table.table_id)
-                    table_obj = client.get_table(table_ref)
-                    
-                    if table_obj.table_type == 'VIEW':
-                        view_definition = table_obj.view_query
-                        source_table = self.extract_source_table(view_definition)
-                        
-                        # Analisar proteções
-                        protection_summary = self.analyze_protection(table_obj.description, table_obj.view_query, len(table_obj.schema))
-                        
-                        views.append({
-                            'view_name': table.table_id,
-                            'source_table': source_table,
-                            'visible_columns': len(table_obj.schema),
-                            'hidden_count': protection_summary['hidden'],
-                            'masked_count': protection_summary['masked'],
-                            'created': table_obj.created.strftime('%Y-%m-%d %H:%M') if table_obj.created else 'Unknown',
-                            'modified': table_obj.modified.strftime('%Y-%m-%d %H:%M') if table_obj.modified else 'Unknown',
-                            'description': table_obj.description or ''
-                        })
+                    is_protected = True
+                
+                # Verificar metadata (views criadas com o novo sistema)
+                if table_obj.description and 'COLUMN_PROTECTION:' in table_obj.description:
+                    is_protected = True
+                
+                # Se não for protegida, pular
+                if not is_protected:
+                    continue
+                
+                # Processar view protegida
+                view_definition = table_obj.view_query
+                source_table = self.extract_source_table(view_definition)
+                
+                # Analisar proteções
+                protection_summary = self.analyze_protection(
+                    table_obj.description, 
+                    table_obj.view_query, 
+                    len(table_obj.schema)
+                )
+                
+                views.append({
+                    'view_name': table.table_id,
+                    'source_table': source_table,
+                    'visible_columns': len(table_obj.schema),
+                    'hidden_count': protection_summary['hidden'],
+                    'masked_count': protection_summary['masked'],
+                    'created': table_obj.created.strftime('%Y-%m-%d %H:%M') if table_obj.created else 'Unknown',
+                    'modified': table_obj.modified.strftime('%Y-%m-%d %H:%M') if table_obj.modified else 'Unknown',
+                    'description': table_obj.description or ''
+                })
             
             return views
+            
         except Exception as e:
+            print(f"[ERROR] get_protected_views: {e}")
+            import traceback
+            traceback.print_exc()
             ui.notify(f"Error: {e}", type="negative")
             return []
     
     def analyze_protection(self, description, view_query, visible_count):
-        """Analisa tipos de proteção"""
+        """Analisa tipos de proteção aplicados"""
         summary = {'hidden': 0, 'masked': 0}
         
+        # ✅ MUDANÇA: Parse melhorado do metadata COLUMN_PROTECTION
         if description and 'COLUMN_PROTECTION:' in description:
             lines = description.split('\n')
+            in_section = False
+            
             for line in lines:
-                if ':' in line and not line.startswith(('Restricted', 'Hidden columns:', 'USERS:', 'COLUMN_PROTECTION:')):
-                    parts = line.split(':')
-                    if len(parts) >= 2:
-                        protection = parts[1].strip()
-                        if protection == 'HIDDEN':
-                            summary['hidden'] += 1
-                        elif protection in ['PARTIAL_MASK', 'HASH', 'NULLIFY', 'ROUND', 'REDACT']:
-                            summary['masked'] += 1
+                if 'COLUMN_PROTECTION:' in line:
+                    in_section = True
+                    continue
+                
+                if in_section:
+                    # Parar se encontrar USERS: ou linha vazia (após já ter lido proteções)
+                    if line.startswith('USERS:') or (not line.strip() and summary['hidden'] + summary['masked'] > 0):
+                        break
+                    
+                    # Parse da linha: column_name:PROTECTION_TYPE
+                    if ':' in line and line.strip():
+                        parts = line.strip().split(':')
+                        if len(parts) >= 2:
+                            protection = parts[1].strip()
+                            if protection == 'HIDDEN':
+                                summary['hidden'] += 1
+                            elif protection in ['PARTIAL_MASK', 'HASH', 'NULLIFY', 'ROUND', 'REDACT']:
+                                summary['masked'] += 1
         
-        # Fallback: detectar na query
+        # Fallback: detectar masking na query se metadata não existe
         if summary['hidden'] == 0 and summary['masked'] == 0 and view_query:
             query_lower = view_query.lower()
-            if any(kw in query_lower for kw in ['sha256', 'concat(substr', 'round(', '[redacted]']):
-                summary['masked'] = 1
+            
+            # Detectar padrões de mascaramento
+            if 'sha256' in query_lower or 'to_base64' in query_lower:
+                summary['masked'] += 1
+            
+            if 'concat(substr' in query_lower:
+                summary['masked'] += 1
+            
+            if 'round(' in query_lower and '10000' in query_lower:
+                summary['masked'] += 1
+            
+            if '[redacted]' in query_lower:
+                summary['masked'] += 1
         
         return summary
     
