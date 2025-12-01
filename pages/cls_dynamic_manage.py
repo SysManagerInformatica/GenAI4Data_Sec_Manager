@@ -64,7 +64,7 @@ class DynamicColumnManage:
         self.current_view = None
         self.source_table_columns = []
         self.column_protection = {}  # {'cpf': 'PARTIAL_MASK', 'rg': 'HIDDEN', etc}
-        self.documented_users = []
+        self.authorized_users = []  # ✅ RENOMEADO de documented_users
         
         # Criar dialog de edição UMA VEZ
         self.create_edit_dialog()
@@ -83,7 +83,7 @@ class DynamicColumnManage:
             
             with ui.tabs().classes('w-full') as tabs:
                 tab_columns = ui.tab('Column Protection', icon='security')
-                tab_users = ui.tab('User Documentation', icon='people')
+                tab_users = ui.tab('Add Users', icon='person_add')  # ✅ RENOMEADO
             
             with ui.tab_panels(tabs, value=tab_columns).classes('w-full'):
                 # TAB 1: Column Protection
@@ -108,15 +108,20 @@ class DynamicColumnManage:
                     with ui.card().classes('w-full bg-purple-50 p-3 mt-4'):
                         self.summary_label = ui.label('').classes('text-sm font-bold')
                 
-                # TAB 2: User Documentation
+                # TAB 2: Add Users (✅ FUNCIONALIDADE REAL DE IAM)
                 with ui.tab_panel(tab_users):
-                    with ui.card().classes('w-full bg-orange-50 p-3 mb-4'):
-                        ui.label('ℹ️ Document which users should access this view').classes('font-bold text-sm mb-2')
-                        ui.label('• This is DOCUMENTATION ONLY (not access control)').classes('text-xs')
-                        ui.label('• Saved in view description metadata').classes('text-xs')
+                    with ui.card().classes('w-full bg-green-50 p-3 mb-4'):
+                        ui.label('✅ Grant access to this view').classes('font-bold text-sm mb-2')
+                        ui.label('• Users added here will have BigQuery Data Viewer role on THIS VIEW').classes('text-xs')
+                        ui.label('• They will NOT have access to the source table').classes('text-xs')
+                        ui.label('• Access is granted via IAM policy binding').classes('text-xs')
                     
-                    ui.label('Recommended Users:').classes('text-sm font-bold mb-2')
+                    ui.label('Authorized Users:').classes('text-sm font-bold mb-2')
+                    
+                    # Container para input de usuário
                     self.users_input_container = ui.column().classes('w-full')
+                    
+                    # Container para lista de usuários
                     self.users_list_container = ui.column().classes('w-full')
             
             # Botões
@@ -146,38 +151,34 @@ class DynamicColumnManage:
             views = []
             
             for table in tables:
-                # ✅ MUDANÇA: Verificar se é VIEW primeiro
                 table_ref = client.dataset(dataset_id).table(table.table_id)
                 table_obj = client.get_table(table_ref)
                 
                 if table_obj.table_type != 'VIEW':
                     continue
                 
-                # ✅ MUDANÇA: ACEITAR SE tem sufixo OU metadata
                 is_protected = False
                 
-                # Verificar sufixo
                 if any(table.table_id.endswith(suffix) for suffix in ['_restricted', '_masked', '_protected']):
                     is_protected = True
                 
-                # Verificar metadata (views criadas com o novo sistema)
                 if table_obj.description and 'COLUMN_PROTECTION:' in table_obj.description:
                     is_protected = True
                 
-                # Se não for protegida, pular
                 if not is_protected:
                     continue
                 
-                # Processar view protegida
                 view_definition = table_obj.view_query
                 source_table = self.extract_source_table(view_definition)
                 
-                # Analisar proteções
                 protection_summary = self.analyze_protection(
                     table_obj.description, 
                     table_obj.view_query, 
                     len(table_obj.schema)
                 )
+                
+                # ✅ Contar usuários autorizados
+                authorized_count = len(self.parse_users_from_description(table_obj.description))
                 
                 views.append({
                     'view_name': table.table_id,
@@ -185,6 +186,7 @@ class DynamicColumnManage:
                     'visible_columns': len(table_obj.schema),
                     'hidden_count': protection_summary['hidden'],
                     'masked_count': protection_summary['masked'],
+                    'authorized_users': authorized_count,  # ✅ NOVO
                     'created': table_obj.created.strftime('%Y-%m-%d %H:%M') if table_obj.created else 'Unknown',
                     'modified': table_obj.modified.strftime('%Y-%m-%d %H:%M') if table_obj.modified else 'Unknown',
                     'description': table_obj.description or ''
@@ -194,7 +196,6 @@ class DynamicColumnManage:
             
         except Exception as e:
             print(f"[ERROR] get_protected_views: {e}")
-            import traceback
             traceback.print_exc()
             ui.notify(f"Error: {e}", type="negative")
             return []
@@ -203,7 +204,6 @@ class DynamicColumnManage:
         """Analisa tipos de proteção aplicados"""
         summary = {'hidden': 0, 'masked': 0}
         
-        # ✅ MUDANÇA: Parse melhorado do metadata COLUMN_PROTECTION
         if description and 'COLUMN_PROTECTION:' in description:
             lines = description.split('\n')
             in_section = False
@@ -214,11 +214,9 @@ class DynamicColumnManage:
                     continue
                 
                 if in_section:
-                    # Parar se encontrar USERS: ou linha vazia (após já ter lido proteções)
-                    if line.startswith('USERS:') or (not line.strip() and summary['hidden'] + summary['masked'] > 0):
+                    if line.startswith('AUTHORIZED_USERS:') or (not line.strip() and summary['hidden'] + summary['masked'] > 0):
                         break
                     
-                    # Parse da linha: column_name:PROTECTION_TYPE
                     if ':' in line and line.strip():
                         parts = line.strip().split(':')
                         if len(parts) >= 2:
@@ -228,11 +226,9 @@ class DynamicColumnManage:
                             elif protection in ['PARTIAL_MASK', 'HASH', 'NULLIFY', 'ROUND', 'REDACT']:
                                 summary['masked'] += 1
         
-        # Fallback: detectar masking na query se metadata não existe
         if summary['hidden'] == 0 and summary['masked'] == 0 and view_query:
             query_lower = view_query.lower()
             
-            # Detectar padrões de mascaramento
             if 'sha256' in query_lower or 'to_base64' in query_lower:
                 summary['masked'] += 1
             
@@ -296,6 +292,7 @@ class DynamicColumnManage:
                 ui.label(f'  • Visible: {view_info["visible_columns"]}').classes('text-xs')
                 ui.label(f'  • Hidden: {view_info["hidden_count"]}').classes('text-xs')
                 ui.label(f'  • Masked: {view_info["masked_count"]}').classes('text-xs')
+                ui.label(f'  • Authorized Users: {view_info["authorized_users"]}').classes('text-xs')  # ✅ NOVO
             
             async def open_editor():
                 n = ui.notification('Loading schema...', type='info', spinner=True, timeout=None)
@@ -327,7 +324,6 @@ class DynamicColumnManage:
                 self.ask_source_table(view_info)
                 return
             
-            # Carregar schema da tabela origem
             table_ref = client.dataset(self.selected_dataset).table(source_table)
             table_obj = await run.io_bound(client.get_table, table_ref)
             
@@ -339,7 +335,6 @@ class DynamicColumnManage:
                     'mode': field.mode
                 })
             
-            # Carregar proteções atuais
             view_ref = client.dataset(self.selected_dataset).table(view_info['view_name'])
             view_obj = await run.io_bound(client.get_table, view_ref)
             
@@ -349,7 +344,7 @@ class DynamicColumnManage:
                 self.source_table_columns
             )
             
-            self.documented_users = self.parse_users_from_description(view_obj.description)
+            self.authorized_users = self.parse_users_from_description(view_obj.description)
             
             ui.notify("Schema loaded!", type="positive", timeout=1000)
             
@@ -368,7 +363,6 @@ class DynamicColumnManage:
         """Parse proteção do metadata ou inferir da query"""
         protection = {}
         
-        # Tentar parsear do metadata COLUMN_PROTECTION
         if description and 'COLUMN_PROTECTION:' in description:
             lines = description.split('\n')
             in_section = False
@@ -377,7 +371,7 @@ class DynamicColumnManage:
                     in_section = True
                     continue
                 if in_section:
-                    if line.startswith('USERS:') or not line.strip():
+                    if line.startswith('AUTHORIZED_USERS:') or not line.strip():
                         break
                     if ':' in line:
                         parts = line.strip().split(':')
@@ -386,7 +380,6 @@ class DynamicColumnManage:
                             prot_type = parts[1]
                             protection[col_name] = prot_type
         
-        # Fallback: inferir colunas ocultas
         if not protection:
             view_ref = client.dataset(self.selected_dataset).table(self.current_view['view_name'])
             view_obj = client.get_table(view_ref)
@@ -394,7 +387,6 @@ class DynamicColumnManage:
             
             for col in all_columns:
                 if col['name'] in view_cols:
-                    # Tentar detectar se tem máscara na query
                     if view_query and f"sha256({col['name'].lower()}" in view_query.lower():
                         protection[col['name']] = 'HASH'
                     elif view_query and f"null as {col['name'].lower()}" in view_query.lower():
@@ -406,7 +398,6 @@ class DynamicColumnManage:
                 else:
                     protection[col['name']] = 'HIDDEN'
         
-        # Garantir que todas as colunas tenham proteção
         for col in all_columns:
             if col['name'] not in protection:
                 protection[col['name']] = 'VISIBLE'
@@ -424,19 +415,17 @@ class DynamicColumnManage:
             for col in self.source_table_columns:
                 with ui.card().classes('w-full p-3 mb-2'):
                     with ui.row().classes('w-full items-center gap-4'):
-                        # Nome da coluna
                         with ui.column().classes('w-48'):
                             ui.label(col['name']).classes('font-bold text-base')
                             ui.label(f"{col['type']}").classes('text-xs text-grey-6')
                         
-                        # Dropdown de proteção
                         current_protection = self.column_protection.get(col['name'], 'VISIBLE')
                         
                         def make_change_handler(col_name):
                             def handler(e):
                                 self.column_protection[col_name] = e.value
                                 self.update_summary()
-                                self.populate_edit_dialog(view_name, source_table)  # Refresh para atualizar cores
+                                self.populate_edit_dialog(view_name, source_table)
                             return handler
                         
                         protection_select = ui.select(
@@ -445,12 +434,10 @@ class DynamicColumnManage:
                             on_change=make_change_handler(col['name'])
                         ).classes('w-48').props('dense')
                         
-                        # Label de status
                         prot_info = self.PROTECTION_TYPES[current_protection]
                         status_label = ui.label(prot_info['label'])
                         status_label.classes(f'text-sm px-3 py-1 rounded {prot_info["color"]}')
                         
-                        # Preview
                         preview = self.get_protection_preview(col['name'], col['type'], current_protection)
                         ui.label(preview).classes('flex-1 text-xs text-grey-7 italic')
         
@@ -489,53 +476,55 @@ class DynamicColumnManage:
         )
     
     def populate_users_section(self):
-        """Popula seção de usuários"""
+        """Popula seção de usuários AUTORIZADOS"""
         self.users_input_container.clear()
         self.users_list_container.clear()
         
         with self.users_input_container:
             with ui.row().classes('w-full gap-2 mb-4'):
-                user_input = ui.input(placeholder='user@company.com', label='Add user').classes('flex-1')
+                user_input = ui.input(placeholder='user@company.com', label='Add authorized user').classes('flex-1')
                 
                 def add_user():
                     email = user_input.value.strip()
                     if email and '@' in email:
-                        if email not in self.documented_users:
-                            self.documented_users.append(email)
+                        if email not in self.authorized_users:
+                            self.authorized_users.append(email)
                             user_input.value = ''
                             self.populate_users_section()
-                            ui.notify(f"Added: {email}", type="positive")
+                            ui.notify(f"✅ Will grant access to: {email}", type="positive")
                         else:
-                            ui.notify("Already in list", type="warning")
+                            ui.notify("User already authorized", type="warning")
                     else:
                         ui.notify("Invalid email", type="warning")
                 
                 ui.button('ADD', icon='add', on_click=add_user).props('color=positive')
         
         with self.users_list_container:
-            if not self.documented_users:
-                ui.label('No users yet').classes('text-grey-5 italic')
+            if not self.authorized_users:
+                ui.label('No authorized users yet').classes('text-grey-5 italic')
             else:
-                for email in self.documented_users:
-                    with ui.row().classes('w-full items-center justify-between p-2 border rounded mb-1'):
-                        ui.label(email).classes('text-sm')
+                for email in self.authorized_users:
+                    with ui.row().classes('w-full items-center justify-between p-2 border rounded mb-1 bg-green-50'):
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('check_circle').classes('text-green-600')
+                            ui.label(email).classes('text-sm font-bold')
                         
                         def make_remove(user_email):
                             def remove():
-                                self.documented_users.remove(user_email)
+                                self.authorized_users.remove(user_email)
                                 self.populate_users_section()
-                                ui.notify(f"Removed: {user_email}", type="info")
+                                ui.notify(f"❌ Will revoke access from: {user_email}", type="warning")
                             return remove
                         
                         ui.button(icon='delete', on_click=make_remove(email)).props('flat dense size=sm color=negative')
     
     def parse_users_from_description(self, description):
-        """Extrai usuários"""
+        """Extrai usuários autorizados"""
         if not description:
             return []
         try:
-            if 'USERS:' in description:
-                users_text = description.split('USERS:')[1].split('\n')[0]
+            if 'AUTHORIZED_USERS:' in description:
+                users_text = description.split('AUTHORIZED_USERS:')[1].split('\n')[0]
                 emails = [email.strip() for email in users_text.split(',')]
                 return [e for e in emails if '@' in e]
         except:
@@ -546,28 +535,21 @@ class DynamicColumnManage:
         """Gera SQL para uma coluna baseado na proteção"""
         if protection == 'VISIBLE':
             return col_name
-        
         elif protection == 'HIDDEN':
-            return None  # Não incluir
-        
+            return None
         elif protection == 'PARTIAL_MASK':
             return f"CONCAT(SUBSTR(CAST({col_name} AS STRING), 1, 3), '.XXX.XXX-', SUBSTR(CAST({col_name} AS STRING), -2)) AS {col_name}"
-        
         elif protection == 'HASH':
             return f"TO_BASE64(SHA256(CAST({col_name} AS STRING))) AS {col_name}"
-        
         elif protection == 'NULLIFY':
             return f"NULL AS {col_name}"
-        
         elif protection == 'ROUND':
             if col_type in ['INTEGER', 'FLOAT', 'NUMERIC', 'BIGNUMERIC', 'INT64', 'FLOAT64']:
                 return f"ROUND({col_name} / 10000) * 10000 AS {col_name}"
             else:
-                return col_name  # Não pode arredondar não-numéricos
-        
+                return col_name
         elif protection == 'REDACT':
             return f"'[REDACTED]' AS {col_name}"
-        
         return col_name
     
     def preview_sql(self):
@@ -590,6 +572,13 @@ class DynamicColumnManage:
                 
                 ui.label(f'✅ Visible: {visible} | 🚫 Hidden: {hidden} | 🎭 Masked: {masked}').classes('text-sm font-bold')
             
+            # ✅ MOSTRAR USUÁRIOS AUTORIZADOS
+            if self.authorized_users:
+                with ui.card().classes('w-full bg-green-50 p-3 mb-4'):
+                    ui.label('👥 Authorized Users (will have access to this view):').classes('font-bold text-sm mb-2')
+                    for email in self.authorized_users:
+                        ui.label(f'  ✅ {email}').classes('text-xs')
+            
             with ui.scroll_area().classes('w-full h-96 bg-grey-9 p-4 rounded'):
                 ui.code(sql, language='sql').classes('text-white')
             
@@ -607,7 +596,6 @@ class DynamicColumnManage:
         view_name = self.current_view['view_name']
         source_table = self.current_view['source_table']
         
-        # Gerar colunas
         select_columns = []
         for col in self.source_table_columns:
             sql_expr = self.generate_column_sql(col['name'], col['type'], self.column_protection.get(col['name'], 'VISIBLE'))
@@ -624,12 +612,55 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
         
         return sql
     
+    async def grant_view_access(self, view_name):
+        """✅ CONCEDE ACESSO REAL À VIEW VIA IAM"""
+        if not self.authorized_users:
+            return
+        
+        try:
+            # Get dataset
+            dataset_ref = client.dataset(self.selected_dataset)
+            dataset = await run.io_bound(client.get_dataset, dataset_ref)
+            
+            # Get view reference
+            view_ref = dataset_ref.table(view_name)
+            
+            # Obter access entries atuais
+            access_entries = list(dataset.access_entries)
+            
+            # Adicionar authorized view para cada usuário
+            for email in self.authorized_users:
+                # Criar access entry para a view específica
+                from google.cloud.bigquery import AccessEntry
+                
+                # Adicionar usuário com acesso específico à view
+                new_entry = AccessEntry(
+                    role='READER',
+                    entity_type='userByEmail',
+                    entity_id=email,
+                    view=view_ref
+                )
+                
+                # Verificar se já existe
+                if new_entry not in access_entries:
+                    access_entries.append(new_entry)
+            
+            # Atualizar dataset
+            dataset.access_entries = access_entries
+            await run.io_bound(client.update_dataset, dataset, ['access_entries'])
+            
+            ui.notify(f"✅ Access granted to {len(self.authorized_users)} user(s)", type="positive", timeout=3000)
+            
+        except Exception as e:
+            print(f"[ERROR] grant_view_access: {e}")
+            traceback.print_exc()
+            ui.notify(f"⚠️ IAM update warning: {e}", type="warning", timeout=5000)
+    
     async def save_view_changes(self):
-        """Salva mudanças"""
+        """Salva mudanças + APLICA IAM"""
         if not self.current_view:
             return
         
-        # Validar: pelo menos 1 coluna visível
         visible_count = len([p for p in self.column_protection.values() if p != 'HIDDEN'])
         if visible_count == 0:
             ui.notify("❌ Cannot hide ALL columns!", type="negative")
@@ -641,12 +672,12 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
             view_name = self.current_view['view_name']
             source_table = self.current_view['source_table']
             
-            # Gerar e executar SQL
+            # 1. Recriar VIEW
             sql = self.generate_view_sql()
             query_job = await run.io_bound(client.query, sql)
             await run.io_bound(query_job.result)
             
-            # Atualizar descrição com metadata
+            # 2. Atualizar descrição
             description_lines = [
                 f"Restricted view from {source_table}",
                 "",
@@ -657,9 +688,9 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
                 if protection != 'VISIBLE':
                     description_lines.append(f"{col_name}:{protection}")
             
-            if self.documented_users:
+            if self.authorized_users:
                 description_lines.append("")
-                description_lines.append(f"USERS: {', '.join(self.documented_users)}")
+                description_lines.append(f"AUTHORIZED_USERS: {', '.join(self.authorized_users)}")
             
             description = '\n'.join(description_lines)
             
@@ -668,7 +699,11 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
             table.description = description
             await run.io_bound(client.update_table, table, ['description'])
             
-            # Audit log
+            # 3. ✅ APLICAR IAM (GRANT ACCESS)
+            if self.authorized_users:
+                await self.grant_view_access(view_name)
+            
+            # 4. Audit log
             self.audit_service.log_action(
                 action='UPDATE_PROTECTED_VIEW',
                 resource_type='PROTECTED_VIEW',
@@ -676,7 +711,7 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
                 status='SUCCESS',
                 details={
                     'column_protection': self.column_protection,
-                    'documented_users': self.documented_users,
+                    'authorized_users': self.authorized_users,
                     'total_columns': len(self.source_table_columns),
                     'visible': len([p for p in self.column_protection.values() if p not in ['HIDDEN']]),
                     'hidden': len([p for p in self.column_protection.values() if p == 'HIDDEN']),
@@ -685,7 +720,7 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
             )
             
             n.dismiss()
-            ui.notify("✅ View updated successfully!", type="positive")
+            ui.notify("✅ View updated and access granted!", type="positive")
             self.edit_dialog.close()
             
             # Refresh
@@ -817,7 +852,7 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
     def render_ui(self):
         with theme.frame('Manage Protected Views'):
             with ui.card().classes('w-full'):
-                ui.label("Manage Protected Views (Unified CLS + Masking)").classes('text-h5 font-bold mb-4')
+                ui.label("Manage Protected Views (Unified CLS + Masking + IAM)").classes('text-h5 font-bold mb-4')
                 
                 with ui.row().classes('w-full gap-4 mb-4 items-center'):
                     datasets = self.get_datasets()
@@ -839,13 +874,14 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
                 
                 self.views_grid = ui.aggrid({
                     'columnDefs': [
-                        {'field': 'view_name', 'headerName': 'View Name', 'checkboxSelection': True, 'filter': True, 'minWidth': 300},
-                        {'field': 'source_table', 'headerName': 'Source Table', 'filter': True, 'minWidth': 250},
-                        {'field': 'visible_columns', 'headerName': 'Visible', 'filter': True, 'minWidth': 100},
-                        {'field': 'hidden_count', 'headerName': 'Hidden', 'filter': True, 'minWidth': 100},
-                        {'field': 'masked_count', 'headerName': 'Masked', 'filter': True, 'minWidth': 100},
-                        {'field': 'created', 'headerName': 'Created', 'filter': True, 'minWidth': 150},
-                        {'field': 'modified', 'headerName': 'Modified', 'filter': True, 'minWidth': 150},
+                        {'field': 'view_name', 'headerName': 'View Name', 'checkboxSelection': True, 'filter': True, 'minWidth': 280},
+                        {'field': 'source_table', 'headerName': 'Source Table', 'filter': True, 'minWidth': 200},
+                        {'field': 'visible_columns', 'headerName': 'Visible', 'filter': True, 'minWidth': 90},
+                        {'field': 'hidden_count', 'headerName': 'Hidden', 'filter': True, 'minWidth': 90},
+                        {'field': 'masked_count', 'headerName': 'Masked', 'filter': True, 'minWidth': 90},
+                        {'field': 'authorized_users', 'headerName': 'Users', 'filter': True, 'minWidth': 90},  # ✅ NOVO
+                        {'field': 'created', 'headerName': 'Created', 'filter': True, 'minWidth': 140},
+                        {'field': 'modified', 'headerName': 'Modified', 'filter': True, 'minWidth': 140},
                     ],
                     'rowData': [],
                     'rowSelection': 'multiple',
