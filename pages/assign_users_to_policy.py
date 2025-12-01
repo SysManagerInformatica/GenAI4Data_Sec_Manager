@@ -245,6 +245,155 @@ class RLSAssignUserstoPolicy:
         else:
             ui.notify(f"⚠️ Deleted {success_count}, {fail_count} failed.", type="warning")
 
+    # ✅ NOVO MÉTODO: DROP ALL FROM TABLE
+    async def drop_all_from_selected_tables(self):
+        """Remove TODAS as políticas RLS das tabelas selecionadas (DROP ALL)"""
+        rows = await self.grid_step1.get_selected_rows()
+        if not rows:
+            ui.notify('No policies selected', type="warning")
+            return
+        
+        # Agrupar policies por tabela
+        tables_map = {}
+        for policy in rows:
+            table_key = f"{policy['Dataset ID']}.{policy['Table Name']}"
+            if table_key not in tables_map:
+                tables_map[table_key] = {
+                    'dataset_id': policy['Dataset ID'],
+                    'table_name': policy['Table Name'],
+                    'policies': []
+                }
+            tables_map[table_key]['policies'].append(policy['Policy Name'])
+        
+        # Dialog de confirmação CRÍTICO
+        with ui.dialog() as confirm_dialog, ui.card().classes('w-full max-w-2xl'):
+            ui.label('⚠️ DROP ALL ROW ACCESS POLICIES').classes('text-h5 font-bold text-red-600 mb-4')
+            
+            with ui.card().classes('w-full bg-red-50 p-4 mb-4 border-2 border-red-500'):
+                ui.label('🚨 CRITICAL WARNING').classes('text-red-700 font-bold mb-2')
+                ui.label('This will remove ALL Row Access Policies from the selected tables!').classes('text-sm mb-2')
+                ui.label('After this action, tables will be ACCESSIBLE TO ALL USERS with table permissions.').classes('text-sm font-bold text-red-600')
+            
+            ui.label('Affected Tables:').classes('font-bold mb-2')
+            
+            for table_key, table_info in tables_map.items():
+                with ui.card().classes('w-full bg-orange-50 p-3 mb-2'):
+                    ui.label(f"📋 {table_key}").classes('font-bold text-sm mb-1')
+                    ui.label(f"   Policies to remove: {len(table_info['policies'])}").classes('text-xs text-grey-7')
+                    
+                    # Mostrar nomes das policies
+                    with ui.expansion('Show policy names', icon='list').classes('w-full text-xs'):
+                        for policy_name in table_info['policies']:
+                            ui.label(f"  • {policy_name}").classes('text-xs')
+            
+            with ui.card().classes('w-full bg-yellow-50 p-3 mt-4'):
+                ui.label('💡 Alternative: If you want to keep access control, create a new policy before dropping these.').classes('text-xs')
+            
+            with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                ui.button('CANCEL', on_click=confirm_dialog.close).props('flat')
+                ui.button(
+                    'DROP ALL POLICIES',
+                    icon='delete_forever',
+                    on_click=lambda: self.execute_drop_all(tables_map, confirm_dialog)
+                ).props('color=negative')
+        
+        confirm_dialog.open()
+
+    # ✅ NOVO MÉTODO: EXECUTAR DROP ALL
+    def execute_drop_all(self, tables_map, dialog):
+        """Executa DROP ALL ROW ACCESS POLICIES para cada tabela"""
+        total_policies = 0
+        success_tables = 0
+        failed_tables = 0
+        
+        for table_key, table_info in tables_map.items():
+            try:
+                dataset_id = table_info['dataset_id']
+                table_name = table_info['table_name']
+                policies_count = len(table_info['policies'])
+                
+                # DROP ALL para remover todas de uma vez
+                sql = f"""DROP ALL ROW ACCESS POLICIES ON `{self.project_id}.{dataset_id}.{table_name}`;"""
+                
+                print(f"[DEBUG] Executing DROP ALL for {table_key}")
+                print(f"[DEBUG] SQL: {sql}")
+                
+                query_job = client.query(sql)
+                query_job.result()
+                
+                # Deletar da tabela de políticas
+                query_delete_policies = f"""
+                DELETE FROM `{config.POLICY_TABLE}`
+                WHERE project_id = '{self.project_id}'
+                  AND dataset_id = '{dataset_id}'
+                  AND table_name = '{table_name}'
+                  AND policy_name IN ({','.join([f"'{p}'" for p in table_info['policies']])});
+                """
+                client.query(query_delete_policies).result()
+                
+                # Deletar filtros associados
+                query_delete_filters = f"""
+                DELETE FROM `{config.FILTER_TABLE}`
+                WHERE project_id = '{self.project_id}'
+                  AND dataset_id = '{dataset_id}'
+                  AND table_id = '{table_name}'
+                  AND policy_name IN ({','.join([f"'{p}'" for p in table_info['policies']])});
+                """
+                client.query(query_delete_filters).result()
+                
+                # Log audit
+                self.audit_service.log_action(
+                    action='DROP_ALL_RLS_POLICIES',
+                    resource_type='TABLE',
+                    resource_name=f"{dataset_id}.{table_name}",
+                    status='SUCCESS',
+                    details={
+                        'policies_count': policies_count,
+                        'policies_removed': table_info['policies'],
+                        'warning': 'Table now accessible to all users with table permissions'
+                    }
+                )
+                
+                success_tables += 1
+                total_policies += policies_count
+                
+                print(f"[SUCCESS] Dropped {policies_count} policies from {table_key}")
+                
+            except Exception as e:
+                print(f"[ERROR] Failed to drop policies from {table_key}: {e}")
+                
+                self.audit_service.log_action(
+                    action='DROP_ALL_RLS_POLICIES',
+                    resource_type='TABLE',
+                    resource_name=f"{dataset_id}.{table_name}",
+                    status='FAILED',
+                    error_message=str(e)
+                )
+                
+                failed_tables += 1
+        
+        dialog.close()
+        
+        # Notificações
+        if success_tables > 0:
+            ui.notify(
+                f"✅ Dropped {total_policies} policies from {success_tables} table(s)!",
+                type="positive",
+                timeout=5000
+            )
+        
+        if failed_tables > 0:
+            ui.notify(
+                f"❌ Failed to drop policies from {failed_tables} table(s)",
+                type="negative",
+                timeout=5000
+            )
+        
+        # Refresh grid
+        self.policy_list = self.get_policies()
+        self.grid_step1.options['rowData'] = self.policy_list
+        self.grid_step1.update()
+
     def refresh_existing_policies_grid(self):
         """Atualiza o grid de políticas existentes"""
         if self.existing_policies_grid:
@@ -486,17 +635,25 @@ class RLSAssignUserstoPolicy:
                     {'field': 'Field ID', 'filter': 'agTextColumnFilter'}
                 ],
                 'rowData': self.policy_list,
-                'rowSelection': 'multiple',  # Permitir seleção múltipla
+                'rowSelection': 'multiple',
             }).classes('max-h-160 ag-theme-quartz').on('rowSelected', self.get_selected_row)
 
             with ui.stepper_navigation():
                 with ui.row().classes('w-full justify-between'):
-                    # Lado esquerdo: Botão DELETE
-                    ui.button(
-                        "DELETE SELECTED", 
-                        icon="delete", 
-                        on_click=self.delete_selected_policies
-                    ).props('color=negative flat')
+                    # Lado esquerdo: Botões DELETE
+                    with ui.row().classes('gap-2'):
+                        ui.button(
+                            "DELETE SELECTED", 
+                            icon="delete", 
+                            on_click=self.delete_selected_policies
+                        ).props('color=negative flat')
+                        
+                        # ✅ NOVO: Botão DROP ALL FROM TABLE
+                        ui.button(
+                            "DROP ALL FROM TABLE",
+                            icon="delete_forever",
+                            on_click=self.drop_all_from_selected_tables
+                        ).props('color=red outline').style('border: 2px solid red;').tooltip('⚠️ Removes ALL policies from selected tables')
                     
                     # Lado direito: Botão NEXT
                     self.step1_next_button = ui.button(
@@ -511,7 +668,7 @@ class RLSAssignUserstoPolicy:
         if "@" in email and "." in email:
             if email not in self.user_list:
                 self.user_list.append(email)
-                self.selected_users.add(email)  # Adicionar como selecionado por padrão
+                self.selected_users.add(email)
                 self.user_input.value = ''
                 self.refresh_user_list()
                 ui.notify(f"User {email} added", type="positive")
@@ -525,7 +682,7 @@ class RLSAssignUserstoPolicy:
         if filter_value:
             if filter_value not in self.filter_values:
                 self.filter_values.append(filter_value)
-                self.selected_filters.add(filter_value)  # Adicionar como selecionado por padrão
+                self.selected_filters.add(filter_value)
                 self.filter_input.value = ''
                 self.refresh_filter_list()
                 ui.notify(f"Filter '{filter_value}' added", type="positive")
@@ -618,4 +775,4 @@ class RLSAssignUserstoPolicy:
 
     def run(self):
         with theme.frame('Assign Users to Policy'):
-            pass  # The stepper is already created in the constructor
+            pass
