@@ -62,9 +62,11 @@ class DynamicColumnManage:
         
         # ✅ NOVA ESTRUTURA: {column_name: protection_type}
         self.current_view = None
+        self.current_view_dataset = None  # ✅ NOVO: Dataset onde a view está
+        self.source_dataset = None  # ✅ NOVO: Dataset da tabela origem
         self.source_table_columns = []
-        self.column_protection = {}  # {'cpf': 'PARTIAL_MASK', 'rg': 'HIDDEN', etc}
-        self.authorized_users = []  # ✅ RENOMEADO de documented_users
+        self.column_protection = {}
+        self.authorized_users = []
         
         # Criar dialog de edição UMA VEZ
         self.create_edit_dialog()
@@ -83,7 +85,7 @@ class DynamicColumnManage:
             
             with ui.tabs().classes('w-full') as tabs:
                 tab_columns = ui.tab('Column Protection', icon='security')
-                tab_users = ui.tab('Add Users', icon='person_add')  # ✅ RENOMEADO
+                tab_users = ui.tab('Add Users', icon='person_add')
             
             with ui.tab_panels(tabs, value=tab_columns).classes('w-full'):
                 # TAB 1: Column Protection
@@ -108,11 +110,11 @@ class DynamicColumnManage:
                     with ui.card().classes('w-full bg-purple-50 p-3 mt-4'):
                         self.summary_label = ui.label('').classes('text-sm font-bold')
                 
-                # TAB 2: Add Users (✅ FUNCIONALIDADE REAL DE IAM)
+                # TAB 2: Add Users
                 with ui.tab_panel(tab_users):
                     with ui.card().classes('w-full bg-green-50 p-3 mb-4'):
                         ui.label('✅ Grant access to this view').classes('font-bold text-sm mb-2')
-                        ui.label('• Users added here will have BigQuery Data Viewer role on THIS VIEW').classes('text-xs')
+                        ui.label('• Users added here will have BigQuery Data Viewer role on the VIEWS dataset').classes('text-xs')
                         ui.label('• They will NOT have access to the source table').classes('text-xs')
                         ui.label('• Access is granted via IAM policy binding').classes('text-xs')
                     
@@ -145,52 +147,67 @@ class DynamicColumnManage:
             return []
     
     def get_protected_views(self, dataset_id):
-        """Lista views protegidas (detecta por sufixo OU por metadata)"""
+        """✅ Lista views protegidas de AMBOS datasets (origem e _views)"""
         try:
-            tables = client.list_tables(dataset_id)
             views = []
+            datasets_to_search = [dataset_id]
             
-            for table in tables:
-                table_ref = client.dataset(dataset_id).table(table.table_id)
-                table_obj = client.get_table(table_ref)
+            # ✅ Adicionar dataset _views se existir
+            views_dataset = f"{dataset_id}_views"
+            try:
+                client.get_dataset(views_dataset)
+                datasets_to_search.append(views_dataset)
+            except:
+                pass
+            
+            for ds in datasets_to_search:
+                tables = client.list_tables(ds)
                 
-                if table_obj.table_type != 'VIEW':
-                    continue
-                
-                is_protected = False
-                
-                if any(table.table_id.endswith(suffix) for suffix in ['_restricted', '_masked', '_protected']):
-                    is_protected = True
-                
-                if table_obj.description and 'COLUMN_PROTECTION:' in table_obj.description:
-                    is_protected = True
-                
-                if not is_protected:
-                    continue
-                
-                view_definition = table_obj.view_query
-                source_table = self.extract_source_table(view_definition)
-                
-                protection_summary = self.analyze_protection(
-                    table_obj.description, 
-                    table_obj.view_query, 
-                    len(table_obj.schema)
-                )
-                
-                # ✅ Contar usuários autorizados
-                authorized_count = len(self.parse_users_from_description(table_obj.description))
-                
-                views.append({
-                    'view_name': table.table_id,
-                    'source_table': source_table,
-                    'visible_columns': len(table_obj.schema),
-                    'hidden_count': protection_summary['hidden'],
-                    'masked_count': protection_summary['masked'],
-                    'authorized_users': authorized_count,  # ✅ NOVO
-                    'created': table_obj.created.strftime('%Y-%m-%d %H:%M') if table_obj.created else 'Unknown',
-                    'modified': table_obj.modified.strftime('%Y-%m-%d %H:%M') if table_obj.modified else 'Unknown',
-                    'description': table_obj.description or ''
-                })
+                for table in tables:
+                    table_ref = client.dataset(ds).table(table.table_id)
+                    table_obj = client.get_table(table_ref)
+                    
+                    if table_obj.table_type != 'VIEW':
+                        continue
+                    
+                    is_protected = False
+                    
+                    # Detectar por sufixo
+                    if any(table.table_id.endswith(suffix) for suffix in ['_restricted', '_masked', '_protected']):
+                        is_protected = True
+                    
+                    # Detectar por metadata
+                    if table_obj.description and 'COLUMN_PROTECTION:' in table_obj.description:
+                        is_protected = True
+                    
+                    if not is_protected:
+                        continue
+                    
+                    view_definition = table_obj.view_query
+                    source_table = self.extract_source_table(view_definition)
+                    source_dataset = self.extract_source_dataset(view_definition) or dataset_id
+                    
+                    protection_summary = self.analyze_protection(
+                        table_obj.description, 
+                        table_obj.view_query, 
+                        len(table_obj.schema)
+                    )
+                    
+                    authorized_count = len(self.parse_users_from_description(table_obj.description))
+                    
+                    views.append({
+                        'view_name': table.table_id,
+                        'view_dataset': ds,  # ✅ NOVO: Dataset da view
+                        'source_dataset': source_dataset,  # ✅ NOVO: Dataset da tabela
+                        'source_table': source_table,
+                        'visible_columns': len(table_obj.schema),
+                        'hidden_count': protection_summary['hidden'],
+                        'masked_count': protection_summary['masked'],
+                        'authorized_users': authorized_count,
+                        'created': table_obj.created.strftime('%Y-%m-%d %H:%M') if table_obj.created else 'Unknown',
+                        'modified': table_obj.modified.strftime('%Y-%m-%d %H:%M') if table_obj.modified else 'Unknown',
+                        'description': table_obj.description or ''
+                    })
             
             return views
             
@@ -199,6 +216,18 @@ class DynamicColumnManage:
             traceback.print_exc()
             ui.notify(f"Error: {e}", type="negative")
             return []
+    
+    def extract_source_dataset(self, view_query):
+        """Extrai dataset da tabela origem"""
+        try:
+            # Pattern: project.dataset.table
+            pattern = r'FROM\s+`[^`]*\.([^`\.]+)\.[^`\.]+`'
+            match = re.search(pattern, view_query, re.IGNORECASE)
+            if match:
+                return match.group(1)
+            return None
+        except:
+            return None
     
     def analyze_protection(self, description, view_query, visible_count):
         """Analisa tipos de proteção aplicados"""
@@ -287,12 +316,12 @@ class DynamicColumnManage:
             
             with ui.card().classes('w-full bg-blue-50 p-3 mb-2'):
                 ui.label('📊 General Information:').classes('font-bold text-sm mb-2')
-                ui.label(f'  • View: {view_info["view_name"]}').classes('text-xs')
-                ui.label(f'  • Source: {view_info["source_table"]}').classes('text-xs')
+                ui.label(f'  • View: {view_info["view_dataset"]}.{view_info["view_name"]}').classes('text-xs font-bold')
+                ui.label(f'  • Source: {view_info["source_dataset"]}.{view_info["source_table"]}').classes('text-xs')
                 ui.label(f'  • Visible: {view_info["visible_columns"]}').classes('text-xs')
                 ui.label(f'  • Hidden: {view_info["hidden_count"]}').classes('text-xs')
                 ui.label(f'  • Masked: {view_info["masked_count"]}').classes('text-xs')
-                ui.label(f'  • Authorized Users: {view_info["authorized_users"]}').classes('text-xs')  # ✅ NOVO
+                ui.label(f'  • Authorized Users: {view_info["authorized_users"]}').classes('text-xs')
             
             async def open_editor():
                 n = ui.notification('Loading schema...', type='info', spinner=True, timeout=None)
@@ -313,6 +342,8 @@ class DynamicColumnManage:
     async def edit_view(self, view_info, parent_dialog=None):
         """Carrega view e abre editor"""
         self.current_view = view_info
+        self.current_view_dataset = view_info['view_dataset']
+        self.source_dataset = view_info['source_dataset']
         
         try:
             source_table = view_info['source_table']
@@ -324,7 +355,8 @@ class DynamicColumnManage:
                 self.ask_source_table(view_info)
                 return
             
-            table_ref = client.dataset(self.selected_dataset).table(source_table)
+            # ✅ Buscar tabela no dataset correto
+            table_ref = client.dataset(self.source_dataset).table(source_table)
             table_obj = await run.io_bound(client.get_table, table_ref)
             
             self.source_table_columns = []
@@ -335,7 +367,8 @@ class DynamicColumnManage:
                     'mode': field.mode
                 })
             
-            view_ref = client.dataset(self.selected_dataset).table(view_info['view_name'])
+            # ✅ Buscar view no dataset correto
+            view_ref = client.dataset(self.current_view_dataset).table(view_info['view_name'])
             view_obj = await run.io_bound(client.get_table, view_ref)
             
             self.column_protection = self.parse_protection_from_description(
@@ -381,7 +414,7 @@ class DynamicColumnManage:
                             protection[col_name] = prot_type
         
         if not protection:
-            view_ref = client.dataset(self.selected_dataset).table(self.current_view['view_name'])
+            view_ref = client.dataset(self.current_view_dataset).table(self.current_view['view_name'])
             view_obj = client.get_table(view_ref)
             view_cols = {field.name for field in view_obj.schema}
             
@@ -407,7 +440,7 @@ class DynamicColumnManage:
     def populate_edit_dialog(self, view_name, source_table):
         """Popula dialog com dados"""
         self.edit_title.set_text(f'Edit View: {view_name}')
-        self.source_label.set_text(f'Source: {source_table} ({len(self.source_table_columns)} columns)')
+        self.source_label.set_text(f'Source: {self.source_dataset}.{source_table} ({len(self.source_table_columns)} columns)')
         
         self.columns_container.clear()
         
@@ -572,7 +605,6 @@ class DynamicColumnManage:
                 
                 ui.label(f'✅ Visible: {visible} | 🚫 Hidden: {hidden} | 🎭 Masked: {masked}').classes('text-sm font-bold')
             
-            # ✅ MOSTRAR USUÁRIOS AUTORIZADOS
             if self.authorized_users:
                 with ui.card().classes('w-full bg-green-50 p-3 mb-4'):
                     ui.label('👥 Authorized Users (will have access to this view):').classes('font-bold text-sm mb-2')
@@ -605,56 +637,62 @@ class DynamicColumnManage:
         if not select_columns:
             return None
         
-        sql = f"""CREATE OR REPLACE VIEW `{self.project_id}.{self.selected_dataset}.{view_name}` AS
+        # ✅ VIEW no dataset correto
+        sql = f"""CREATE OR REPLACE VIEW `{self.project_id}.{self.current_view_dataset}.{view_name}` AS
 SELECT
   {(','+chr(10)+'  ').join(select_columns)}
-FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
+FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
         
         return sql
     
     async def grant_view_access(self, view_name):
-        """✅ CONCEDE ACESSO REAL À VIEW VIA AUTHORIZED VIEWS"""
+        """✅ CONCEDE ACESSO VIA AUTHORIZED VIEWS (CROSS-DATASET)"""
         if not self.authorized_users:
             return
         
         try:
-            # 1. ✅ ADICIONAR VIEW COMO "AUTHORIZED VIEW" NO DATASET
-            dataset_ref = client.dataset(self.selected_dataset)
-            dataset = await run.io_bound(client.get_dataset, dataset_ref)
-            
-            # Get access entries atuais
-            access_entries = list(dataset.access_entries)
-            
-            # Adicionar a view como authorized view
             from google.cloud.bigquery import AccessEntry
             
-            view_full_id = f"{self.project_id}.{self.selected_dataset}.{view_name}"
+            # 1. Adicionar view como AUTHORIZED no dataset ORIGEM
+            source_dataset_ref = client.dataset(self.source_dataset)
+            source_dataset = await run.io_bound(client.get_dataset, source_dataset_ref)
             
-            # Criar authorized view entry
+            access_entries = list(source_dataset.access_entries)
+            
+            # Authorized view entry
             authorized_view_entry = AccessEntry(
                 role=None,
                 entity_type='view',
                 entity_id={
                     'projectId': self.project_id,
-                    'datasetId': self.selected_dataset,
+                    'datasetId': self.current_view_dataset,
                     'tableId': view_name
                 }
             )
             
             # Verificar se já existe
-            view_already_authorized = False
+            view_exists = False
             for entry in access_entries:
                 if entry.entity_type == 'view' and isinstance(entry.entity_id, dict):
                     if (entry.entity_id.get('projectId') == self.project_id and
-                        entry.entity_id.get('datasetId') == self.selected_dataset and
+                        entry.entity_id.get('datasetId') == self.current_view_dataset and
                         entry.entity_id.get('tableId') == view_name):
-                        view_already_authorized = True
+                        view_exists = True
                         break
             
-            if not view_already_authorized:
+            if not view_exists:
                 access_entries.append(authorized_view_entry)
             
-            # 2. ✅ ADICIONAR USUÁRIOS COM ROLE READER NO DATASET
+            # Atualizar dataset origem
+            source_dataset.access_entries = access_entries
+            await run.io_bound(client.update_dataset, source_dataset, ['access_entries'])
+            
+            # 2. Adicionar usuários no dataset de VIEWS
+            views_dataset_ref = client.dataset(self.current_view_dataset)
+            views_dataset_obj = await run.io_bound(client.get_dataset, views_dataset_ref)
+            
+            views_access_entries = list(views_dataset_obj.access_entries)
+            
             for email in self.authorized_users:
                 user_entry = AccessEntry(
                     role='READER',
@@ -663,20 +701,20 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
                 )
                 
                 # Verificar se já existe
-                user_already_added = False
-                for entry in access_entries:
+                user_exists = False
+                for entry in views_access_entries:
                     if (entry.entity_type == 'userByEmail' and 
                         entry.entity_id == email and 
                         entry.role == 'READER'):
-                        user_already_added = True
+                        user_exists = True
                         break
                 
-                if not user_already_added:
-                    access_entries.append(user_entry)
+                if not user_exists:
+                    views_access_entries.append(user_entry)
             
-            # 3. ✅ ATUALIZAR DATASET COM NOVOS ACCESS ENTRIES
-            dataset.access_entries = access_entries
-            await run.io_bound(client.update_dataset, dataset, ['access_entries'])
+            # Atualizar dataset de views
+            views_dataset_obj.access_entries = views_access_entries
+            await run.io_bound(client.update_dataset, views_dataset_obj, ['access_entries'])
             
             ui.notify(
                 f"✅ Authorized view configured!\n"
@@ -685,23 +723,21 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
                 timeout=5000
             )
             
-            # 4. ℹ️ INSTRUÇÕES ADICIONAIS
             print(f"""
-[INFO] Authorized View Configuration:
-- View: {view_full_id}
+[INFO] Cross-Dataset Authorized View Configuration:
+- Source Dataset: {self.source_dataset} (users blocked)
+- Views Dataset: {self.current_view_dataset} (users allowed)
+- View: {view_name}
 - Users: {', '.join(self.authorized_users)}
-- Dataset: {self.selected_dataset}
 
-Users can now query:
-SELECT * FROM `{view_full_id}` LIMIT 1000;
-
-If errors persist, check Policy Tag permissions in Data Catalog.
+Users can query:
+SELECT * FROM `{self.project_id}.{self.current_view_dataset}.{view_name}` LIMIT 1000;
             """)
             
         except Exception as e:
             print(f"[ERROR] grant_view_access: {e}")
             traceback.print_exc()
-            ui.notify(f"⚠️ IAM update error: {str(e)[:200]}", type="warning", timeout=10000)
+            ui.notify(f"⚠️ IAM update error: {str(e)[:300]}", type="warning", timeout=10000)
     
     async def save_view_changes(self):
         """Salva mudanças + APLICA IAM"""
@@ -726,7 +762,7 @@ If errors persist, check Policy Tag permissions in Data Catalog.
             
             # 2. Atualizar descrição
             description_lines = [
-                f"Restricted view from {source_table}",
+                f"Restricted view from {self.source_dataset}.{source_table}",
                 "",
                 "COLUMN_PROTECTION:"
             ]
@@ -741,7 +777,7 @@ If errors persist, check Policy Tag permissions in Data Catalog.
             
             description = '\n'.join(description_lines)
             
-            table_ref = client.dataset(self.selected_dataset).table(view_name)
+            table_ref = client.dataset(self.current_view_dataset).table(view_name)
             table = await run.io_bound(client.get_table, table_ref)
             table.description = description
             await run.io_bound(client.update_table, table, ['description'])
@@ -754,9 +790,12 @@ If errors persist, check Policy Tag permissions in Data Catalog.
             self.audit_service.log_action(
                 action='UPDATE_PROTECTED_VIEW',
                 resource_type='PROTECTED_VIEW',
-                resource_name=f"{self.selected_dataset}.{view_name}",
+                resource_name=f"{self.current_view_dataset}.{view_name}",
                 status='SUCCESS',
                 details={
+                    'source_dataset': self.source_dataset,
+                    'source_table': source_table,
+                    'views_dataset': self.current_view_dataset,
                     'column_protection': self.column_protection,
                     'authorized_users': self.authorized_users,
                     'total_columns': len(self.source_table_columns),
@@ -781,7 +820,7 @@ If errors persist, check Policy Tag permissions in Data Catalog.
             self.audit_service.log_action(
                 action='UPDATE_PROTECTED_VIEW',
                 resource_type='PROTECTED_VIEW',
-                resource_name=f"{self.selected_dataset}.{view_name}",
+                resource_name=f"{self.current_view_dataset}.{view_name}",
                 status='FAILED',
                 error_message=str(e)
             )
@@ -794,7 +833,7 @@ If errors persist, check Policy Tag permissions in Data Catalog.
             ui.label('Select source table manually:').classes('mb-4')
             
             try:
-                tables = client.list_tables(self.selected_dataset)
+                tables = client.list_tables(self.source_dataset)
                 table_names = [t.table_id for t in tables if not any(t.table_id.endswith(s) for s in ['_restricted', '_masked', '_protected'])]
                 
                 if not table_names:
@@ -831,7 +870,7 @@ If errors persist, check Policy Tag permissions in Data Catalog.
             ui.notify('No views selected', type="warning")
             return
         
-        view_names = [row['view_name'] for row in rows]
+        view_names = [f"{row['view_dataset']}.{row['view_name']}" for row in rows]
         
         with ui.dialog() as confirm_dialog, ui.card():
             ui.label('⚠️ Confirm Deletion').classes('text-h6 font-bold text-orange-600 mb-4')
@@ -855,13 +894,13 @@ If errors persist, check Policy Tag permissions in Data Catalog.
         
         for view in views:
             try:
-                table_ref = client.dataset(self.selected_dataset).table(view['view_name'])
+                table_ref = client.dataset(view['view_dataset']).table(view['view_name'])
                 client.delete_table(table_ref)
                 
                 self.audit_service.log_action(
                     action='DELETE_PROTECTED_VIEW',
                     resource_type='PROTECTED_VIEW',
-                    resource_name=f"{self.selected_dataset}.{view['view_name']}",
+                    resource_name=f"{view['view_dataset']}.{view['view_name']}",
                     status='SUCCESS'
                 )
                 success += 1
@@ -869,7 +908,7 @@ If errors persist, check Policy Tag permissions in Data Catalog.
                 self.audit_service.log_action(
                     action='DELETE_PROTECTED_VIEW',
                     resource_type='PROTECTED_VIEW',
-                    resource_name=f"{self.selected_dataset}.{view['view_name']}",
+                    resource_name=f"{view['view_dataset']}.{view['view_name']}",
                     status='FAILED',
                     error_message=str(e)
                 )
@@ -901,11 +940,17 @@ If errors persist, check Policy Tag permissions in Data Catalog.
             with ui.card().classes('w-full'):
                 ui.label("Manage Protected Views (Unified CLS + Masking + IAM)").classes('text-h5 font-bold mb-4')
                 
+                with ui.card().classes('w-full bg-yellow-50 p-3 mb-4'):
+                    ui.label('🔐 Cross-Dataset Security:').classes('font-bold text-sm mb-2')
+                    ui.label('• Views are stored in {dataset}_views datasets').classes('text-xs')
+                    ui.label('• Users have access to views but NOT to source tables').classes('text-xs')
+                    ui.label('• Authorized Views bypass Policy Tags on source tables').classes('text-xs')
+                
                 with ui.row().classes('w-full gap-4 mb-4 items-center'):
                     datasets = self.get_datasets()
                     ui.select(
                         options=datasets,
-                        label='Select Dataset',
+                        label='Select Dataset (will search dataset + dataset_views)',
                         on_change=lambda e: self.on_dataset_change(e.value)
                     ).classes('flex-1')
                     
@@ -917,16 +962,17 @@ If errors persist, check Policy Tag permissions in Data Catalog.
                         self.total_views_label = ui.label('0').classes('text-3xl font-bold text-blue-600')
                 
                 ui.separator()
-                ui.label("Protected Views (_restricted, _masked, _protected)").classes('text-h6 font-bold mt-4 mb-2')
+                ui.label("Protected Views (from dataset and dataset_views)").classes('text-h6 font-bold mt-4 mb-2')
                 
                 self.views_grid = ui.aggrid({
                     'columnDefs': [
                         {'field': 'view_name', 'headerName': 'View Name', 'checkboxSelection': True, 'filter': True, 'minWidth': 280},
+                        {'field': 'view_dataset', 'headerName': 'View Dataset', 'filter': True, 'minWidth': 180},
                         {'field': 'source_table', 'headerName': 'Source Table', 'filter': True, 'minWidth': 200},
                         {'field': 'visible_columns', 'headerName': 'Visible', 'filter': True, 'minWidth': 90},
                         {'field': 'hidden_count', 'headerName': 'Hidden', 'filter': True, 'minWidth': 90},
                         {'field': 'masked_count', 'headerName': 'Masked', 'filter': True, 'minWidth': 90},
-                        {'field': 'authorized_users', 'headerName': 'Users', 'filter': True, 'minWidth': 90},  # ✅ NOVO
+                        {'field': 'authorized_users', 'headerName': 'Users', 'filter': True, 'minWidth': 90},
                         {'field': 'created', 'headerName': 'Created', 'filter': True, 'minWidth': 140},
                         {'field': 'modified', 'headerName': 'Modified', 'filter': True, 'minWidth': 140},
                     ],
