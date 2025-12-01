@@ -613,48 +613,95 @@ FROM `{self.project_id}.{self.selected_dataset}.{source_table}`;"""
         return sql
     
     async def grant_view_access(self, view_name):
-        """✅ CONCEDE ACESSO REAL À VIEW VIA IAM"""
+        """✅ CONCEDE ACESSO REAL À VIEW VIA AUTHORIZED VIEWS"""
         if not self.authorized_users:
             return
         
         try:
-            # Get dataset
+            # 1. ✅ ADICIONAR VIEW COMO "AUTHORIZED VIEW" NO DATASET
             dataset_ref = client.dataset(self.selected_dataset)
             dataset = await run.io_bound(client.get_dataset, dataset_ref)
             
-            # Get view reference
-            view_ref = dataset_ref.table(view_name)
-            
-            # Obter access entries atuais
+            # Get access entries atuais
             access_entries = list(dataset.access_entries)
             
-            # Adicionar authorized view para cada usuário
+            # Adicionar a view como authorized view
+            from google.cloud.bigquery import AccessEntry
+            
+            view_full_id = f"{self.project_id}.{self.selected_dataset}.{view_name}"
+            
+            # Criar authorized view entry
+            authorized_view_entry = AccessEntry(
+                role=None,
+                entity_type='view',
+                entity_id={
+                    'projectId': self.project_id,
+                    'datasetId': self.selected_dataset,
+                    'tableId': view_name
+                }
+            )
+            
+            # Verificar se já existe
+            view_already_authorized = False
+            for entry in access_entries:
+                if entry.entity_type == 'view' and isinstance(entry.entity_id, dict):
+                    if (entry.entity_id.get('projectId') == self.project_id and
+                        entry.entity_id.get('datasetId') == self.selected_dataset and
+                        entry.entity_id.get('tableId') == view_name):
+                        view_already_authorized = True
+                        break
+            
+            if not view_already_authorized:
+                access_entries.append(authorized_view_entry)
+            
+            # 2. ✅ ADICIONAR USUÁRIOS COM ROLE READER NO DATASET
             for email in self.authorized_users:
-                # Criar access entry para a view específica
-                from google.cloud.bigquery import AccessEntry
-                
-                # Adicionar usuário com acesso específico à view
-                new_entry = AccessEntry(
+                user_entry = AccessEntry(
                     role='READER',
                     entity_type='userByEmail',
-                    entity_id=email,
-                    view=view_ref
+                    entity_id=email
                 )
                 
                 # Verificar se já existe
-                if new_entry not in access_entries:
-                    access_entries.append(new_entry)
+                user_already_added = False
+                for entry in access_entries:
+                    if (entry.entity_type == 'userByEmail' and 
+                        entry.entity_id == email and 
+                        entry.role == 'READER'):
+                        user_already_added = True
+                        break
+                
+                if not user_already_added:
+                    access_entries.append(user_entry)
             
-            # Atualizar dataset
+            # 3. ✅ ATUALIZAR DATASET COM NOVOS ACCESS ENTRIES
             dataset.access_entries = access_entries
             await run.io_bound(client.update_dataset, dataset, ['access_entries'])
             
-            ui.notify(f"✅ Access granted to {len(self.authorized_users)} user(s)", type="positive", timeout=3000)
+            ui.notify(
+                f"✅ Authorized view configured!\n"
+                f"✅ Access granted to {len(self.authorized_users)} user(s)", 
+                type="positive", 
+                timeout=5000
+            )
+            
+            # 4. ℹ️ INSTRUÇÕES ADICIONAIS
+            print(f"""
+[INFO] Authorized View Configuration:
+- View: {view_full_id}
+- Users: {', '.join(self.authorized_users)}
+- Dataset: {self.selected_dataset}
+
+Users can now query:
+SELECT * FROM `{view_full_id}` LIMIT 1000;
+
+If errors persist, check Policy Tag permissions in Data Catalog.
+            """)
             
         except Exception as e:
             print(f"[ERROR] grant_view_access: {e}")
             traceback.print_exc()
-            ui.notify(f"⚠️ IAM update warning: {e}", type="warning", timeout=5000)
+            ui.notify(f"⚠️ IAM update error: {str(e)[:200]}", type="warning", timeout=10000)
     
     async def save_view_changes(self):
         """Salva mudanças + APLICA IAM"""
