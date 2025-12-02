@@ -64,8 +64,8 @@ class DatasetIAMManager:
             # Current Users
             ui.label('Current Permissions:').classes('text-sm font-bold mb-2')
             
-            with ui.scroll_area().classes('w-full h-96 border rounded p-2 mb-4'):
-                self.users_container = ui.column().classes('w-full')
+            # ✅ SEM scroll_area para evitar problemas de renderização
+            self.users_container = ui.column().classes('w-full border rounded p-2 mb-4').style('max-height: 400px; overflow-y: auto;')
             
             # Add New User Section
             ui.separator()
@@ -174,34 +174,49 @@ class DatasetIAMManager:
     
     async def manage_permissions(self):
         """Abre dialog para gerenciar permissões"""
+        print("=" * 80)
+        print("🟢 MANAGE_PERMISSIONS CALLED!")
+        print("=" * 80)
+        
         rows = await self.datasets_grid.get_selected_rows()
+        print(f"Selected rows: {rows}")
+        
         if not rows:
+            print("❌ No dataset selected!")
             ui.notify('No dataset selected', type="warning")
             return
         
         dataset_info = rows[0]
         self.selected_dataset = dataset_info['dataset_id']
+        print(f"✅ Selected dataset: {self.selected_dataset}")
         
         n = ui.notification('Loading permissions...', spinner=True, timeout=None)
         
         try:
             # Atualizar título
             self.dialog_title.set_text(f'Manage IAM: {self.selected_dataset}')
+            print(f"✅ Dialog title set")
             
             # Atualizar info card
             await self.update_info_card(dataset_info)
+            print(f"✅ Info card updated")
             
             # Atualizar security status
             await self.update_security_status(dataset_info)
+            print(f"✅ Security status updated")
             
             # Carregar usuários
+            print(f"🔵 About to call load_users()...")
             await self.load_users()
+            print(f"✅ load_users() completed")
             
             n.dismiss()
             self.manage_dialog.open()
+            print(f"✅ Dialog opened")
             
         except Exception as e:
             n.dismiss()
+            print(f"❌ ERROR in manage_permissions: {e}")
             ui.notify(f"Error: {e}", type="negative")
             traceback.print_exc()
     
@@ -254,15 +269,21 @@ class DatasetIAMManager:
     
     async def load_users(self):
         """Carrega lista de usuários"""
+        print("=" * 80)
+        print("🔴 LOAD_USERS CALLED!")
+        print(f"Dataset: {self.selected_dataset}")
+        print("=" * 80)
+        
         # Limpar container ANTES
         self.users_container.clear()
+        print("✅ Container cleared")
         
         try:
             dataset_ref = client.dataset(self.selected_dataset)
             dataset_obj = await run.io_bound(client.get_dataset, dataset_ref)
+            print(f"✅ Dataset object retrieved")
             
             # Debug: Ver TODOS os entries
-            print(f"\n=== DEBUG LOAD_USERS: {self.selected_dataset} ===")
             print(f"Total access entries: {len(dataset_obj.access_entries)}")
             
             user_entries = []
@@ -273,20 +294,20 @@ class DatasetIAMManager:
                     print(f"    ✅ User: {entry.entity_id}")
             
             print(f"Filtered user entries: {len(user_entries)}")
-            print("=" * 60)
             
             if not user_entries:
+                print("⚠️ No users found - showing empty message")
                 with self.users_container:
                     with ui.card().classes('w-full bg-gray-50 p-4'):
                         ui.icon('people_off', size='48px', color='gray').classes('mx-auto mb-2')
                         ui.label('No users with permissions').classes('text-gray-500 text-center')
-                self.users_container.update()
                 return
             
             # Criar cards para cada usuário
+            print(f"🔵 Creating cards for {len(user_entries)} users...")
             with self.users_container:
                 for i, entry in enumerate(user_entries):
-                    print(f"Creating card {i+1} for: {entry.entity_id}")
+                    print(f"  Creating card {i+1} for: {entry.entity_id}")
                     
                     with ui.card().classes('w-full p-4 mb-2 bg-white border-2'):
                         with ui.row().classes('w-full items-center justify-between'):
@@ -320,15 +341,13 @@ class DatasetIAMManager:
                                 on_click=make_remove(entry.entity_id, entry.role)
                             ).props('flat color=negative')
             
-            # Forçar update do container
-            self.users_container.update()
-            print(f"✅ Container updated with {len(user_entries)} users")
+            print(f"✅ All cards created successfully")
+            print("=" * 80)
             
         except Exception as e:
+            print(f"❌ ERROR in load_users: {e}")
             with self.users_container:
                 ui.label(f'Error loading users: {e}').classes('text-red-600')
-            self.users_container.update()
-            print(f"❌ ERROR in load_users: {e}")
             traceback.print_exc()
     
     async def add_user(self):
@@ -494,8 +513,13 @@ class DatasetIAMManager:
                     'defaultColDef': {'sortable': True, 'resizable': True},
                 }).classes('w-full h-96 ag-theme-quartz')
                 
+                # ✅ BOTÃO COM LAMBDA PARA GARANTIR CHAMADA ASYNC
                 with ui.row().classes('mt-2 gap-2'):
-                    ui.button("MANAGE IAM", icon="admin_panel_settings", on_click=self.manage_permissions).props('color=primary')
+                    ui.button(
+                        "MANAGE IAM",
+                        icon="admin_panel_settings",
+                        on_click=lambda: self.manage_permissions()
+                    ).props('color=primary')
                 
                 # Carregar datasets ao iniciar
                 self.load_datasets()
