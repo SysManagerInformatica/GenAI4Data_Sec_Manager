@@ -6,6 +6,7 @@ from google.iam.v1 import policy_pb2
 from services.audit_service import AuditService
 import traceback
 from datetime import datetime
+import asyncio # Importar asyncio no topo
 
 config = Config()
 
@@ -248,13 +249,15 @@ class ProjectIAMManager:
             traceback.print_exc()
             return []
     
-    def load_users(self):
+    # ------------------ CORREÇÃO PRINCIPAL AQUI ------------------
+    # Mudamos de 'def' para 'async def' e removemos o asyncio.run
+    async def load_users(self):
         """Carrega usuários no grid"""
         n = ui.notification('Loading users...', spinner=True, timeout=None)
         
         try:
-            import asyncio
-            self.users = asyncio.run(self.get_project_users())
+            # CORREÇÃO: Usamos 'await' diretamente pois estamos no loop do NiceGUI
+            self.users = await self.get_project_users()
             
             if self.users_grid:
                 self.users_grid.options['rowData'] = self.users
@@ -267,7 +270,8 @@ class ProjectIAMManager:
             n.dismiss()
             ui.notify(f"Error: {e}", type="negative")
             traceback.print_exc()
-    
+    # -------------------------------------------------------------
+
     async def manage_user_roles(self):
         """Abre dialog para gerenciar roles de um usuário"""
         rows = await self.users_grid.get_selected_rows()
@@ -432,7 +436,7 @@ class ProjectIAMManager:
             
             # Refresh
             await self.load_user_roles()
-            self.load_users()
+            await self.load_users() # CORREÇÃO: await aqui
             
         except Exception as e:
             n.dismiss()
@@ -508,7 +512,7 @@ class ProjectIAMManager:
             
             # Refresh
             await self.load_user_roles()
-            self.load_users()
+            await self.load_users() # CORREÇÃO: await aqui
             
         except Exception as e:
             n.dismiss()
@@ -583,7 +587,7 @@ class ProjectIAMManager:
             self.add_user_dialog.close()
             
             # Refresh
-            self.load_users()
+            await self.load_users() # CORREÇÃO: await aqui
             
         except Exception as e:
             n.dismiss()
@@ -627,8 +631,8 @@ class ProjectIAMManager:
                 with ui.row().classes('mt-2 gap-2'):
                     ui.button("MANAGE ROLES", icon="settings", on_click=self.manage_user_roles).props('color=primary')
                 
-                # Carregar usuários ao iniciar
-                self.load_users()
+                # CORREÇÃO: Carregar usuários usando ui.timer para não bloquear o render_ui
+                ui.timer(0.1, self.load_users, once=True)
     
     def run(self):
         pass
