@@ -238,7 +238,6 @@ class ProjectIAMManager:
             
             if not policy:
                 print("[ERROR] ❌ Policy vazia")
-                ui.notify('Failed to load IAM. Check console.', type='negative', position='top', timeout=5000)
                 return []
             
             print(f"[DEBUG] ✅ Processando bindings...")
@@ -315,13 +314,11 @@ class ProjectIAMManager:
         except Exception as e:
             print(f"[ERROR] ❌ Erro: {e}")
             traceback.print_exc()
-            ui.notify(f'Error: {str(e)}', type='negative', position='top', timeout=5000)
             return []
     
     async def load_users(self):
-        """Carrega usuários no grid"""
+        """Carrega usuários no grid - SEM NOTIFICAÇÕES (chamado por timer)"""
         print(f"\n[DEBUG] 🔄 load_users() iniciado")
-        n = ui.notification('Loading IAM...', spinner=True, timeout=None)
         
         try:
             self.users = await self.get_project_users()
@@ -329,21 +326,29 @@ class ProjectIAMManager:
             if self.users_grid:
                 self.users_grid.options['rowData'] = self.users
                 self.users_grid.update()
-                print(f"[DEBUG] 📊 Grid: {len(self.users)} linhas")
-            
-            n.dismiss()
+                print(f"[DEBUG] 📊 Grid atualizado: {len(self.users)} linhas")
             
             if not self.users:
-                print(f"[WARNING] ⚠️ Nenhum membro")
-                ui.notify("No members found. Check console.", type="warning", position='top', timeout=5000)
+                print(f"[WARNING] ⚠️ Nenhum membro encontrado")
             else:
                 print(f"[SUCCESS] ✅ {len(self.users)} membros carregados")
-                ui.notify(f"✅ {len(self.users)} members loaded", type="positive")
             
         except Exception as e:
-            n.dismiss()
             print(f"[ERROR] ❌ load_users: {e}")
             traceback.print_exc()
+    
+    async def refresh_users_with_notification(self):
+        """Refresh com notificação - chamado por botão"""
+        n = ui.notification('Loading IAM...', spinner=True, timeout=None)
+        try:
+            await self.load_users()
+            n.dismiss()
+            if not self.users:
+                ui.notify("No members found. Check console.", type="warning", position='top')
+            else:
+                ui.notify(f"✅ {len(self.users)} members loaded", type="positive")
+        except Exception as e:
+            n.dismiss()
             ui.notify(f"Error: {e}", type="negative")
 
     async def manage_user_roles(self):
@@ -666,7 +671,7 @@ class ProjectIAMManager:
                     ui.label('• Requires "resourcemanager.projects.getIamPolicy" permission').classes('text-xs text-gray-600')
                 
                 with ui.row().classes('w-full gap-2 mb-4'):
-                    ui.button('REFRESH', icon='refresh', on_click=lambda: asyncio.create_task(self.load_users())).props('color=primary')
+                    ui.button('REFRESH', icon='refresh', on_click=lambda: asyncio.create_task(self.refresh_users_with_notification())).props('color=primary')
                     ui.button('ADD NEW IDENTITY', icon='person_add', on_click=self.add_user_dialog.open).props('color=positive')
                 
                 ui.label(f"Project: {self.project_id}").classes('text-h6 font-bold mb-2')
@@ -687,6 +692,7 @@ class ProjectIAMManager:
                 with ui.row().classes('mt-2 gap-2'):
                     ui.button("MANAGE ROLES", icon="settings", on_click=lambda: asyncio.create_task(self.manage_user_roles())).props('color=primary')
                 
+                # Timer corrigido - apenas chama load_users sem notificações
                 ui.timer(0.5, lambda: asyncio.create_task(self.load_users()), once=True)
     
     def run(self):
