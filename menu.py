@@ -89,14 +89,21 @@ def menu() -> None:
                 with ui.item_section():
                     ui.item_label('Schema Browser').classes(replace='text-primary text-bold').style('font-size:14px')
         
-        # ✅ NOVA SEÇÃO: IAM & SECURITY
+        # ✅ IAM & SECURITY
         with ui.expansion('IAM & Security', caption='Click to Expand', icon='admin_panel_settings').classes('w-full text-primary text-bold').style('font-size:16px'):
             # Dataset IAM Manager
             with ui.item(on_click=lambda: ui.navigate.to('/datasetiammanager/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('shield', color='orange-500')
+                    ui.icon('storage', color='orange-500')
                 with ui.item_section():
                     ui.item_label('Dataset IAM Manager').classes(replace='text-primary text-bold').style('font-size:14px')
+            
+            # ✅ NOVO: Project IAM Manager
+            with ui.item(on_click=lambda: ui.navigate.to('/projectiammanager/')):
+                with ui.item_section().props('avatar'):
+                    ui.icon('shield', color='red-500')
+                with ui.item_section():
+                    ui.item_label('Project IAM Manager').classes(replace='text-primary text-bold').style('font-size:14px')
             
             # Control Access (apenas OWNER e ADMIN)
             if user.get('role') in ['OWNER', 'ADMIN']:
