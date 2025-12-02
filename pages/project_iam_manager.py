@@ -2,6 +2,7 @@ import theme
 from config import Config
 from nicegui import ui, run
 from google.cloud import resourcemanager_v3
+from google.iam.v1 import iam_policy_pb2 as iam_policy
 from google.iam.v1 import policy_pb2
 from services.audit_service import AuditService
 import traceback
@@ -185,24 +186,25 @@ class ProjectIAMManager:
             self.add_user_role_desc.set_text(f"{role_info['label']}: {role_info['description']}")
     
     async def get_project_iam_policy(self):
-        """Obtém política IAM do projeto - COM LOGS DETALHADOS"""
+        """Obtém política IAM do projeto - API CORRIGIDA"""
         print(f"\n{'='*80}")
         print(f"[DEBUG] 🔍 OBTENDO IAM POLICY: {self.project_id}")
         print(f"{'='*80}")
         
         try:
-            client_rm = resourcemanager_v3.ProjectsClient()
+            client = resourcemanager_v3.ProjectsClient()
             resource_name = f"projects/{self.project_id}"
             
             print(f"[DEBUG] 📋 Resource: {resource_name}")
             
-            request = resourcemanager_v3.GetIamPolicyRequest(
+            # API CORRETA
+            request = iam_policy.GetIamPolicyRequest(
                 resource=resource_name
             )
             
             print(f"[DEBUG] 📡 Enviando requisição...")
             
-            policy = await run.io_bound(client_rm.get_iam_policy, request=request)
+            policy = await run.io_bound(client.get_iam_policy, request=request)
             
             if policy:
                 bindings_count = len(policy.bindings) if policy.bindings else 0
@@ -230,7 +232,7 @@ class ProjectIAMManager:
             return None
     
     async def get_project_users(self):
-        """Lista todos os membros - COM LOGS"""
+        """Lista todos os membros"""
         print(f"\n[DEBUG] 🚀 Listando IAM: {self.project_id}")
         
         try:
@@ -317,7 +319,7 @@ class ProjectIAMManager:
             return []
     
     async def load_users(self):
-        """Carrega usuários no grid - SEM NOTIFICAÇÕES (chamado por timer)"""
+        """Carrega usuários no grid - SEM NOTIFICAÇÕES"""
         print(f"\n[DEBUG] 🔄 load_users() iniciado")
         
         try:
@@ -337,19 +339,10 @@ class ProjectIAMManager:
             print(f"[ERROR] ❌ load_users: {e}")
             traceback.print_exc()
     
-    async def refresh_users_with_notification(self):
-        """Refresh com notificação - chamado por botão"""
-        n = ui.notification('Loading IAM...', spinner=True, timeout=None)
-        try:
-            await self.load_users()
-            n.dismiss()
-            if not self.users:
-                ui.notify("No members found. Check console.", type="warning", position='top')
-            else:
-                ui.notify(f"✅ {len(self.users)} members loaded", type="positive")
-        except Exception as e:
-            n.dismiss()
-            ui.notify(f"Error: {e}", type="negative")
+    def refresh_users_button(self):
+        """Handler do botão REFRESH - SEM NOTIFICAÇÕES"""
+        print(f"[DEBUG] 🔄 Botão REFRESH clicado")
+        asyncio.create_task(self.load_users())
 
     async def manage_user_roles(self):
         """Abre dialog para gerenciar roles"""
@@ -463,11 +456,11 @@ class ProjectIAMManager:
         n = ui.notification(f'Adding {role}...', spinner=True, timeout=None)
         
         try:
-            client_rm = resourcemanager_v3.ProjectsClient()
+            client = resourcemanager_v3.ProjectsClient()
             resource = f"projects/{self.project_id}"
             
-            request = resourcemanager_v3.GetIamPolicyRequest(resource=resource)
-            policy = await run.io_bound(client_rm.get_iam_policy, request=request)
+            request = iam_policy.GetIamPolicyRequest(resource=resource)
+            policy = await run.io_bound(client.get_iam_policy, request=request)
             
             prefix = "user:"
             if self.selected_user_type == "serviceAccount": prefix = "serviceAccount:"
@@ -493,8 +486,8 @@ class ProjectIAMManager:
                 new_binding = policy_pb2.Binding(role=role, members=[member])
                 policy.bindings.append(new_binding)
             
-            set_request = resourcemanager_v3.SetIamPolicyRequest(resource=resource, policy=policy)
-            await run.io_bound(client_rm.set_iam_policy, request=set_request)
+            set_request = iam_policy.SetIamPolicyRequest(resource=resource, policy=policy)
+            await run.io_bound(client.set_iam_policy, request=set_request)
             
             self.audit_service.log_action(
                 action='ADD_PROJECT_ROLE',
@@ -540,11 +533,11 @@ class ProjectIAMManager:
         n = ui.notification('Removing...', spinner=True, timeout=None)
         
         try:
-            client_rm = resourcemanager_v3.ProjectsClient()
+            client = resourcemanager_v3.ProjectsClient()
             resource = f"projects/{self.project_id}"
             
-            request = resourcemanager_v3.GetIamPolicyRequest(resource=resource)
-            policy = await run.io_bound(client_rm.get_iam_policy, request=request)
+            request = iam_policy.GetIamPolicyRequest(resource=resource)
+            policy = await run.io_bound(client.get_iam_policy, request=request)
             
             prefix = "user:"
             if self.selected_user_type == "serviceAccount": prefix = "serviceAccount:"
@@ -558,8 +551,8 @@ class ProjectIAMManager:
                     binding.members.remove(member)
                     break
             
-            set_request = resourcemanager_v3.SetIamPolicyRequest(resource=resource, policy=policy)
-            await run.io_bound(client_rm.set_iam_policy, request=set_request)
+            set_request = iam_policy.SetIamPolicyRequest(resource=resource, policy=policy)
+            await run.io_bound(client.set_iam_policy, request=set_request)
             
             self.audit_service.log_action(
                 action='REMOVE_PROJECT_ROLE',
@@ -581,7 +574,7 @@ class ProjectIAMManager:
             traceback.print_exc()
     
     async def add_new_user(self):
-        """Adiciona novo usuário - MELHORADO"""
+        """Adiciona novo usuário"""
         email = self.add_user_email.value.strip()
         role = self.add_user_role.value
         identity_type = self.add_user_type_select.value
@@ -607,11 +600,11 @@ class ProjectIAMManager:
             
             print(f"[DEBUG] 📝 Member: {member}")
             
-            client_rm = resourcemanager_v3.ProjectsClient()
+            client = resourcemanager_v3.ProjectsClient()
             resource = f"projects/{self.project_id}"
             
-            request = resourcemanager_v3.GetIamPolicyRequest(resource=resource)
-            policy = await run.io_bound(client_rm.get_iam_policy, request=request)
+            request = iam_policy.GetIamPolicyRequest(resource=resource)
+            policy = await run.io_bound(client.get_iam_policy, request=request)
             
             for binding in policy.bindings:
                 if binding.role == role and member in binding.members:
@@ -633,8 +626,8 @@ class ProjectIAMManager:
                 policy.bindings.append(new_binding)
                 print(f"[DEBUG] ✅ Created new binding")
             
-            set_request = resourcemanager_v3.SetIamPolicyRequest(resource=resource, policy=policy)
-            await run.io_bound(client_rm.set_iam_policy, request=set_request)
+            set_request = iam_policy.SetIamPolicyRequest(resource=resource, policy=policy)
+            await run.io_bound(client.set_iam_policy, request=set_request)
             
             self.audit_service.log_action(
                 action='ADD_USER_TO_PROJECT',
@@ -671,7 +664,7 @@ class ProjectIAMManager:
                     ui.label('• Requires "resourcemanager.projects.getIamPolicy" permission').classes('text-xs text-gray-600')
                 
                 with ui.row().classes('w-full gap-2 mb-4'):
-                    ui.button('REFRESH', icon='refresh', on_click=lambda: asyncio.create_task(self.refresh_users_with_notification())).props('color=primary')
+                    ui.button('REFRESH', icon='refresh', on_click=self.refresh_users_button).props('color=primary')
                     ui.button('ADD NEW IDENTITY', icon='person_add', on_click=self.add_user_dialog.open).props('color=positive')
                 
                 ui.label(f"Project: {self.project_id}").classes('text-h6 font-bold mb-2')
@@ -692,7 +685,7 @@ class ProjectIAMManager:
                 with ui.row().classes('mt-2 gap-2'):
                     ui.button("MANAGE ROLES", icon="settings", on_click=lambda: asyncio.create_task(self.manage_user_roles())).props('color=primary')
                 
-                # Timer corrigido - apenas chama load_users sem notificações
+                # Timer para carregar dados automaticamente
                 ui.timer(0.5, lambda: asyncio.create_task(self.load_users()), once=True)
     
     def run(self):
