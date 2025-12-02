@@ -254,26 +254,40 @@ class DatasetIAMManager:
     
     async def load_users(self):
         """Carrega lista de usuários"""
+        # Limpar container ANTES
         self.users_container.clear()
         
         try:
             dataset_ref = client.dataset(self.selected_dataset)
             dataset_obj = await run.io_bound(client.get_dataset, dataset_ref)
             
-            user_entries = [
-                entry for entry in dataset_obj.access_entries
-                if entry.entity_type == 'userByEmail'
-            ]
+            # Debug: Ver TODOS os entries
+            print(f"\n=== DEBUG LOAD_USERS: {self.selected_dataset} ===")
+            print(f"Total access entries: {len(dataset_obj.access_entries)}")
+            
+            user_entries = []
+            for entry in dataset_obj.access_entries:
+                print(f"  Entry type: {entry.entity_type}, Role: {entry.role}")
+                if entry.entity_type == 'userByEmail':
+                    user_entries.append(entry)
+                    print(f"    ✅ User: {entry.entity_id}")
+            
+            print(f"Filtered user entries: {len(user_entries)}")
+            print("=" * 60)
             
             if not user_entries:
                 with self.users_container:
                     with ui.card().classes('w-full bg-gray-50 p-4'):
                         ui.icon('people_off', size='48px', color='gray').classes('mx-auto mb-2')
                         ui.label('No users with permissions').classes('text-gray-500 text-center')
+                self.users_container.update()
                 return
             
+            # Criar cards para cada usuário
             with self.users_container:
-                for entry in user_entries:
+                for i, entry in enumerate(user_entries):
+                    print(f"Creating card {i+1} for: {entry.entity_id}")
+                    
                     with ui.card().classes('w-full p-4 mb-2 bg-white border-2'):
                         with ui.row().classes('w-full items-center justify-between'):
                             # User info
@@ -306,9 +320,15 @@ class DatasetIAMManager:
                                 on_click=make_remove(entry.entity_id, entry.role)
                             ).props('flat color=negative')
             
+            # Forçar update do container
+            self.users_container.update()
+            print(f"✅ Container updated with {len(user_entries)} users")
+            
         except Exception as e:
             with self.users_container:
                 ui.label(f'Error loading users: {e}').classes('text-red-600')
+            self.users_container.update()
+            print(f"❌ ERROR in load_users: {e}")
             traceback.print_exc()
     
     async def add_user(self):
