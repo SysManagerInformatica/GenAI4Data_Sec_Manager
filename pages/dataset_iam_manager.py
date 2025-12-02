@@ -71,14 +71,11 @@ class DatasetIAMManager:
                 ui.button('CLOSE', on_click=self.manage_dialog.close).props('flat')
     
     def create_edit_dialog(self):
-        """Dialog de EDIÇÃO - Gerenciar permissões"""
+        """Dialog de EDIÇÃO - Gerenciar permissões - VISUAL MINIMALISTA"""
         with ui.dialog() as self.edit_dialog, ui.card().classes('w-full max-w-6xl'):
             self.edit_dialog_title = ui.label('').classes('text-h5 font-bold mb-4')
             
-            # Info card
-            self.edit_info_card_container = ui.column().classes('w-full mb-4')
-            
-            # Campo de busca (SENSÍVEL - digita "bruno" e aparece tudo)
+            # Campo de busca
             ui.label('Search and Manage Users:').classes('text-sm font-bold mb-2')
             
             with ui.row().classes('w-full items-center gap-2 mb-3'):
@@ -92,36 +89,36 @@ class DatasetIAMManager:
             # Label com contagem
             self.edit_users_count_label = ui.label('').classes('text-sm text-gray-600 mb-2')
             
-            # Lista de usuários (COM botão REMOVE)
-            with ui.scroll_area().classes('w-full').style('max-height: 400px;'):
+            # Lista de usuários - AUMENTADO (550px)
+            with ui.scroll_area().classes('w-full').style('max-height: 550px;'):
                 self.edit_users_container = ui.column().classes('w-full gap-2')
             
-            ui.separator().classes('my-4')
+            ui.separator().classes('my-3')
             
-            # Adicionar novo usuário
-            with ui.card().classes('w-full bg-green-50 p-6'):
-                ui.label('➕ Add New User').classes('font-bold text-xl mb-4')
+            # Adicionar novo usuário - COMPACTO E MINIMALISTA
+            with ui.card().classes('w-full bg-green-50 p-3'):
+                ui.label('➕ Add New User').classes('font-bold text-sm mb-2')
                 
-                with ui.row().classes('w-full gap-4 items-end'):
+                with ui.row().classes('w-full gap-2 items-end'):
                     self.edit_new_user_email = ui.input(
-                        label='Email Address',
+                        label='Email',
                         placeholder='user@company.com'
-                    ).classes('flex-1').props('outlined')
+                    ).classes('flex-1').props('outlined dense')
                     
                     self.edit_new_user_role = ui.select(
                         label='Role',
                         options=list(self.ROLES.keys()),
                         value='READER'
-                    ).classes('w-48').props('outlined')
+                    ).classes('w-40').props('outlined dense')
                     
                     ui.button(
-                        'ADD USER',
+                        'ADD',
                         icon='person_add',
                         on_click=self.add_user
-                    ).props('color=positive size=lg')
+                    ).props('color=positive')
             
-            # Botões
-            with ui.row().classes('w-full justify-end gap-2 mt-4'):
+            # Botões finais
+            with ui.row().classes('w-full justify-end gap-2 mt-3'):
                 ui.button('CLOSE', on_click=self.edit_dialog.close).props('flat')
                 ui.button('REFRESH', icon='refresh', on_click=self.refresh_edit_permissions).props('color=primary')
     
@@ -249,10 +246,7 @@ class DatasetIAMManager:
             # Atualizar título
             self.edit_dialog_title.set_text(f'Edit Permissions: {self.selected_dataset}')
             
-            # Atualizar info card
-            await self.update_edit_info_card(dataset_info)
-            
-            # Carregar usuários (COM edição)
+            # Carregar usuários (COM edição) - SEM INFO CARD
             await self.load_edit_users()
             
             n.dismiss()
@@ -268,19 +262,6 @@ class DatasetIAMManager:
         self.manage_info_card_container.clear()
         
         with self.manage_info_card_container:
-            with ui.card().classes('w-full bg-blue-50 p-4'):
-                ui.label('📊 Dataset Information:').classes('font-bold mb-2')
-                ui.label(f"  • Dataset: {dataset_info['dataset_id']}").classes('text-sm')
-                ui.label(f"  • Type: {dataset_info['type']}").classes('text-sm')
-                ui.label(f"  • Total Users: {dataset_info['users']}").classes('text-sm')
-                ui.label(f"  • Owners: {dataset_info['owners']}").classes('text-sm')
-                ui.label(f"  • Authorized Views: {dataset_info['authorized_views']}").classes('text-sm')
-    
-    async def update_edit_info_card(self, dataset_info):
-        """Atualiza card de informações (EDIT)"""
-        self.edit_info_card_container.clear()
-        
-        with self.edit_info_card_container:
             with ui.card().classes('w-full bg-blue-50 p-4'):
                 ui.label('📊 Dataset Information:').classes('font-bold mb-2')
                 ui.label(f"  • Dataset: {dataset_info['dataset_id']}").classes('text-sm')
