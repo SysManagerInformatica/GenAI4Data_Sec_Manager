@@ -42,6 +42,21 @@ except Exception as e:
     print(f"✗ Warning: Could not load all pages: {e}")
     # Não é crítico, podemos continuar
 
+# ✅ ADICIONAR ROTA DO DATASET IAM MANAGER (FALLBACK)
+try:
+    from pages.dataset_iam_manager import DatasetIAMManager
+    
+    @ui.page('/datasetiammanager/')
+    def dataset_iam_manager_page():
+        if not app.storage.user.get('authenticated', False):
+            ui.run_javascript('window.location.href = "/login"')
+            return
+        DatasetIAMManager()
+    
+    print("✓ Dataset IAM Manager route registered successfully")
+except Exception as e:
+    print(f"✗ Warning: Could not register Dataset IAM Manager: {e}")
+
 # Página inicial
 @ui.page('/')
 def home():
