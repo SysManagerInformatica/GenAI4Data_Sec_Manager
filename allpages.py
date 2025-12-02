@@ -92,50 +92,40 @@ except:
                 ui.label('Policy Tag IAM Permissions Manager').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
-# Dynamic Column Security
+# Dynamic Column Security (Create Protected View)
 try:
     from pages.cls_dynamic_columns import DynamicColumnSecurity
 except:
     class DynamicColumnSecurity:
         def run(self):
             from theme import frame
-            with frame('Dynamic Column Security'):
-                ui.label('Dynamic Column Security').classes('text-2xl font-bold mb-4')
+            with frame('Create Protected View'):
+                ui.label('Create Protected View').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
-# 🆕 Manage Dynamic Views
+# Manage Protected Views
 try:
     from pages.cls_dynamic_manage import DynamicColumnManage
 except:
     class DynamicColumnManage:
         def run(self):
             from theme import frame
-            with frame('Manage Dynamic Views'):
-                ui.label('Manage Dynamic Views').classes('text-2xl font-bold mb-4')
+            with frame('Manage Protected Views'):
+                ui.label('Manage Protected Views').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
-# DATA MASKING - Create Masked View
+# ✅ NOVO: Dataset IAM Manager
 try:
-    from pages.mask_create_view import MaskCreateView
+    from pages.dataset_iam_manager import DatasetIAMManager
 except:
-    class MaskCreateView:
+    class DatasetIAMManager:
         def run(self):
             from theme import frame
-            with frame('Create Masked View'):
-                ui.label('Create Masked View').classes('text-2xl font-bold mb-4')
+            with frame('Dataset IAM Manager'):
+                ui.label('Dataset IAM Manager').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
-# DATA MASKING - View Masking Status
-try:
-    from pages.mask_status import MaskStatus
-except:
-    class MaskStatus:
-        def run(self):
-            from theme import frame
-            with frame('View Masking Status'):
-                ui.label('View Masking Status').classes('text-2xl font-bold mb-4')
-                ui.label('This feature is under development').classes('text-orange-600')
-
+# Audit Logs
 try:
     from pages.audit_logs import AuditLogs
 except:
@@ -146,7 +136,7 @@ except:
                 ui.label('System Audit Logs').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
-# Importar Control Access
+# Control Access
 try:
     from pages.control_access import ControlAccess
 except:
@@ -217,28 +207,23 @@ def create() -> None:
         cls_instance.run()
     ui.page('/clsapplyiam/')(cls_apply_iam_page)
 
-    # Dynamic Column Security Page
+    # Create Protected View (CLS + Masking Unified)
     def cls_dynamic_columns_page():
         cls_instance = DynamicColumnSecurity()
         cls_instance.run()
     ui.page('/clsdynamiccolumns/')(cls_dynamic_columns_page)
 
-    # 🆕 Manage Dynamic Views Page
+    # Manage Protected Views
     def cls_dynamic_manage_page():
         cls_instance = DynamicColumnManage()
         cls_instance.run()
     ui.page('/clsdynamicmanage/')(cls_dynamic_manage_page)
 
-    # DATA MASKING Pages
-    def mask_create_view_page():
-        mask_instance = MaskCreateView()
-        mask_instance.run()
-    ui.page('/maskcreateview/')(mask_create_view_page)
-
-    def mask_status_page():
-        mask_instance = MaskStatus()
-        mask_instance.run()
-    ui.page('/maskstatus/')(mask_status_page)
+    # ✅ NOVO: Dataset IAM Manager
+    def dataset_iam_manager_page():
+        iam_instance = DatasetIAMManager()
+        iam_instance.run()
+    ui.page('/datasetiammanager/')(dataset_iam_manager_page)
 
     # Audit Logs Page
     def audit_logs_page():
