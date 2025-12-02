@@ -41,8 +41,9 @@ class DatasetIAMManager:
         self.selected_dataset = None
         self.all_user_entries = []
         
-        # Dialog para gerenciar permissões
-        self.create_manage_dialog()
+        # Dialogs
+        self.create_manage_dialog()  # READ ONLY
+        self.create_edit_dialog()    # EDIÇÃO
         
         self.headers()
         self.render_ui()
@@ -52,85 +53,77 @@ class DatasetIAMManager:
         ui.label('Dataset IAM Manager').classes('text-primary text-center text-bold')
     
     def create_manage_dialog(self):
-        """Cria dialog para gerenciar permissões"""
-        with ui.dialog() as self.manage_dialog, ui.card().classes('w-full max-w-6xl'):
-            self.dialog_title = ui.label('').classes('text-h5 font-bold mb-4')
+        """Dialog READ ONLY - Apenas visualização"""
+        with ui.dialog() as self.manage_dialog, ui.card().classes('w-full max-w-4xl'):
+            self.manage_dialog_title = ui.label('').classes('text-h5 font-bold mb-4')
             
             # Info card
-            self.info_card_container = ui.column().classes('w-full mb-4')
+            self.manage_info_card_container = ui.column().classes('w-full mb-4')
             
-            # Security status card
-            self.security_status_container = ui.column().classes('w-full mb-4')
+            # Lista de usuários (READ ONLY - sem botões)
+            ui.label('Current Users:').classes('text-sm font-bold mb-2')
             
-            # ✅ TABS PARA ORGANIZAR
-            with ui.tabs().classes('w-full') as tabs:
-                tab_users = ui.tab('Current Users', icon='people')
-                tab_add = ui.tab('Add New User', icon='person_add')
+            with ui.scroll_area().classes('w-full').style('max-height: 400px;'):
+                self.manage_users_container = ui.column().classes('w-full gap-2')
             
-            with ui.tab_panels(tabs, value=tab_users).classes('w-full'):
-                # ✅ TAB 1: CURRENT USERS
-                with ui.tab_panel(tab_users):
-                    # Campo de busca
-                    with ui.row().classes('w-full items-center gap-2 mb-3'):
-                        self.search_input = ui.input(
-                            placeholder='Search by email...',
-                            on_change=self.filter_users
-                        ).classes('flex-1').props('outlined dense clearable')
-                        
-                        ui.icon('search', size='sm', color='primary')
-                    
-                    # Label com contagem
-                    self.users_count_label = ui.label('').classes('text-sm text-gray-600 mb-2')
-                    
-                    # Lista de usuários (SEM limite de altura, vai crescer conforme necessário)
-                    with ui.scroll_area().classes('w-full').style('max-height: 500px;'):
-                        self.users_container = ui.column().classes('w-full gap-2')
+            # Botões
+            with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                ui.button('CLOSE', on_click=self.manage_dialog.close).props('flat')
+    
+    def create_edit_dialog(self):
+        """Dialog de EDIÇÃO - Gerenciar permissões"""
+        with ui.dialog() as self.edit_dialog, ui.card().classes('w-full max-w-6xl'):
+            self.edit_dialog_title = ui.label('').classes('text-h5 font-bold mb-4')
+            
+            # Info card
+            self.edit_info_card_container = ui.column().classes('w-full mb-4')
+            
+            # Campo de busca (SENSÍVEL - digita "bruno" e aparece tudo)
+            ui.label('Search and Manage Users:').classes('text-sm font-bold mb-2')
+            
+            with ui.row().classes('w-full items-center gap-2 mb-3'):
+                self.edit_search_input = ui.input(
+                    placeholder='Type to search (e.g., "bruno", "maria")...',
+                    on_change=self.filter_edit_users
+                ).classes('flex-1').props('outlined dense clearable')
                 
-                # ✅ TAB 2: ADD NEW USER
-                with ui.tab_panel(tab_add):
-                    with ui.card().classes('w-full bg-green-50 p-6'):
-                        ui.label('➕ Add New User to Dataset').classes('font-bold text-xl mb-4')
-                        
-                        ui.label('Grant access to a user by entering their email address and selecting a role.').classes('text-sm text-gray-700 mb-4')
-                        
-                        with ui.column().classes('w-full gap-4'):
-                            self.new_user_email = ui.input(
-                                label='Email Address',
-                                placeholder='user@company.com'
-                            ).classes('w-full').props('outlined')
-                            
-                            self.new_user_role = ui.select(
-                                label='Role',
-                                options=list(self.ROLES.keys()),
-                                value='READER'
-                            ).classes('w-full').props('outlined')
-                            
-                            # Mostrar descrição do role selecionado
-                            self.role_description = ui.label('').classes('text-sm text-gray-600 italic')
-                            
-                            # Atualizar descrição quando mudar o role
-                            def update_role_description():
-                                role = self.new_user_role.value
-                                role_info = self.ROLES.get(role, {})
-                                self.role_description.set_text(
-                                    f"{role_info.get('label', '')} - {role_info.get('description', '')}"
-                                )
-                            
-                            self.new_user_role.on('update:model-value', update_role_description)
-                            update_role_description()  # Inicializar
-                            
-                            ui.button(
-                                'ADD USER',
-                                icon='person_add',
-                                on_click=self.add_user
-                            ).classes('w-full').props('color=positive size=lg')
+                ui.icon('search', size='sm', color='primary')
+            
+            # Label com contagem
+            self.edit_users_count_label = ui.label('').classes('text-sm text-gray-600 mb-2')
+            
+            # Lista de usuários (COM botão REMOVE)
+            with ui.scroll_area().classes('w-full').style('max-height: 400px;'):
+                self.edit_users_container = ui.column().classes('w-full gap-2')
             
             ui.separator().classes('my-4')
             
-            # Botões de ação
-            with ui.row().classes('w-full justify-end gap-2'):
-                ui.button('CLOSE', on_click=self.manage_dialog.close).props('flat')
-                ui.button('REFRESH', icon='refresh', on_click=self.refresh_permissions).props('color=primary')
+            # Adicionar novo usuário
+            with ui.card().classes('w-full bg-green-50 p-6'):
+                ui.label('➕ Add New User').classes('font-bold text-xl mb-4')
+                
+                with ui.row().classes('w-full gap-4 items-end'):
+                    self.edit_new_user_email = ui.input(
+                        label='Email Address',
+                        placeholder='user@company.com'
+                    ).classes('flex-1').props('outlined')
+                    
+                    self.edit_new_user_role = ui.select(
+                        label='Role',
+                        options=list(self.ROLES.keys()),
+                        value='READER'
+                    ).classes('w-48').props('outlined')
+                    
+                    ui.button(
+                        'ADD USER',
+                        icon='person_add',
+                        on_click=self.add_user
+                    ).props('color=positive size=lg')
+            
+            # Botões
+            with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                ui.button('CLOSE', on_click=self.edit_dialog.close).props('flat')
+                ui.button('REFRESH', icon='refresh', on_click=self.refresh_edit_permissions).props('color=primary')
     
     def get_datasets(self):
         """Lista todos os datasets"""
@@ -209,58 +202,72 @@ class DatasetIAMManager:
             traceback.print_exc()
     
     async def manage_permissions(self):
-        """Abre dialog para gerenciar permissões"""
-        print("=" * 80)
-        print("🟢 MANAGE_PERMISSIONS CALLED!")
-        print("=" * 80)
-        
+        """Abre dialog READ ONLY para visualizar permissões"""
         rows = await self.datasets_grid.get_selected_rows()
-        print(f"Selected rows: {rows}")
         
         if not rows:
-            print("❌ No dataset selected!")
             ui.notify('No dataset selected', type="warning")
             return
         
         dataset_info = rows[0]
         self.selected_dataset = dataset_info['dataset_id']
-        print(f"✅ Selected dataset: {self.selected_dataset}")
         
-        n = ui.notification('Loading permissions...', spinner=True, timeout=None)
+        n = ui.notification('Loading...', spinner=True, timeout=None)
         
         try:
             # Atualizar título
-            self.dialog_title.set_text(f'Manage IAM: {self.selected_dataset}')
-            print(f"✅ Dialog title set")
+            self.manage_dialog_title.set_text(f'View IAM: {self.selected_dataset}')
             
             # Atualizar info card
-            await self.update_info_card(dataset_info)
-            print(f"✅ Info card updated")
+            await self.update_manage_info_card(dataset_info)
             
-            # Atualizar security status
-            await self.update_security_status(dataset_info)
-            print(f"✅ Security status updated")
-            
-            # Carregar usuários
-            print(f"🔵 About to call load_users()...")
-            await self.load_users()
-            print(f"✅ load_users() completed")
+            # Carregar usuários (READ ONLY)
+            await self.load_manage_users()
             
             n.dismiss()
             self.manage_dialog.open()
-            print(f"✅ Dialog opened")
             
         except Exception as e:
             n.dismiss()
-            print(f"❌ ERROR in manage_permissions: {e}")
             ui.notify(f"Error: {e}", type="negative")
             traceback.print_exc()
     
-    async def update_info_card(self, dataset_info):
-        """Atualiza card de informações"""
-        self.info_card_container.clear()
+    async def edit_permissions(self):
+        """Abre dialog de EDIÇÃO para gerenciar permissões"""
+        rows = await self.datasets_grid.get_selected_rows()
         
-        with self.info_card_container:
+        if not rows:
+            ui.notify('No dataset selected', type="warning")
+            return
+        
+        dataset_info = rows[0]
+        self.selected_dataset = dataset_info['dataset_id']
+        
+        n = ui.notification('Loading...', spinner=True, timeout=None)
+        
+        try:
+            # Atualizar título
+            self.edit_dialog_title.set_text(f'Edit Permissions: {self.selected_dataset}')
+            
+            # Atualizar info card
+            await self.update_edit_info_card(dataset_info)
+            
+            # Carregar usuários (COM edição)
+            await self.load_edit_users()
+            
+            n.dismiss()
+            self.edit_dialog.open()
+            
+        except Exception as e:
+            n.dismiss()
+            ui.notify(f"Error: {e}", type="negative")
+            traceback.print_exc()
+    
+    async def update_manage_info_card(self, dataset_info):
+        """Atualiza card de informações (MANAGE - READ ONLY)"""
+        self.manage_info_card_container.clear()
+        
+        with self.manage_info_card_container:
             with ui.card().classes('w-full bg-blue-50 p-4'):
                 ui.label('📊 Dataset Information:').classes('font-bold mb-2')
                 ui.label(f"  • Dataset: {dataset_info['dataset_id']}").classes('text-sm')
@@ -268,103 +275,104 @@ class DatasetIAMManager:
                 ui.label(f"  • Total Users: {dataset_info['users']}").classes('text-sm')
                 ui.label(f"  • Owners: {dataset_info['owners']}").classes('text-sm')
                 ui.label(f"  • Authorized Views: {dataset_info['authorized_views']}").classes('text-sm')
-                ui.label(f"  • Status: {dataset_info['security_status']}").classes('text-sm font-bold')
     
-    async def update_security_status(self, dataset_info):
-        """Atualiza status de segurança"""
-        self.security_status_container.clear()
+    async def update_edit_info_card(self, dataset_info):
+        """Atualiza card de informações (EDIT)"""
+        self.edit_info_card_container.clear()
         
-        with self.security_status_container:
-            is_views = dataset_info['type'] == 'Views'
-            has_users = dataset_info['users'] > 0
-            
-            if is_views:
-                # Dataset de views - OK ter usuários
-                with ui.card().classes('w-full bg-green-50 p-4'):
-                    ui.label('✅ Views Dataset').classes('font-bold text-green-700 mb-2')
-                    ui.label('• Users should have access to this dataset').classes('text-sm')
-                    ui.label('• Contains protected views with masking/CLS').classes('text-sm')
-            
-            elif not has_users:
-                # Dataset origem sem usuários - IDEAL
-                with ui.card().classes('w-full bg-green-50 p-4'):
-                    ui.label('✅ Secure Configuration').classes('font-bold text-green-700 mb-2')
-                    ui.label('• No users have direct access').classes('text-sm')
-                    ui.label('• Access controlled via authorized views').classes('text-sm')
-            
-            else:
-                # Dataset origem COM usuários - AVISO
-                with ui.card().classes('w-full bg-orange-50 p-4'):
-                    ui.label('⚠️ Security Recommendation').classes('font-bold text-orange-700 mb-2')
-                    ui.label(f'• {dataset_info["users"]} user(s) have direct access').classes('text-sm')
-                    ui.label('• Consider moving users to views dataset').classes('text-sm')
-                    
-                    # Verificar se existe dataset _views
-                    views_dataset = f"{dataset_info['dataset_id']}_views"
-                    ui.label(f'• Recommended: Grant access to {views_dataset} instead').classes('text-sm font-bold')
+        with self.edit_info_card_container:
+            with ui.card().classes('w-full bg-blue-50 p-4'):
+                ui.label('📊 Dataset Information:').classes('font-bold mb-2')
+                ui.label(f"  • Dataset: {dataset_info['dataset_id']}").classes('text-sm')
+                ui.label(f"  • Type: {dataset_info['type']}").classes('text-sm')
+                ui.label(f"  • Total Users: {dataset_info['users']}").classes('text-sm')
+                ui.label(f"  • Owners: {dataset_info['owners']}").classes('text-sm')
+                ui.label(f"  • Authorized Views: {dataset_info['authorized_views']}").classes('text-sm')
     
-    async def load_users(self):
-        """Carrega lista de usuários"""
-        print("=" * 80)
-        print("🔴 LOAD_USERS CALLED!")
-        print(f"Dataset: {self.selected_dataset}")
-        print("=" * 80)
-        
-        # Limpar container e busca
-        self.users_container.clear()
-        self.search_input.value = ''
-        print("✅ Container cleared")
+    async def load_manage_users(self):
+        """Carrega usuários READ ONLY (MANAGE DIALOG)"""
+        self.manage_users_container.clear()
         
         try:
             dataset_ref = client.dataset(self.selected_dataset)
             dataset_obj = await run.io_bound(client.get_dataset, dataset_ref)
-            print(f"✅ Dataset object retrieved")
             
-            # Debug: Ver TODOS os entries
-            print(f"Total access entries: {len(dataset_obj.access_entries)}")
-            
-            user_entries = []
-            for entry in dataset_obj.access_entries:
-                print(f"  Entry type: {entry.entity_type}, Role: {entry.role}")
-                if entry.entity_type == 'userByEmail':
-                    user_entries.append(entry)
-                    print(f"    ✅ User: {entry.entity_id}")
-            
-            print(f"Filtered user entries: {len(user_entries)}")
-            
-            # ✅ Salvar para usar no filtro
-            self.all_user_entries = user_entries
-            
-            # Atualizar contagem
-            self.users_count_label.set_text(f'Showing {len(user_entries)} of {len(user_entries)} users')
+            user_entries = [
+                entry for entry in dataset_obj.access_entries
+                if entry.entity_type == 'userByEmail'
+            ]
             
             if not user_entries:
-                print("⚠️ No users found - showing empty message")
-                with self.users_container:
+                with self.manage_users_container:
                     with ui.card().classes('w-full bg-gray-50 p-4'):
                         ui.icon('people_off', size='48px', color='gray').classes('mx-auto mb-2')
                         ui.label('No users with permissions').classes('text-gray-500 text-center')
                 return
             
-            # Criar cards para cada usuário
-            print(f"🔵 Creating cards for {len(user_entries)} users...")
-            self.render_user_cards(user_entries)
-            
-            print(f"✅ All cards created successfully")
-            print("=" * 80)
+            # Renderizar cards SEM botões
+            with self.manage_users_container:
+                for entry in user_entries:
+                    with ui.card().classes('w-full p-4 bg-white border-2'):
+                        with ui.row().classes('w-full items-center gap-3'):
+                            ui.icon('person', size='24px', color='blue')
+                            
+                            with ui.column().classes('flex-1'):
+                                ui.label(entry.entity_id).classes('font-bold text-base')
+                                
+                                role_info = self.ROLES.get(entry.role, {
+                                    'label': entry.role,
+                                    'description': '',
+                                    'color': 'bg-gray-100 text-gray-700'
+                                })
+                                
+                                ui.label(role_info['label']).classes(
+                                    f"text-sm px-3 py-1 rounded {role_info['color']}"
+                                ).style('display: inline-block;')
             
         except Exception as e:
-            print(f"❌ ERROR in load_users: {e}")
-            with self.users_container:
+            with self.manage_users_container:
                 ui.label(f'Error loading users: {e}').classes('text-red-600')
             traceback.print_exc()
     
-    def render_user_cards(self, user_entries):
-        """Renderiza cards de usuários"""
-        with self.users_container:
-            for i, entry in enumerate(user_entries):
-                print(f"  Creating card {i+1} for: {entry.entity_id}")
-                
+    async def load_edit_users(self):
+        """Carrega usuários COM edição (EDIT DIALOG)"""
+        self.edit_users_container.clear()
+        self.edit_search_input.value = ''
+        
+        try:
+            dataset_ref = client.dataset(self.selected_dataset)
+            dataset_obj = await run.io_bound(client.get_dataset, dataset_ref)
+            
+            user_entries = [
+                entry for entry in dataset_obj.access_entries
+                if entry.entity_type == 'userByEmail'
+            ]
+            
+            # Salvar para busca
+            self.all_user_entries = user_entries
+            
+            # Atualizar contagem
+            self.edit_users_count_label.set_text(f'Showing {len(user_entries)} of {len(user_entries)} users')
+            
+            if not user_entries:
+                with self.edit_users_container:
+                    with ui.card().classes('w-full bg-gray-50 p-4'):
+                        ui.icon('people_off', size='48px', color='gray').classes('mx-auto mb-2')
+                        ui.label('No users with permissions').classes('text-gray-500 text-center')
+                return
+            
+            # Renderizar cards COM botões
+            self.render_edit_user_cards(user_entries)
+            
+        except Exception as e:
+            with self.edit_users_container:
+                ui.label(f'Error loading users: {e}').classes('text-red-600')
+            traceback.print_exc()
+    
+    def render_edit_user_cards(self, user_entries):
+        """Renderiza cards COM botão REMOVE (EDIT DIALOG)"""
+        with self.edit_users_container:
+            for entry in user_entries:
                 with ui.card().classes('w-full p-4 bg-white border-2'):
                     with ui.row().classes('w-full items-center justify-between'):
                         # User info
@@ -397,16 +405,16 @@ class DatasetIAMManager:
                             on_click=make_remove(entry.entity_id, entry.role)
                         ).props('flat color=negative')
     
-    def filter_users(self):
-        """Filtra usuários baseado na busca"""
-        search_term = self.search_input.value.lower() if self.search_input.value else ''
+    def filter_edit_users(self):
+        """Filtra usuários em tempo real (SENSÍVEL)"""
+        search_term = self.edit_search_input.value.lower() if self.edit_search_input.value else ''
         
-        # Recriar a lista filtrada
-        self.users_container.clear()
+        self.edit_users_container.clear()
         
         if not hasattr(self, 'all_user_entries') or not self.all_user_entries:
             return
         
+        # Busca sensível - encontra "bruno" em "bruno.barreto@..."
         filtered_users = [
             entry for entry in self.all_user_entries
             if search_term in entry.entity_id.lower()
@@ -415,22 +423,22 @@ class DatasetIAMManager:
         # Atualizar contagem
         total = len(self.all_user_entries)
         showing = len(filtered_users)
-        self.users_count_label.set_text(f'Showing {showing} of {total} users')
+        self.edit_users_count_label.set_text(f'Showing {showing} of {total} users')
         
         if not filtered_users:
-            with self.users_container:
+            with self.edit_users_container:
                 with ui.card().classes('w-full bg-gray-50 p-4'):
                     ui.icon('search_off', size='48px', color='gray').classes('mx-auto mb-2')
-                    ui.label('No users found').classes('text-gray-500 text-center')
+                    ui.label(f'No users found matching "{search_term}"').classes('text-gray-500 text-center')
             return
         
-        # Criar cards para usuários filtrados
-        self.render_user_cards(filtered_users)
+        # Renderizar usuários filtrados
+        self.render_edit_user_cards(filtered_users)
     
     async def add_user(self):
         """Adiciona usuário ao dataset"""
-        email = self.new_user_email.value.strip()
-        role = self.new_user_role.value
+        email = self.edit_new_user_email.value.strip()
+        role = self.edit_new_user_role.value
         
         if not email or '@' not in email:
             ui.notify('Please enter a valid email address', type="warning")
@@ -478,10 +486,10 @@ class DatasetIAMManager:
             ui.notify(f'✅ {email} added with {role} role', type="positive")
             
             # Limpar input
-            self.new_user_email.value = ''
+            self.edit_new_user_email.value = ''
             
             # Refresh
-            await self.load_users()
+            await self.load_edit_users()
             self.load_datasets()
             
         except Exception as e:
@@ -546,7 +554,7 @@ class DatasetIAMManager:
             ui.notify(f'✅ {email} removed successfully', type="positive")
             
             # Refresh
-            await self.load_users()
+            await self.load_edit_users()
             self.load_datasets()
             
         except Exception as e:
@@ -554,9 +562,9 @@ class DatasetIAMManager:
             ui.notify(f'Error: {e}', type="negative")
             traceback.print_exc()
     
-    async def refresh_permissions(self):
-        """Refresh permissões"""
-        await self.load_users()
+    async def refresh_edit_permissions(self):
+        """Refresh permissões (EDIT DIALOG)"""
+        await self.load_edit_users()
         ui.notify('Refreshed', type="positive")
     
     def render_ui(self):
@@ -590,12 +598,19 @@ class DatasetIAMManager:
                     'defaultColDef': {'sortable': True, 'resizable': True},
                 }).classes('w-full h-96 ag-theme-quartz')
                 
+                # ✅ DOIS BOTÕES: MANAGE IAM (visualizar) e EDIT PERMISSIONS (editar)
                 with ui.row().classes('mt-2 gap-2'):
                     ui.button(
                         "MANAGE IAM",
-                        icon="admin_panel_settings",
+                        icon="visibility",
                         on_click=lambda: self.manage_permissions()
                     ).props('color=primary')
+                    
+                    ui.button(
+                        "EDIT PERMISSIONS",
+                        icon="edit",
+                        on_click=lambda: self.edit_permissions()
+                    ).props('color=secondary')
                 
                 # Carregar datasets ao iniciar
                 self.load_datasets()
