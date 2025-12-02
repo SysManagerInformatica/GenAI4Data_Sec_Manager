@@ -68,19 +68,19 @@ def menu() -> None:
                 with ui.item_section():
                     ui.item_label('Policy Tag Permissions').classes(replace='text-primary text-bold').style('font-size:14px')
             
-            # 5. Dynamic Column Security
+            # 5. Create Protected View (CLS + Masking Unified)
             with ui.item(on_click=lambda: ui.navigate.to('/clsdynamiccolumns/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('visibility', color='green-500')
+                    ui.icon('add_circle', color='green-500')
                 with ui.item_section():
-                    ui.item_label('Dynamic Column Security').classes(replace='text-primary text-bold').style('font-size:14px')
+                    ui.item_label('Create Protected View').classes(replace='text-primary text-bold').style('font-size:14px')
             
-            # 6. Manage Dynamic Views
+            # 6. Manage Protected Views
             with ui.item(on_click=lambda: ui.navigate.to('/clsdynamicmanage/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('settings', color='green-500')
                 with ui.item_section():
-                    ui.item_label('Manage Dynamic Views').classes(replace='text-primary text-bold').style('font-size:14px')
+                    ui.item_label('Manage Protected Views').classes(replace='text-primary text-bold').style('font-size:14px')
             
             # 7. Schema Browser
             with ui.item(on_click=lambda: ui.navigate.to('/clsschemabrowser/')):
@@ -89,27 +89,22 @@ def menu() -> None:
                 with ui.item_section():
                     ui.item_label('Schema Browser').classes(replace='text-primary text-bold').style('font-size:14px')
         
-        # DATA MASKING
-        with ui.expansion('Data Masking', caption='Click to Expand', icon='masks').classes('w-full text-primary text-bold').style('font-size:16px'):
-            with ui.item(on_click=lambda: ui.navigate.to('/maskcreateview/')):
+        # ✅ NOVA SEÇÃO: IAM & SECURITY
+        with ui.expansion('IAM & Security', caption='Click to Expand', icon='admin_panel_settings').classes('w-full text-primary text-bold').style('font-size:16px'):
+            # Dataset IAM Manager
+            with ui.item(on_click=lambda: ui.navigate.to('/datasetiammanager/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('visibility_off', color='purple-500')
+                    ui.icon('shield', color='orange-500')
                 with ui.item_section():
-                    ui.item_label('Create Masked View').classes(replace='text-primary text-bold').style('font-size:14px')
+                    ui.item_label('Dataset IAM Manager').classes(replace='text-primary text-bold').style('font-size:14px')
             
-            with ui.item(on_click=lambda: ui.navigate.to('/maskstatus/')):
-                with ui.item_section().props('avatar'):
-                    ui.icon('list', color='purple-500')
-                with ui.item_section():
-                    ui.item_label('View Masking Status').classes(replace='text-primary text-bold').style('font-size:14px')
-        
-        # CONTROL ACCESS - Mostrar apenas para OWNER e ADMIN
-        if user.get('role') in ['OWNER', 'ADMIN']:
-            with ui.item(on_click=lambda: ui.navigate.to('/controlaccess/')):
-                with ui.item_section().props('avatar'):
-                    ui.icon('admin_panel_settings', color='orange-500')
-                with ui.item_section():
-                    ui.item_label('Control Access').classes(replace='text-primary text-bold').style('font-size:16px')
+            # Control Access (apenas OWNER e ADMIN)
+            if user.get('role') in ['OWNER', 'ADMIN']:
+                with ui.item(on_click=lambda: ui.navigate.to('/controlaccess/')):
+                    with ui.item_section().props('avatar'):
+                        ui.icon('lock', color='orange-500')
+                    with ui.item_section():
+                        ui.item_label('Control Access').classes(replace='text-primary text-bold').style('font-size:14px')
         
         # AUDIT LOGS
         with ui.item(on_click=lambda: ui.navigate.to('/auditlogs/')):
