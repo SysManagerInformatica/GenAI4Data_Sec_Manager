@@ -114,7 +114,7 @@ except:
                 ui.label('Manage Protected Views').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
-# ✅ NOVO: Dataset IAM Manager
+# ✅ Dataset IAM Manager
 try:
     from pages.dataset_iam_manager import DatasetIAMManager
 except:
@@ -123,6 +123,17 @@ except:
             from theme import frame
             with frame('Dataset IAM Manager'):
                 ui.label('Dataset IAM Manager').classes('text-2xl font-bold mb-4')
+                ui.label('This feature is under development').classes('text-orange-600')
+
+# ✅ NOVO: Project IAM Manager
+try:
+    from pages.project_iam_manager import ProjectIAMManager
+except:
+    class ProjectIAMManager:
+        def run(self):
+            from theme import frame
+            with frame('Project IAM Manager'):
+                ui.label('Project IAM Manager').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
 # Audit Logs
@@ -219,11 +230,17 @@ def create() -> None:
         cls_instance.run()
     ui.page('/clsdynamicmanage/')(cls_dynamic_manage_page)
 
-    # ✅ NOVO: Dataset IAM Manager
+    # ✅ Dataset IAM Manager
     def dataset_iam_manager_page():
         iam_instance = DatasetIAMManager()
         iam_instance.run()
     ui.page('/datasetiammanager/')(dataset_iam_manager_page)
+
+    # ✅ NOVO: Project IAM Manager
+    def project_iam_manager_page():
+        iam_instance = ProjectIAMManager()
+        iam_instance.run()
+    ui.page('/projectiammanager/')(project_iam_manager_page)
 
     # Audit Logs Page
     def audit_logs_page():
