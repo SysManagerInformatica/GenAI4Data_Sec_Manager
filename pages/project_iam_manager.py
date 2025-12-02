@@ -5,8 +5,7 @@ from google.cloud import resourcemanager_v3
 from google.iam.v1 import policy_pb2
 from services.audit_service import AuditService
 import traceback
-from datetime import datetime
-import asyncio # Importar asyncio no topo
+import asyncio
 
 config = Config()
 
@@ -84,6 +83,7 @@ class ProjectIAMManager:
         self.users = []
         self.users_grid = None
         self.selected_user = None
+        self.selected_user_type = 'user' # user, serviceAccount, group
         
         # Dialog para gerenciar roles do usuário
         self.create_manage_dialog()
@@ -131,7 +131,7 @@ class ProjectIAMManager:
                     ui.button(
                         'ADD ROLE',
                         icon='add',
-                        on_click=self.add_role_to_user
+                        on_click=lambda: asyncio.create_task(self.add_role_to_user())
                     ).props('color=positive size=md')
                 
                 # Atualizar descrição quando role muda
@@ -141,22 +141,21 @@ class ProjectIAMManager:
             # Botões
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('CLOSE', on_click=self.manage_dialog.close).props('flat')
-                ui.button('REFRESH', icon='refresh', on_click=self.refresh_user_roles).props('color=primary')
+                ui.button('REFRESH', icon='refresh', on_click=lambda: asyncio.create_task(self.refresh_user_roles())).props('color=primary')
     
     def create_add_user_dialog(self):
         """Cria dialog para adicionar novo usuário"""
         with ui.dialog() as self.add_user_dialog, ui.card().classes('w-full max-w-2xl'):
-            ui.label('➕ Add New User to Project').classes('text-h5 font-bold mb-4')
+            ui.label('➕ Add New Identity to Project').classes('text-h5 font-bold mb-4')
             
             with ui.card().classes('w-full bg-blue-50 p-3 mb-4'):
                 ui.label('ℹ️ Important:').classes('font-bold text-sm mb-2')
-                ui.label('• This will grant project-level permissions').classes('text-xs')
-                ui.label('• User will have access according to the role assigned').classes('text-xs')
-                ui.label('• You can add multiple roles to the same user later').classes('text-xs')
+                ui.label('• You can add Users, Service Accounts, or Groups').classes('text-xs')
+                ui.label('• Format for Service Accounts: name@project.iam.gserviceaccount.com').classes('text-xs')
             
             self.add_user_email = ui.input(
                 placeholder='user@company.com',
-                label='Email Address'
+                label='Email / Principal Address'
             ).classes('w-full mb-4')
             
             self.add_user_role = ui.select(
@@ -171,7 +170,7 @@ class ProjectIAMManager:
             
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('CANCEL', on_click=self.add_user_dialog.close).props('flat')
-                ui.button('ADD USER', icon='person_add', on_click=self.add_new_user).props('color=positive')
+                ui.button('ADD', icon='person_add', on_click=lambda: asyncio.create_task(self.add_new_user())).props('color=positive')
     
     def update_role_description(self):
         """Atualiza descrição da role selecionada"""
@@ -188,13 +187,14 @@ class ProjectIAMManager:
             self.add_user_role_desc.set_text(f"{role_info['label']}: {role_info['description']}")
     
     async def get_project_iam_policy(self):
-        """Obtém política IAM do projeto"""
+        """Obtém política IAM do projeto (Non-blocking)"""
         try:
             client_rm = resourcemanager_v3.ProjectsClient()
             request = resourcemanager_v3.GetIamPolicyRequest(
                 resource=f"projects/{self.project_id}"
             )
             
+            # Executa na thread pool para não travar a UI
             policy = await run.io_bound(client_rm.get_iam_policy, request=request)
             return policy
             
@@ -204,25 +204,56 @@ class ProjectIAMManager:
             return None
     
     async def get_project_users(self):
-        """Lista usuários com permissões no projeto"""
+        """Lista TODOS os membros (Users, SA, Groups) com permissões"""
+        print(f"\n[DEBUG] Iniciando busca de IAM para: {self.project_id}")
         try:
             policy = await self.get_project_iam_policy()
             if not policy:
+                print("[DEBUG] ❌ Policy vazia ou erro de permissão.")
                 return []
             
+            print(f"[DEBUG] ✅ Policy obtida. Processando bindings...")
+            
             users = {}
+            
+            # Itera sobre todas as bindings (Role -> Members)
             for binding in policy.bindings:
                 role = binding.role
                 for member in binding.members:
+                    # Identifica o tipo e extrai o email/id
+                    member_type = 'unknown'
+                    email = member
+                    
                     if member.startswith('user:'):
+                        member_type = 'user'
                         email = member.replace('user:', '')
-                        if email not in users:
-                            users[email] = []
-                        users[email].append(role)
+                    elif member.startswith('serviceAccount:'):
+                        member_type = 'serviceAccount'
+                        email = member.replace('serviceAccount:', '')
+                    elif member.startswith('group:'):
+                        member_type = 'group'
+                        email = member.replace('group:', '')
+                    elif member.startswith('domain:'):
+                        member_type = 'domain'
+                        email = member.replace('domain:', '')
+                    
+                    # Agrupa roles por membro
+                    if email not in users:
+                        users[email] = {
+                            'roles': [], 
+                            'type': member_type,
+                            'full_member_string': member # Guarda string original 'user:abc@...'
+                        }
+                    users[email]['roles'].append(role)
+            
+            print(f"[DEBUG] Total de identidades encontradas: {len(users)}")
             
             user_list = []
-            for email, roles in users.items():
-                # Classificar nível de risco
+            for email, data in users.items():
+                roles = data['roles']
+                m_type = data['type']
+                
+                # Nível de risco
                 risk_level = 'safe'
                 for role in roles:
                     if role in self.PROJECT_ROLES:
@@ -233,13 +264,22 @@ class ProjectIAMManager:
                         elif level == 'warning' and risk_level == 'safe':
                             risk_level = 'warning'
                 
+                # Ícones por tipo
+                icon = "👤"
+                if m_type == "serviceAccount": icon = "🤖"
+                elif m_type == "group": icon = "👥"
+                elif m_type == "domain": icon = "🌐"
+                
                 user_list.append({
                     'email': email,
+                    'display_name': f"{icon} {email}",
+                    'type': m_type,
+                    'full_member_string': data['full_member_string'],
                     'roles_count': len(roles),
                     'roles': ', '.join([r.split('/')[-1] for r in roles[:3]]) + ('...' if len(roles) > 3 else ''),
                     'risk_level': risk_level,
                     'risk_icon': '🔴' if risk_level == 'danger' else '🟡' if risk_level == 'warning' else '🟢',
-                    'all_roles': roles  # Para uso interno
+                    'all_roles': roles
                 })
             
             return user_list
@@ -249,14 +289,11 @@ class ProjectIAMManager:
             traceback.print_exc()
             return []
     
-    # ------------------ CORREÇÃO PRINCIPAL AQUI ------------------
-    # Mudamos de 'def' para 'async def' e removemos o asyncio.run
     async def load_users(self):
-        """Carrega usuários no grid"""
-        n = ui.notification('Loading users...', spinner=True, timeout=None)
+        """Carrega usuários no grid (Async)"""
+        n = ui.notification('Loading IAM policies...', spinner=True, timeout=None)
         
         try:
-            # CORREÇÃO: Usamos 'await' diretamente pois estamos no loop do NiceGUI
             self.users = await self.get_project_users()
             
             if self.users_grid:
@@ -264,29 +301,36 @@ class ProjectIAMManager:
                 self.users_grid.update()
             
             n.dismiss()
-            ui.notify(f"✅ Loaded {len(self.users)} users", type="positive")
+            if not self.users:
+                ui.notify("No members found. Check terminal logs.", type="warning")
+            else:
+                ui.notify(f"✅ Loaded {len(self.users)} members", type="positive")
             
         except Exception as e:
             n.dismiss()
             ui.notify(f"Error: {e}", type="negative")
             traceback.print_exc()
-    # -------------------------------------------------------------
 
     async def manage_user_roles(self):
-        """Abre dialog para gerenciar roles de um usuário"""
+        """Abre dialog para gerenciar roles"""
         rows = await self.users_grid.get_selected_rows()
         if not rows:
-            ui.notify('No user selected', type="warning")
+            ui.notify('No identity selected', type="warning")
             return
         
         user_info = rows[0]
         self.selected_user = user_info['email']
+        self.selected_user_type = user_info.get('type', 'user')
         
-        n = ui.notification('Loading user roles...', spinner=True, timeout=None)
+        n = ui.notification('Loading roles...', spinner=True, timeout=None)
         
         try:
             # Atualizar título
-            self.dialog_title.set_text(f'Manage Roles: {self.selected_user}')
+            icon = "👤"
+            if self.selected_user_type == "serviceAccount": icon = "🤖"
+            elif self.selected_user_type == "group": icon = "👥"
+            
+            self.dialog_title.set_text(f'Manage Roles: {icon} {self.selected_user}')
             
             # Atualizar info card
             await self.update_user_info_card(user_info)
@@ -303,20 +347,21 @@ class ProjectIAMManager:
             traceback.print_exc()
     
     async def update_user_info_card(self, user_info):
-        """Atualiza card de informações do usuário"""
+        """Atualiza card de informações"""
         self.user_info_container.clear()
         
         with self.user_info_container:
             risk_color = 'red' if user_info['risk_level'] == 'danger' else 'orange' if user_info['risk_level'] == 'warning' else 'green'
             
             with ui.card().classes(f'w-full bg-{risk_color}-50 p-4'):
-                ui.label(f"{user_info['risk_icon']} User Information:").classes('font-bold mb-2')
-                ui.label(f"  • Email: {user_info['email']}").classes('text-sm')
+                ui.label(f"{user_info['risk_icon']} Identity Information:").classes('font-bold mb-2')
+                ui.label(f"  • Principal: {user_info['email']}").classes('text-sm')
+                ui.label(f"  • Type: {user_info['type'].upper()}").classes('text-sm')
                 ui.label(f"  • Total Roles: {user_info['roles_count']}").classes('text-sm')
                 ui.label(f"  • Risk Level: {user_info['risk_level'].upper()}").classes('text-sm font-bold')
     
     async def load_user_roles(self):
-        """Carrega roles do usuário"""
+        """Carrega roles do usuário selecionado"""
         self.roles_container.clear()
         
         try:
@@ -326,9 +371,17 @@ class ProjectIAMManager:
                     ui.label('Error loading roles').classes('text-red-600')
                 return
             
+            # Reconstrói a string correta do membro para busca (ex: serviceAccount:email...)
+            prefix = "user:"
+            if self.selected_user_type == "serviceAccount": prefix = "serviceAccount:"
+            elif self.selected_user_type == "group": prefix = "group:"
+            elif self.selected_user_type == "domain": prefix = "domain:"
+            
+            target_member = f"{prefix}{self.selected_user}"
+            
             user_roles = []
             for binding in policy.bindings:
-                if f"user:{self.selected_user}" in binding.members:
+                if target_member in binding.members:
                     user_roles.append(binding.role)
             
             if not user_roles:
@@ -342,7 +395,7 @@ class ProjectIAMManager:
                 for role in user_roles:
                     role_info = self.PROJECT_ROLES.get(role, {
                         'label': role,
-                        'description': 'Custom role',
+                        'description': 'Custom/Other role',
                         'color': 'bg-gray-100 text-gray-700',
                         'level': 'safe'
                     })
@@ -354,15 +407,11 @@ class ProjectIAMManager:
                                 ui.label(role_info['description']).classes('text-xs text-gray-600 mb-1')
                                 ui.label(role).classes('text-xs text-gray-400 font-mono')
                             
-                            def make_remove(user_role):
-                                async def remove():
-                                    await self.remove_role_from_user(user_role)
-                                return remove
-                            
+                            # Botão remover
                             ui.button(
                                 'REMOVE',
                                 icon='delete',
-                                on_click=make_remove(role)
+                                on_click=lambda r=role: asyncio.create_task(self.remove_role_from_user(r))
                             ).props('flat dense color=negative')
         
         except Exception as e:
@@ -371,9 +420,8 @@ class ProjectIAMManager:
             traceback.print_exc()
     
     async def add_role_to_user(self):
-        """Adiciona role ao usuário"""
+        """Adiciona role"""
         role = self.new_role.value
-        
         if not role:
             ui.notify('Please select a role', type="warning")
             return
@@ -384,19 +432,26 @@ class ProjectIAMManager:
             client_rm = resourcemanager_v3.ProjectsClient()
             resource = f"projects/{self.project_id}"
             
-            # Get current policy
+            # Get policy
             request = resourcemanager_v3.GetIamPolicyRequest(resource=resource)
             policy = await run.io_bound(client_rm.get_iam_policy, request=request)
             
-            # Check if already has role
-            member = f"user:{self.selected_user}"
+            # Construct member string
+            prefix = "user:"
+            if self.selected_user_type == "serviceAccount": prefix = "serviceAccount:"
+            elif self.selected_user_type == "group": prefix = "group:"
+            elif self.selected_user_type == "domain": prefix = "domain:"
+            
+            member = f"{prefix}{self.selected_user}"
+            
+            # Check exist
             for binding in policy.bindings:
                 if binding.role == role and member in binding.members:
                     n.dismiss()
-                    ui.notify(f'User already has this role', type="warning")
+                    ui.notify(f'Identity already has this role', type="warning")
                     return
             
-            # Add member to role
+            # Add
             binding_found = False
             for binding in policy.bindings:
                 if binding.role == role:
@@ -405,38 +460,27 @@ class ProjectIAMManager:
                     break
             
             if not binding_found:
-                # Create new binding
-                new_binding = policy_pb2.Binding(
-                    role=role,
-                    members=[member]
-                )
+                new_binding = policy_pb2.Binding(role=role, members=[member])
                 policy.bindings.append(new_binding)
             
-            # Set updated policy
-            set_request = resourcemanager_v3.SetIamPolicyRequest(
-                resource=resource,
-                policy=policy
-            )
+            # Set
+            set_request = resourcemanager_v3.SetIamPolicyRequest(resource=resource, policy=policy)
             await run.io_bound(client_rm.set_iam_policy, request=set_request)
             
-            # Audit log
+            # Audit
             self.audit_service.log_action(
                 action='ADD_PROJECT_ROLE',
                 resource_type='PROJECT_IAM',
                 resource_name=self.project_id,
                 status='SUCCESS',
-                details={
-                    'user': self.selected_user,
-                    'role': role
-                }
+                details={'member': member, 'role': role}
             )
             
             n.dismiss()
-            ui.notify(f'✅ Role {role} added', type="positive")
+            ui.notify(f'✅ Role added', type="positive")
             
-            # Refresh
             await self.load_user_roles()
-            await self.load_users() # CORREÇÃO: await aqui
+            await self.load_users()
             
         except Exception as e:
             n.dismiss()
@@ -444,75 +488,67 @@ class ProjectIAMManager:
             traceback.print_exc()
     
     async def remove_role_from_user(self, role):
-        """Remove role do usuário"""
-        # Confirmar remoção
+        """Remove role"""
+        # Dialog confirmation
         with ui.dialog() as confirm_dialog, ui.card().classes('w-full max-w-md'):
             ui.label('⚠️ Confirm Removal').classes('text-h6 font-bold text-orange-600 mb-4')
             
-            role_info = self.PROJECT_ROLES.get(role, {'label': role, 'description': ''})
+            role_info = self.PROJECT_ROLES.get(role, {'label': role})
             
             with ui.card().classes('w-full bg-orange-50 p-3 mb-4'):
-                ui.label(f'User: {self.selected_user}').classes('text-sm font-bold')
+                ui.label(f'Identity: {self.selected_user}').classes('text-sm font-bold')
                 ui.label(f'Role: {role_info["label"]}').classes('text-sm')
-                ui.label(f'({role})').classes('text-xs text-gray-600')
             
-            ui.label('This will remove this role from the user at PROJECT level.').classes('text-sm mb-2')
-            ui.label('Are you sure?').classes('text-sm font-bold')
-            
-            async def execute_removal():
+            async def execute():
                 confirm_dialog.close()
                 await self.execute_remove_role(role)
             
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('CANCEL', on_click=confirm_dialog.close).props('flat')
-                ui.button('REMOVE', on_click=execute_removal).props('color=negative')
+                ui.button('REMOVE', on_click=lambda: asyncio.create_task(execute())).props('color=negative')
         
         confirm_dialog.open()
     
     async def execute_remove_role(self, role):
-        """Executa remoção da role"""
-        n = ui.notification(f'Removing {role}...', spinner=True, timeout=None)
+        n = ui.notification(f'Removing role...', spinner=True, timeout=None)
         
         try:
             client_rm = resourcemanager_v3.ProjectsClient()
             resource = f"projects/{self.project_id}"
             
-            # Get current policy
             request = resourcemanager_v3.GetIamPolicyRequest(resource=resource)
             policy = await run.io_bound(client_rm.get_iam_policy, request=request)
             
-            # Remove member from role
-            member = f"user:{self.selected_user}"
+            # Construct member string
+            prefix = "user:"
+            if self.selected_user_type == "serviceAccount": prefix = "serviceAccount:"
+            elif self.selected_user_type == "group": prefix = "group:"
+            elif self.selected_user_type == "domain": prefix = "domain:"
+            
+            member = f"{prefix}{self.selected_user}"
+            
+            # Remove
             for binding in policy.bindings:
                 if binding.role == role and member in binding.members:
                     binding.members.remove(member)
                     break
             
-            # Set updated policy
-            set_request = resourcemanager_v3.SetIamPolicyRequest(
-                resource=resource,
-                policy=policy
-            )
+            set_request = resourcemanager_v3.SetIamPolicyRequest(resource=resource, policy=policy)
             await run.io_bound(client_rm.set_iam_policy, request=set_request)
             
-            # Audit log
             self.audit_service.log_action(
                 action='REMOVE_PROJECT_ROLE',
                 resource_type='PROJECT_IAM',
                 resource_name=self.project_id,
                 status='SUCCESS',
-                details={
-                    'user': self.selected_user,
-                    'role': role
-                }
+                details={'member': member, 'role': role}
             )
             
             n.dismiss()
-            ui.notify(f'✅ Role removed successfully', type="positive")
+            ui.notify(f'✅ Role removed', type="positive")
             
-            # Refresh
             await self.load_user_roles()
-            await self.load_users() # CORREÇÃO: await aqui
+            await self.load_users()
             
         except Exception as e:
             n.dismiss()
@@ -520,74 +556,57 @@ class ProjectIAMManager:
             traceback.print_exc()
     
     async def add_new_user(self):
-        """Adiciona novo usuário ao projeto"""
+        """Adiciona novo usuário/principal"""
         email = self.add_user_email.value.strip()
         role = self.add_user_role.value
         
         if not email or '@' not in email:
-            ui.notify('Please enter a valid email address', type="warning")
+            ui.notify('Invalid address', type="warning")
             return
         
         n = ui.notification(f'Adding {email}...', spinner=True, timeout=None)
         
         try:
+            # Tenta adivinhar o prefixo
+            member = f"user:{email}"
+            if email.endswith('.gserviceaccount.com'):
+                member = f"serviceAccount:{email}"
+            
             client_rm = resourcemanager_v3.ProjectsClient()
             resource = f"projects/{self.project_id}"
             
-            # Get current policy
             request = resourcemanager_v3.GetIamPolicyRequest(resource=resource)
             policy = await run.io_bound(client_rm.get_iam_policy, request=request)
             
-            # Add member to role
-            member = f"user:{email}"
+            # Add
             binding_found = False
-            
             for binding in policy.bindings:
                 if binding.role == role:
-                    if member in binding.members:
-                        n.dismiss()
-                        ui.notify(f'User already has this role', type="warning")
-                        return
-                    binding.members.append(member)
+                    if member not in binding.members:
+                        binding.members.append(member)
                     binding_found = True
                     break
             
             if not binding_found:
-                # Create new binding
-                new_binding = policy_pb2.Binding(
-                    role=role,
-                    members=[member]
-                )
+                new_binding = policy_pb2.Binding(role=role, members=[member])
                 policy.bindings.append(new_binding)
             
-            # Set updated policy
-            set_request = resourcemanager_v3.SetIamPolicyRequest(
-                resource=resource,
-                policy=policy
-            )
+            set_request = resourcemanager_v3.SetIamPolicyRequest(resource=resource, policy=policy)
             await run.io_bound(client_rm.set_iam_policy, request=set_request)
             
-            # Audit log
             self.audit_service.log_action(
                 action='ADD_USER_TO_PROJECT',
                 resource_type='PROJECT_IAM',
                 resource_name=self.project_id,
                 status='SUCCESS',
-                details={
-                    'user': email,
-                    'role': role
-                }
+                details={'member': member, 'role': role}
             )
             
             n.dismiss()
-            ui.notify(f'✅ {email} added with {role}', type="positive")
-            
-            # Limpar e fechar
+            ui.notify(f'✅ Added successfully', type="positive")
             self.add_user_email.value = ''
             self.add_user_dialog.close()
-            
-            # Refresh
-            await self.load_users() # CORREÇÃO: await aqui
+            await self.load_users()
             
         except Exception as e:
             n.dismiss()
@@ -595,7 +614,6 @@ class ProjectIAMManager:
             traceback.print_exc()
     
     async def refresh_user_roles(self):
-        """Refresh roles do usuário"""
         await self.load_user_roles()
         ui.notify('Refreshed', type="positive")
     
@@ -606,22 +624,21 @@ class ProjectIAMManager:
                 
                 with ui.card().classes('w-full bg-orange-50 p-3 mb-4'):
                     ui.label('⚠️ Project-Level Permissions:').classes('font-bold text-sm mb-2')
-                    ui.label('• These permissions apply to the ENTIRE project').classes('text-xs')
                     ui.label('• Users with Owner/Editor roles bypass all dataset restrictions').classes('text-xs')
-                    ui.label('• Use dataset-level permissions for better security control').classes('text-xs font-bold')
                 
                 with ui.row().classes('w-full gap-2 mb-4'):
-                    ui.button('REFRESH', icon='refresh', on_click=self.load_users).props('color=primary')
-                    ui.button('ADD NEW USER', icon='person_add', on_click=self.add_user_dialog.open).props('color=positive')
+                    ui.button('REFRESH', icon='refresh', on_click=lambda: asyncio.create_task(self.load_users())).props('color=primary')
+                    ui.button('ADD NEW IDENTITY', icon='person_add', on_click=self.add_user_dialog.open).props('color=positive')
                 
                 ui.label(f"Project: {self.project_id}").classes('text-h6 font-bold mb-2')
                 
                 self.users_grid = ui.aggrid({
                     'columnDefs': [
-                        {'field': 'email', 'headerName': 'User Email', 'checkboxSelection': True, 'filter': True, 'minWidth': 350},
-                        {'field': 'roles_count', 'headerName': 'Roles Count', 'filter': True, 'minWidth': 120},
-                        {'field': 'roles', 'headerName': 'Roles Preview', 'filter': True, 'minWidth': 300},
-                        {'field': 'risk_icon', 'headerName': 'Risk', 'filter': True, 'minWidth': 80},
+                        {'field': 'display_name', 'headerName': 'Principal', 'checkboxSelection': True, 'filter': True, 'minWidth': 350},
+                        {'field': 'type', 'headerName': 'Type', 'filter': True, 'width': 100},
+                        {'field': 'roles_count', 'headerName': 'Roles', 'filter': True, 'width': 100},
+                        {'field': 'roles', 'headerName': 'Preview', 'filter': True, 'minWidth': 300},
+                        {'field': 'risk_icon', 'headerName': 'Risk', 'width': 80},
                     ],
                     'rowData': [],
                     'rowSelection': 'single',
@@ -629,10 +646,10 @@ class ProjectIAMManager:
                 }).classes('w-full h-96 ag-theme-quartz')
                 
                 with ui.row().classes('mt-2 gap-2'):
-                    ui.button("MANAGE ROLES", icon="settings", on_click=self.manage_user_roles).props('color=primary')
+                    ui.button("MANAGE ROLES", icon="settings", on_click=lambda: asyncio.create_task(self.manage_user_roles())).props('color=primary')
                 
-                # CORREÇÃO: Carregar usuários usando ui.timer para não bloquear o render_ui
-                ui.timer(0.1, self.load_users, once=True)
+                # Timer inicial seguro
+                ui.timer(0.1, lambda: asyncio.create_task(self.load_users()), once=True)
     
     def run(self):
         pass
