@@ -386,7 +386,7 @@ FROM `{self.project_id}.{self.selected_dataset}.{self.selected_table}`;"""
                 
                 with ui.row().classes('w-full justify-end gap-2 mt-4'):
                     ui.button('CREATE ANOTHER', icon='add', on_click=reset_form).props('color=positive')
-                    ui.button('DONE', on_click=lambda: ui.navigate.to('/cls_dynamic_manage')).props('flat')
+                    ui.button('DONE', on_click=lambda: ui.navigate.to('/clsdynamicmanage/')).props('flat')  # ✅ CORRIGIDO
             
             success_dialog.open()
             
