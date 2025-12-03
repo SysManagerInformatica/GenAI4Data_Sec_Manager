@@ -5,6 +5,7 @@ from google.cloud import bigquery
 from services.audit_service import AuditService
 import re
 import traceback
+import asyncio
 
 config = Config()
 client = bigquery.Client(project=config.PROJECT_ID)
