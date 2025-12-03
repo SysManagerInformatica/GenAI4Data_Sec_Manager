@@ -125,7 +125,7 @@ class DynamicColumnManage:
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('PREVIEW SQL', icon='code', on_click=self.preview_sql).props('flat color=blue')
                 ui.button('CANCEL', on_click=self.close_edit_dialog).props('flat')
-                ui.button('SAVE CHANGES', icon='save', on_click=self.save_changes_wrapper).props('color=positive')
+                ui.button('SAVE CHANGES', icon='save', on_click=lambda: asyncio.create_task(self.save_changes_wrapper())).props('color=positive')
     
     def close_edit_dialog(self):
         self.edit_dialog.close()
