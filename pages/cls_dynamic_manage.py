@@ -74,8 +74,10 @@ class DynamicColumnManage:
         try:
             datasets = await run.io_bound(self.get_datasets_sync)
             if self.dataset_select and datasets:
-                self.dataset_select.set_options(datasets)
-                self.dataset_select.set_value(None)
+                # FIX: Use direct property assignment + update()
+                self.dataset_select.options = datasets
+                self.dataset_select.value = None
+                self.dataset_select.update()
                 ui.notify(f"✅ {len(datasets)} datasets loaded", type="positive", timeout=2000)
         except Exception as e:
             ui.notify(f"⚠️ Error loading datasets: {e}", type="warning")
@@ -133,6 +135,8 @@ class DynamicColumnManage:
     
     def get_protected_views(self, dataset_id):
         try:
+            print(f"[DEBUG] ===== get_protected_views START =====")
+            print(f"[DEBUG] Dataset ID: {dataset_id}")
             views = []
             datasets_to_search = [dataset_id]
             
@@ -140,16 +144,22 @@ class DynamicColumnManage:
             try:
                 client.get_dataset(views_dataset)
                 datasets_to_search.append(views_dataset)
-            except:
+                print(f"[DEBUG] Found views dataset: {views_dataset}")
+            except Exception as e:
+                print(f"[DEBUG] No views dataset found: {e}")
                 pass
             
             for ds in datasets_to_search:
-                tables = client.list_tables(ds)
+                print(f"[DEBUG] Searching in dataset: {ds}")
+                tables = list(client.list_tables(ds))
+                print(f"[DEBUG] Found {len(tables)} tables in {ds}")
                 
                 for table in tables:
+                    print(f"[DEBUG] Processing table: {table.table_id}")
                     table_ref = client.dataset(ds).table(table.table_id)
                     table_obj = client.get_table(table_ref)
                     
+                    print(f"[DEBUG] Table type: {table_obj.table_type}")
                     if table_obj.table_type != 'VIEW':
                         continue
                     
@@ -157,11 +167,14 @@ class DynamicColumnManage:
                     
                     if any(table.table_id.endswith(suffix) for suffix in ['_restricted', '_masked', '_protected']):
                         is_protected = True
+                        print(f"[DEBUG] View {table.table_id} is protected (suffix match)")
                     
                     if table_obj.description and 'COLUMN_PROTECTION:' in table_obj.description:
                         is_protected = True
+                        print(f"[DEBUG] View {table.table_id} is protected (description match)")
                     
                     if not is_protected:
+                        print(f"[DEBUG] View {table.table_id} is NOT protected, skipping")
                         continue
                     
                     view_definition = table_obj.view_query
@@ -189,7 +202,11 @@ class DynamicColumnManage:
                         'modified': table_obj.modified.strftime('%Y-%m-%d %H:%M') if table_obj.modified else 'Unknown',
                         'description': table_obj.description or ''
                     })
+                    print(f"[DEBUG] Added view: {table.table_id}")
             
+            print(f"[DEBUG] ===== TOTAL VIEWS FOUND: {len(views)} =====")
+            for v in views:
+                print(f"[DEBUG]   - {v['view_name']} ({v['view_dataset']})")
             return views
             
         except Exception as e:
@@ -263,27 +280,49 @@ class DynamicColumnManage:
     
     async def on_dataset_change(self, dataset_id):
         self.selected_dataset = dataset_id
+        print(f"[DEBUG] ===== on_dataset_change START =====")
+        print(f"[DEBUG] Selected dataset: {dataset_id}")
+        
         n = ui.notification('Loading views...', spinner=True, timeout=None)
         try:
+            # Buscar dados (fora do contexto de UI está OK)
             self.protected_views = await run.io_bound(self.get_protected_views, dataset_id)
-            self.refresh_views_grid()
-            self.update_statistics()
+            print(f"[DEBUG] Protected views loaded: {len(self.protected_views)}")
+            
+            # FIX: Atualizar UI diretamente
+            if self.views_grid:
+                print(f"[DEBUG] Updating grid with {len(self.protected_views)} views")
+                self.views_grid.options['rowData'] = self.protected_views
+                self.views_grid.update()
+                print(f"[DEBUG] Grid updated successfully")
+            
+            # Atualizar estatísticas
+            if hasattr(self, 'total_views_label'):
+                self.total_views_label.text = str(len(self.protected_views))
+                self.total_views_label.update()
+            
             n.dismiss()
             ui.notify(f"✅ Loaded {len(self.protected_views)} views", type="positive", timeout=2000)
         except Exception as e:
             n.dismiss()
-            ui.notify(f"Error: {e}", type="negative")
+            print(f"[ERROR] on_dataset_change: {e}")
             traceback.print_exc()
+            ui.notify(f"Error: {e}", type="negative")
     
     def refresh_views_grid(self):
         if self.views_grid:
+            print(f"[DEBUG] refresh_views_grid called with {len(self.protected_views)} views")
             self.views_grid.options['rowData'] = self.protected_views
             self.views_grid.update()
+            print(f"[DEBUG] Grid updated successfully")
+        else:
+            print(f"[ERROR] views_grid is None!")
     
     def update_statistics(self):
         total = len(self.protected_views)
         if hasattr(self, 'total_views_label'):
-            self.total_views_label.set_text(str(total))
+            self.total_views_label.text = str(total)
+            self.total_views_label.update()
     
     async def view_details(self):
         rows = await self.views_grid.get_selected_rows()
