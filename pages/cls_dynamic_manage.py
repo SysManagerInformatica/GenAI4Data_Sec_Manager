@@ -294,9 +294,9 @@ class DynamicColumnManage:
         self.update_statistics()
     
     def refresh_views_grid(self):
-        if self.views_grid and self.protected_views:
-            self.views_grid.options['rowData'] = self.protected_views
-            self.views_grid.update()
+    if self.views_grid:
+        self.views_grid.options['rowData'] = self.protected_views
+        self.views_grid.update()
     
     def update_statistics(self):
         total = len(self.protected_views)
