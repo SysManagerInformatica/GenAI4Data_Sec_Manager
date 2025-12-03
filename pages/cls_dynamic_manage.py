@@ -13,7 +13,6 @@ client = bigquery.Client(project=config.PROJECT_ID)
 
 class DynamicColumnManage:
     
-    # ✅ TIPOS DE PROTEÇÃO UNIFICADOS (CLS + MASKING) - SEM ROUND
     PROTECTION_TYPES = {
         'VISIBLE': {
             'label': '👁️ Visible',
@@ -57,7 +56,6 @@ class DynamicColumnManage:
         self.views_grid = None
         self.dataset_select = None
         
-        # ✅ NOVA ESTRUTURA: {column_name: protection_type}
         self.current_view = None
         self.current_view_dataset = None
         self.source_dataset = None
@@ -65,13 +63,12 @@ class DynamicColumnManage:
         self.column_protection = {}
         self.authorized_users = []
         
-        # Criar dialog de edição UMA VEZ
         self.create_edit_dialog()
         
         self.headers()
         self.render_ui()
         
-        # ✅ CARREGAMENTO LAZY: Carregar datasets APÓS página montar
+        # ✅ CORREÇÃO 1: Wrapper correto para async
         ui.timer(0.1, lambda: asyncio.create_task(self.lazy_load_datasets()), once=True)
     
     async def lazy_load_datasets(self):
@@ -94,6 +91,7 @@ class DynamicColumnManage:
             return [dataset.dataset_id for dataset in datasets]
         except Exception as e:
             print(f"[ERROR] get_datasets_sync: {e}")
+            # ❌ NÃO usar ui.notify aqui - está em thread
             return []
     
     def headers(self):
@@ -101,7 +99,7 @@ class DynamicColumnManage:
         ui.label('Manage Protected Views (Unified CLS + Masking)').classes('text-primary text-center text-bold')
     
     def create_edit_dialog(self):
-        """Cria dialog de edição UMA VEZ - será reutilizado - SEM ABA ADD USERS"""
+        """Cria dialog de edição UMA VEZ - será reutilizado"""
         with ui.dialog() as self.edit_dialog, ui.card().classes('w-full max-w-7xl'):
             self.edit_title = ui.label('').classes('text-h5 font-bold mb-4')
             
@@ -139,7 +137,7 @@ class DynamicColumnManage:
         return self.get_datasets_sync()
     
     def get_protected_views(self, dataset_id):
-        """✅ Lista views protegidas de AMBOS datasets (origem e _views)"""
+        """✅ CORREÇÃO 2: Removido ui.notify de dentro da thread"""
         try:
             views = []
             datasets_to_search = [dataset_id]
@@ -203,7 +201,7 @@ class DynamicColumnManage:
         except Exception as e:
             print(f"[ERROR] get_protected_views: {e}")
             traceback.print_exc()
-            ui.notify(f"Error: {e}", type="negative")
+            # ❌ REMOVIDO ui.notify - está em thread secundária
             return []
     
     def extract_source_dataset(self, view_query):
@@ -274,6 +272,7 @@ class DynamicColumnManage:
         self.selected_dataset = dataset_id
         n = ui.notification('Loading views...', spinner=True, timeout=None)
         try:
+            # ✅ ui.notify agora está no contexto async correto
             self.protected_views = await run.io_bound(self.get_protected_views, dataset_id)
             self.refresh_views_grid()
             self.update_statistics()
@@ -765,18 +764,21 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
             
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('Cancel', on_click=confirm_dialog.close).props('flat')
-                ui.button('DELETE', on_click=lambda: self.execute_deletion(rows, confirm_dialog)).props('color=negative')
+                ui.button('DELETE', on_click=lambda: asyncio.create_task(self.execute_deletion(rows, confirm_dialog))).props('color=negative')
         
         confirm_dialog.open()
     
-    def execute_deletion(self, views, dialog):
+    # ✅ CORREÇÃO 3: Método async agora
+    async def execute_deletion(self, views, dialog):
+        """✅ Versão assíncrona para não travar a UI"""
         success = 0
         failed = 0
         
         for view in views:
             try:
                 table_ref = client.dataset(view['view_dataset']).table(view['view_name'])
-                client.delete_table(table_ref)
+                # ✅ Usar io_bound para não bloquear
+                await run.io_bound(client.delete_table, table_ref)
                 
                 self.audit_service.log_action(
                     action='DELETE_PROTECTED_VIEW',
@@ -802,7 +804,8 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
         if failed > 0:
             ui.notify(f"❌ {failed} failed", type="negative")
         
-        self.protected_views = self.get_protected_views(self.selected_dataset)
+        # ✅ Recarregar também com io_bound
+        self.protected_views = await run.io_bound(self.get_protected_views, self.selected_dataset)
         self.refresh_views_grid()
         self.update_statistics()
     
