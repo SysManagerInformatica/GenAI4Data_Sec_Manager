@@ -879,8 +879,8 @@ SELECT * FROM `{self.project_id}.{self.current_view_dataset}.{view_name}` LIMIT 
                 }).classes('w-full h-96 ag-theme-quartz')
                 
                 with ui.row().classes('mt-2 gap-2'):
-                    ui.button("EDIT VIEW", icon="edit", on_click=self.view_details).props('color=primary')
-                    ui.button("DELETE SELECTED", icon="delete", on_click=self.delete_selected_views).props('color=negative')
+                    ui.button("EDIT VIEW", icon="edit", on_click=lambda: asyncio.create_task(self.view_details())).props('color=primary')
+                    ui.button("DELETE SELECTED", icon="delete", on_click=lambda: asyncio.create_task(self.delete_selected_views())).props('color=negative')
     
     def run(self):
         pass
