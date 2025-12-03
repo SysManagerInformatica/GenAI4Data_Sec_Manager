@@ -72,8 +72,8 @@ class DynamicColumnManage:
         self.headers()
         self.render_ui()
         
-        # Load datasets synchronously - simpler and avoids slot context issues
-        self.load_datasets_on_init()
+        # Use timer correctly - pass the async function directly, don't create a task
+        ui.timer(0.1, self.lazy_load_datasets, once=True)
     
     async def lazy_load_datasets(self):
         try:
@@ -83,22 +83,9 @@ class DynamicColumnManage:
                 self.dataset_select.options = datasets
                 self.dataset_select.value = None
                 self.dataset_select.update()
-                ui.notify(f"✅ {len(datasets)} datasets loaded", type="positive", timeout=2000)
+                print(f"[INFO] Loaded {len(datasets)} datasets")
         except Exception as e:
-            ui.notify(f"⚠️ Error loading datasets: {e}", type="warning")
             print(f"[ERROR] lazy_load_datasets: {e}")
-            traceback.print_exc()
-    
-    def load_datasets_on_init(self):
-        """Load datasets synchronously during initialization to avoid slot context issues"""
-        try:
-            datasets = self.get_datasets_sync()
-            if self.dataset_select and datasets:
-                self.dataset_select.options = datasets
-                self.dataset_select.value = None
-                print(f"[INFO] Loaded {len(datasets)} datasets on init")
-        except Exception as e:
-            print(f"[ERROR] load_datasets_on_init: {e}")
             traceback.print_exc()
     
     def get_datasets_sync(self):
