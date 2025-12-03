@@ -126,7 +126,7 @@ class DynamicColumnManage:
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('PREVIEW SQL', icon='code', on_click=self.preview_sql).props('flat color=blue')
                 ui.button('CANCEL', on_click=self.close_edit_dialog).props('flat')
-                ui.button('SAVE CHANGES', icon='save', on_click=lambda: asyncio.create_task(self.save_changes_wrapper())).props('color=positive')
+                ui.button('SAVE CHANGES', icon='save', on_click=self.save_changes_wrapper).props('color=positive')
     
     def close_edit_dialog(self):
         self.edit_dialog.close()
@@ -282,7 +282,8 @@ class DynamicColumnManage:
         except:
             return 'Unknown'
     
-    async def on_dataset_change(self, dataset_id):
+    async def on_dataset_change(self, e):
+        dataset_id = e.value
         print("\n" + "="*80)
         print(f"[ON_DATASET_CHANGE] Dataset selected: {dataset_id}")
         print("="*80 + "\n")
@@ -803,7 +804,7 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
             
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('Cancel', on_click=confirm_dialog.close).props('flat')
-                ui.button('DELETE', on_click=lambda: asyncio.create_task(self.execute_deletion(rows, confirm_dialog))).props('color=negative')
+                ui.button('DELETE', on_click=lambda: self.execute_deletion(rows, confirm_dialog)).props('color=negative')
         
         confirm_dialog.open()
     
@@ -876,10 +877,10 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
                     self.dataset_select = ui.select(
                         options=[],
                         label='Select Dataset (loading...)',
-                        on_change=lambda e: asyncio.create_task(self.on_dataset_change(e.value))
+                        on_change=self.on_dataset_change
                     ).classes('flex-1')
                     
-                    ui.button('REFRESH', icon='refresh', on_click=lambda: asyncio.create_task(self.refresh_all())).props('flat')
+                    ui.button('REFRESH', icon='refresh', on_click=self.refresh_all).props('flat')
                 
                 with ui.row().classes('w-full gap-4 mb-4'):
                     with ui.card().classes('flex-1 bg-blue-50'):
@@ -907,8 +908,8 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
                 }).classes('w-full h-96 ag-theme-quartz')
                 
                 with ui.row().classes('mt-2 gap-2'):
-                    ui.button("EDIT VIEW", icon="edit", on_click=lambda: asyncio.create_task(self.view_details())).props('color=primary')
-                    ui.button("DELETE SELECTED", icon="delete", on_click=lambda: asyncio.create_task(self.delete_selected_views())).props('color=negative')
+                    ui.button("EDIT VIEW", icon="edit", on_click=self.view_details).props('color=primary')
+                    ui.button("DELETE SELECTED", icon="delete", on_click=self.delete_selected_views).props('color=negative')
     
     def run(self):
         pass
