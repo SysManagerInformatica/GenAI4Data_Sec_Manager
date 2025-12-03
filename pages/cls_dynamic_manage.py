@@ -26,7 +26,7 @@ class DynamicColumnManage:
         },
         'PARTIAL_MASK': {
             'label': '🎭 Partial Mask',
-            'description': 'First/last chars (123.XXX.XX-XX)',
+            'description': 'First/last chars (123.XXX.XX-45)',
             'color': 'bg-purple-100 text-purple-700'
         },
         'HASH': {
