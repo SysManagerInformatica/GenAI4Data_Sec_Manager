@@ -72,7 +72,7 @@ class DynamicColumnManage:
         self.render_ui()
         
         # ✅ CARREGAMENTO LAZY: Carregar datasets APÓS página montar
-        ui.timer(0.1, self.lazy_load_datasets, once=True)
+        ui.timer(0.1, lambda: asyncio.create_task(self.lazy_load_datasets()), once=True)
     
     async def lazy_load_datasets(self):
         """✅ Carrega datasets de forma assíncrona APÓS página estar montada"""
