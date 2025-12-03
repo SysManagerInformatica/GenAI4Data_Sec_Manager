@@ -47,6 +47,10 @@ class DynamicColumnManage:
     }
 
     def __init__(self):
+        print("="*80)
+        print("[STARTUP] DynamicColumnManage.__init__ called")
+        print("="*80)
+        
         self.project_id = config.PROJECT_ID
         self.audit_service = AuditService(config.PROJECT_ID)
         self.page_title = "Manage Protected Views"
@@ -68,7 +72,8 @@ class DynamicColumnManage:
         self.headers()
         self.render_ui()
         
-        ui.timer(0.1, lambda: asyncio.create_task(self.lazy_load_datasets()), once=True)
+        # Load datasets synchronously - simpler and avoids slot context issues
+        self.load_datasets_on_init()
     
     async def lazy_load_datasets(self):
         try:
@@ -82,6 +87,18 @@ class DynamicColumnManage:
         except Exception as e:
             ui.notify(f"⚠️ Error loading datasets: {e}", type="warning")
             print(f"[ERROR] lazy_load_datasets: {e}")
+            traceback.print_exc()
+    
+    def load_datasets_on_init(self):
+        """Load datasets synchronously during initialization to avoid slot context issues"""
+        try:
+            datasets = self.get_datasets_sync()
+            if self.dataset_select and datasets:
+                self.dataset_select.options = datasets
+                self.dataset_select.value = None
+                print(f"[INFO] Loaded {len(datasets)} datasets on init")
+        except Exception as e:
+            print(f"[ERROR] load_datasets_on_init: {e}")
             traceback.print_exc()
     
     def get_datasets_sync(self):
@@ -279,6 +296,10 @@ class DynamicColumnManage:
             return 'Unknown'
     
     async def on_dataset_change(self, dataset_id):
+        print("\n" + "="*80)
+        print(f"[ON_DATASET_CHANGE] Dataset selected: {dataset_id}")
+        print("="*80 + "\n")
+        
         self.selected_dataset = dataset_id
         print(f"[DEBUG] ===== on_dataset_change START =====")
         print(f"[DEBUG] Selected dataset: {dataset_id}")
