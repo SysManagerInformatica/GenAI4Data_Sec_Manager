@@ -294,9 +294,9 @@ class DynamicColumnManage:
         self.update_statistics()
     
     def refresh_views_grid(self):
-    if self.views_grid and self.protected_views:  
-        self.views_grid.options['rowData'] = self.protected_views
-        self.views_grid.update()
+        if self.views_grid and self.protected_views:
+            self.views_grid.options['rowData'] = self.protected_views
+            self.views_grid.update()
     
     def update_statistics(self):
         total = len(self.protected_views)
@@ -571,7 +571,7 @@ class DynamicColumnManage:
         elif protection == 'HIDDEN':
             return None
         elif protection == 'PARTIAL_MASK':
-            return f"CONCAT(SUBSTR(CAST({col_name} AS STRING), 1, 3), '.XXX.XX-', SUBSTR(CAST({col_name} AS STRING), -2)) AS {col_name}"
+            return f"CONCAT(SUBSTR(CAST({col_name} AS STRING), 1, 3), '.XXX.XXX-', SUBSTR(CAST({col_name} AS STRING), -2)) AS {col_name}"
         elif protection == 'HASH':
             return f"TO_BASE64(SHA256(CAST({col_name} AS STRING))) AS {col_name}"
         elif protection == 'NULLIFY':
