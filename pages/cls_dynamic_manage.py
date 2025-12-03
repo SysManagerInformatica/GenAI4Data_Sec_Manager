@@ -5,7 +5,6 @@ from google.cloud import bigquery
 from services.audit_service import AuditService
 import re
 import traceback
-import asyncio
 
 config = Config()
 client = bigquery.Client(project=config.PROJECT_ID)
@@ -13,7 +12,7 @@ client = bigquery.Client(project=config.PROJECT_ID)
 
 class DynamicColumnManage:
     
-    # ✅ TIPOS DE PROTEÇÃO UNIFICADOS (CLS + MASKING) - SEM ROUND
+    # ✅ TIPOS DE PROTEÇÃO UNIFICADOS (CLS + MASKING)
     PROTECTION_TYPES = {
         'VISIBLE': {
             'label': '👁️ Visible',
@@ -27,7 +26,7 @@ class DynamicColumnManage:
         },
         'PARTIAL_MASK': {
             'label': '🎭 Partial Mask',
-            'description': 'First 3 digits only (123.XXX.XXX-XX)',
+            'description': 'First/last chars (123.XXX.XX-XX)',
             'color': 'bg-purple-100 text-purple-700'
         },
         'HASH': {
@@ -39,6 +38,11 @@ class DynamicColumnManage:
             'label': '∅ Nullify',
             'description': 'Replace with NULL',
             'color': 'bg-gray-100 text-gray-700'
+        },
+        'ROUND': {
+            'label': '🔢 Round',
+            'description': 'Round to 10,000',
+            'color': 'bg-yellow-100 text-yellow-700'
         },
         'REDACT': {
             'label': '📝 Redact',
@@ -58,8 +62,8 @@ class DynamicColumnManage:
         
         # ✅ NOVA ESTRUTURA: {column_name: protection_type}
         self.current_view = None
-        self.current_view_dataset = None
-        self.source_dataset = None
+        self.current_view_dataset = None  # ✅ NOVO: Dataset onde a view está
+        self.source_dataset = None  # ✅ NOVO: Dataset da tabela origem
         self.source_table_columns = []
         self.column_protection = {}
         self.authorized_users = []
@@ -75,31 +79,52 @@ class DynamicColumnManage:
         ui.label('Manage Protected Views (Unified CLS + Masking)').classes('text-primary text-center text-bold')
     
     def create_edit_dialog(self):
-        """Cria dialog de edição UMA VEZ - será reutilizado - SEM ABA ADD USERS"""
+        """Cria dialog de edição UMA VEZ - será reutilizado"""
         with ui.dialog() as self.edit_dialog, ui.card().classes('w-full max-w-7xl'):
             self.edit_title = ui.label('').classes('text-h5 font-bold mb-4')
             
-            # ✅ SEM ABAS - APENAS CONTEÚDO DIRETO
-            ui.label('Column Protection').classes('text-h6 font-bold mb-4')
+            with ui.tabs().classes('w-full') as tabs:
+                tab_columns = ui.tab('Column Protection', icon='security')
+                tab_users = ui.tab('Add Users', icon='person_add')
             
-            with ui.card().classes('w-full bg-blue-50 p-3 mb-4'):
-                ui.label('ℹ️ Configure protection type for each column').classes('font-bold text-sm mb-2')
-                ui.label('• VISIBLE: Real data shown without changes').classes('text-xs')
-                ui.label('• HIDDEN: Column excluded from view (CLS)').classes('text-xs')
-                ui.label('• PARTIAL_MASK: Show first 3 digits (123.XXX.XXX-XX)').classes('text-xs')
-                ui.label('• HASH: Replace with SHA256 hash').classes('text-xs')
-                ui.label('• NULLIFY: Replace with NULL').classes('text-xs')
-                ui.label('• REDACT: Replace with [REDACTED]').classes('text-xs')
-            
-            self.source_label = ui.label('').classes('text-sm font-bold mb-2')
-            
-            # Container para colunas
-            with ui.scroll_area().classes('w-full h-96 border rounded p-2'):
-                self.columns_container = ui.column().classes('w-full')
-            
-            # Resumo
-            with ui.card().classes('w-full bg-purple-50 p-3 mt-4'):
-                self.summary_label = ui.label('').classes('text-sm font-bold')
+            with ui.tab_panels(tabs, value=tab_columns).classes('w-full'):
+                # TAB 1: Column Protection
+                with ui.tab_panel(tab_columns):
+                    with ui.card().classes('w-full bg-blue-50 p-3 mb-4'):
+                        ui.label('ℹ️ Configure protection type for each column').classes('font-bold text-sm mb-2')
+                        ui.label('• VISIBLE: Real data shown without changes').classes('text-xs')
+                        ui.label('• HIDDEN: Column excluded from view (CLS)').classes('text-xs')
+                        ui.label('• PARTIAL_MASK: Show first/last chars (123.XXX.XX-45)').classes('text-xs')
+                        ui.label('• HASH: Replace with SHA256 hash').classes('text-xs')
+                        ui.label('• NULLIFY: Replace with NULL').classes('text-xs')
+                        ui.label('• ROUND: Round numbers to 10,000').classes('text-xs')
+                        ui.label('• REDACT: Replace with [REDACTED]').classes('text-xs')
+                    
+                    self.source_label = ui.label('').classes('text-sm font-bold mb-2')
+                    
+                    # Container para colunas
+                    with ui.scroll_area().classes('w-full h-96 border rounded p-2'):
+                        self.columns_container = ui.column().classes('w-full')
+                    
+                    # Resumo
+                    with ui.card().classes('w-full bg-purple-50 p-3 mt-4'):
+                        self.summary_label = ui.label('').classes('text-sm font-bold')
+                
+                # TAB 2: Add Users
+                with ui.tab_panel(tab_users):
+                    with ui.card().classes('w-full bg-green-50 p-3 mb-4'):
+                        ui.label('✅ Grant access to this view').classes('font-bold text-sm mb-2')
+                        ui.label('• Users added here will have BigQuery Data Viewer role on the VIEWS dataset').classes('text-xs')
+                        ui.label('• They will NOT have access to the source table').classes('text-xs')
+                        ui.label('• Access is granted via IAM policy binding').classes('text-xs')
+                    
+                    ui.label('Authorized Users:').classes('text-sm font-bold mb-2')
+                    
+                    # Container para input de usuário
+                    self.users_input_container = ui.column().classes('w-full')
+                    
+                    # Container para lista de usuários
+                    self.users_list_container = ui.column().classes('w-full')
             
             # Botões
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
@@ -172,8 +197,8 @@ class DynamicColumnManage:
                     
                     views.append({
                         'view_name': table.table_id,
-                        'view_dataset': ds,
-                        'source_dataset': source_dataset,
+                        'view_dataset': ds,  # ✅ NOVO: Dataset da view
+                        'source_dataset': source_dataset,  # ✅ NOVO: Dataset da tabela
                         'source_table': source_table,
                         'visible_columns': len(table_obj.schema),
                         'hidden_count': protection_summary['hidden'],
@@ -195,6 +220,7 @@ class DynamicColumnManage:
     def extract_source_dataset(self, view_query):
         """Extrai dataset da tabela origem"""
         try:
+            # Pattern: project.dataset.table
             pattern = r'FROM\s+`[^`]*\.([^`\.]+)\.[^`\.]+`'
             match = re.search(pattern, view_query, re.IGNORECASE)
             if match:
@@ -226,7 +252,7 @@ class DynamicColumnManage:
                             protection = parts[1].strip()
                             if protection == 'HIDDEN':
                                 summary['hidden'] += 1
-                            elif protection in ['PARTIAL_MASK', 'HASH', 'NULLIFY', 'REDACT']:
+                            elif protection in ['PARTIAL_MASK', 'HASH', 'NULLIFY', 'ROUND', 'REDACT']:
                                 summary['masked'] += 1
         
         if summary['hidden'] == 0 and summary['masked'] == 0 and view_query:
@@ -236,6 +262,9 @@ class DynamicColumnManage:
                 summary['masked'] += 1
             
             if 'concat(substr' in query_lower:
+                summary['masked'] += 1
+            
+            if 'round(' in query_lower and '10000' in query_lower:
                 summary['masked'] += 1
             
             if '[redacted]' in query_lower:
@@ -265,10 +294,9 @@ class DynamicColumnManage:
         self.update_statistics()
     
     def refresh_views_grid(self):
-        """Atualiza grid - SEMPRE, mesmo se lista vazia"""
-        if self.views_grid:
-            self.views_grid.options['rowData'] = self.protected_views
-            self.views_grid.update()
+    if self.views_grid:
+        self.views_grid.options['rowData'] = self.protected_views
+        self.views_grid.update()
     
     def update_statistics(self):
         total = len(self.protected_views)
@@ -283,15 +311,33 @@ class DynamicColumnManage:
         
         view_info = rows[0]
         
-        # ✅ ABRIR DIRETO O EDITOR (SEM DIALOG INTERMEDIÁRIO)
-        n = ui.notification('Loading schema...', type='info', spinner=True, timeout=None)
-        try:
-            await self.edit_view(view_info)
-        except Exception as e:
-            ui.notify(f"Error: {e}", type="negative")
-            traceback.print_exc()
-        finally:
-            n.dismiss()
+        with ui.dialog() as details_dialog, ui.card().classes('w-full max-w-4xl'):
+            ui.label(f'View Details: {view_info["view_name"]}').classes('text-h5 font-bold mb-4')
+            
+            with ui.card().classes('w-full bg-blue-50 p-3 mb-2'):
+                ui.label('📊 General Information:').classes('font-bold text-sm mb-2')
+                ui.label(f'  • View: {view_info["view_dataset"]}.{view_info["view_name"]}').classes('text-xs font-bold')
+                ui.label(f'  • Source: {view_info["source_dataset"]}.{view_info["source_table"]}').classes('text-xs')
+                ui.label(f'  • Visible: {view_info["visible_columns"]}').classes('text-xs')
+                ui.label(f'  • Hidden: {view_info["hidden_count"]}').classes('text-xs')
+                ui.label(f'  • Masked: {view_info["masked_count"]}').classes('text-xs')
+                ui.label(f'  • Authorized Users: {view_info["authorized_users"]}').classes('text-xs')
+            
+            async def open_editor():
+                n = ui.notification('Loading schema...', type='info', spinner=True, timeout=None)
+                try:
+                    await self.edit_view(view_info, parent_dialog=details_dialog)
+                except Exception as e:
+                    ui.notify(f"Error: {e}", type="negative")
+                    traceback.print_exc()
+                finally:
+                    n.dismiss()
+            
+            with ui.row().classes('w-full justify-end gap-2 mt-4'):
+                ui.button('Close', on_click=details_dialog.close).props('flat')
+                ui.button('EDIT VIEW', icon='edit', on_click=open_editor).props('color=primary')
+        
+        details_dialog.open()
     
     async def edit_view(self, view_info, parent_dialog=None):
         """Carrega view e abre editor"""
@@ -309,7 +355,7 @@ class DynamicColumnManage:
                 self.ask_source_table(view_info)
                 return
             
-            # Buscar tabela no dataset correto
+            # ✅ Buscar tabela no dataset correto
             table_ref = client.dataset(self.source_dataset).table(source_table)
             table_obj = await run.io_bound(client.get_table, table_ref)
             
@@ -321,7 +367,7 @@ class DynamicColumnManage:
                     'mode': field.mode
                 })
             
-            # Buscar view no dataset correto
+            # ✅ Buscar view no dataset correto
             view_ref = client.dataset(self.current_view_dataset).table(view_info['view_name'])
             view_obj = await run.io_bound(client.get_table, view_ref)
             
@@ -429,6 +475,7 @@ class DynamicColumnManage:
                         ui.label(preview).classes('flex-1 text-xs text-grey-7 italic')
         
         self.update_summary()
+        self.populate_users_section()
     
     def get_protection_preview(self, col_name, col_type, protection):
         """Preview do resultado da proteção"""
@@ -437,11 +484,13 @@ class DynamicColumnManage:
         elif protection == 'HIDDEN':
             return '→ (not in view)'
         elif protection == 'PARTIAL_MASK':
-            return '→ 123.XXX.XXX-XX'
+            return '→ 123.XXX.XX-XX'
         elif protection == 'HASH':
             return '→ a3f5e9d8b2c1...'
         elif protection == 'NULLIFY':
             return '→ NULL'
+        elif protection == 'ROUND':
+            return '→ 80000.00'
         elif protection == 'REDACT':
             return '→ [REDACTED]'
         return ''
@@ -459,6 +508,49 @@ class DynamicColumnManage:
             f'Masked: {masked}'
         )
     
+    def populate_users_section(self):
+        """Popula seção de usuários AUTORIZADOS"""
+        self.users_input_container.clear()
+        self.users_list_container.clear()
+        
+        with self.users_input_container:
+            with ui.row().classes('w-full gap-2 mb-4'):
+                user_input = ui.input(placeholder='user@company.com', label='Add authorized user').classes('flex-1')
+                
+                def add_user():
+                    email = user_input.value.strip()
+                    if email and '@' in email:
+                        if email not in self.authorized_users:
+                            self.authorized_users.append(email)
+                            user_input.value = ''
+                            self.populate_users_section()
+                            ui.notify(f"✅ Will grant access to: {email}", type="positive")
+                        else:
+                            ui.notify("User already authorized", type="warning")
+                    else:
+                        ui.notify("Invalid email", type="warning")
+                
+                ui.button('ADD', icon='add', on_click=add_user).props('color=positive')
+        
+        with self.users_list_container:
+            if not self.authorized_users:
+                ui.label('No authorized users yet').classes('text-grey-5 italic')
+            else:
+                for email in self.authorized_users:
+                    with ui.row().classes('w-full items-center justify-between p-2 border rounded mb-1 bg-green-50'):
+                        with ui.row().classes('items-center gap-2'):
+                            ui.icon('check_circle').classes('text-green-600')
+                            ui.label(email).classes('text-sm font-bold')
+                        
+                        def make_remove(user_email):
+                            def remove():
+                                self.authorized_users.remove(user_email)
+                                self.populate_users_section()
+                                ui.notify(f"❌ Will revoke access from: {user_email}", type="warning")
+                            return remove
+                        
+                        ui.button(icon='delete', on_click=make_remove(email)).props('flat dense size=sm color=negative')
+    
     def parse_users_from_description(self, description):
         """Extrai usuários autorizados"""
         if not description:
@@ -473,7 +565,7 @@ class DynamicColumnManage:
         return []
     
     def generate_column_sql(self, col_name, col_type, protection):
-        """Gera SQL para uma coluna baseado na proteção - SEM ROUND"""
+        """Gera SQL para uma coluna baseado na proteção"""
         if protection == 'VISIBLE':
             return col_name
         elif protection == 'HIDDEN':
@@ -484,6 +576,11 @@ class DynamicColumnManage:
             return f"TO_BASE64(SHA256(CAST({col_name} AS STRING))) AS {col_name}"
         elif protection == 'NULLIFY':
             return f"NULL AS {col_name}"
+        elif protection == 'ROUND':
+            if col_type in ['INTEGER', 'FLOAT', 'NUMERIC', 'BIGNUMERIC', 'INT64', 'FLOAT64']:
+                return f"ROUND({col_name} / 10000) * 10000 AS {col_name}"
+            else:
+                return col_name
         elif protection == 'REDACT':
             return f"'[REDACTED]' AS {col_name}"
         return col_name
@@ -510,7 +607,7 @@ class DynamicColumnManage:
             
             if self.authorized_users:
                 with ui.card().classes('w-full bg-green-50 p-3 mb-4'):
-                    ui.label('👥 Authorized Users (currently have access):').classes('font-bold text-sm mb-2')
+                    ui.label('👥 Authorized Users (will have access to this view):').classes('font-bold text-sm mb-2')
                     for email in self.authorized_users:
                         ui.label(f'  ✅ {email}').classes('text-xs')
             
@@ -540,6 +637,7 @@ class DynamicColumnManage:
         if not select_columns:
             return None
         
+        # ✅ VIEW no dataset correto
         sql = f"""CREATE OR REPLACE VIEW `{self.project_id}.{self.current_view_dataset}.{view_name}` AS
 SELECT
   {(','+chr(10)+'  ').join(select_columns)}
@@ -548,7 +646,7 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
         return sql
     
     async def grant_view_access(self, view_name):
-        """Concede acesso via Authorized Views (Cross-Dataset)"""
+        """✅ CONCEDE ACESSO VIA AUTHORIZED VIEWS (CROSS-DATASET)"""
         if not self.authorized_users:
             return
         
@@ -561,6 +659,7 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
             
             access_entries = list(source_dataset.access_entries)
             
+            # Authorized view entry
             authorized_view_entry = AccessEntry(
                 role=None,
                 entity_type='view',
@@ -571,6 +670,7 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
                 }
             )
             
+            # Verificar se já existe
             view_exists = False
             for entry in access_entries:
                 if entry.entity_type == 'view' and isinstance(entry.entity_id, dict):
@@ -583,6 +683,7 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
             if not view_exists:
                 access_entries.append(authorized_view_entry)
             
+            # Atualizar dataset origem
             source_dataset.access_entries = access_entries
             await run.io_bound(client.update_dataset, source_dataset, ['access_entries'])
             
@@ -599,6 +700,7 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
                     entity_id=email
                 )
                 
+                # Verificar se já existe
                 user_exists = False
                 for entry in views_access_entries:
                     if (entry.entity_type == 'userByEmail' and 
@@ -610,6 +712,7 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
                 if not user_exists:
                     views_access_entries.append(user_entry)
             
+            # Atualizar dataset de views
             views_dataset_obj.access_entries = views_access_entries
             await run.io_bound(client.update_dataset, views_dataset_obj, ['access_entries'])
             
@@ -679,7 +782,7 @@ SELECT * FROM `{self.project_id}.{self.current_view_dataset}.{view_name}` LIMIT 
             table.description = description
             await run.io_bound(client.update_table, table, ['description'])
             
-            # 3. APLICAR IAM (GRANT ACCESS)
+            # 3. ✅ APLICAR IAM (GRANT ACCESS)
             if self.authorized_users:
                 await self.grant_view_access(view_name)
             
@@ -703,7 +806,7 @@ SELECT * FROM `{self.project_id}.{self.current_view_dataset}.{view_name}` LIMIT 
             )
             
             n.dismiss()
-            ui.notify("✅ View updated successfully!", type="positive")
+            ui.notify("✅ View updated and access granted!", type="positive")
             self.edit_dialog.close()
             
             # Refresh
@@ -835,14 +938,13 @@ SELECT * FROM `{self.project_id}.{self.current_view_dataset}.{view_name}` LIMIT 
     def render_ui(self):
         with theme.frame('Manage Protected Views'):
             with ui.card().classes('w-full'):
-                ui.label("Manage Protected Views (Unified CLS + Masking)").classes('text-h5 font-bold mb-4')
+                ui.label("Manage Protected Views (Unified CLS + Masking + IAM)").classes('text-h5 font-bold mb-4')
                 
                 with ui.card().classes('w-full bg-yellow-50 p-3 mb-4'):
                     ui.label('🔐 Cross-Dataset Security:').classes('font-bold text-sm mb-2')
                     ui.label('• Views are stored in {dataset}_views datasets').classes('text-xs')
                     ui.label('• Users have access to views but NOT to source tables').classes('text-xs')
                     ui.label('• Authorized Views bypass Policy Tags on source tables').classes('text-xs')
-                    ui.label('• Use Dataset IAM Manager to grant/revoke user access').classes('text-xs font-bold')
                 
                 with ui.row().classes('w-full gap-4 mb-4 items-center'):
                     datasets = self.get_datasets()
@@ -880,8 +982,8 @@ SELECT * FROM `{self.project_id}.{self.current_view_dataset}.{view_name}` LIMIT 
                 }).classes('w-full h-96 ag-theme-quartz')
                 
                 with ui.row().classes('mt-2 gap-2'):
-                    ui.button("EDIT VIEW", icon="edit", on_click=lambda: asyncio.create_task(self.view_details())).props('color=primary')
-                    ui.button("DELETE SELECTED", icon="delete", on_click=lambda: asyncio.create_task(self.delete_selected_views())).props('color=negative')
+                    ui.button("VIEW DETAILS", icon="info", on_click=self.view_details).props('color=primary')
+                    ui.button("DELETE SELECTED", icon="delete", on_click=self.delete_selected_views).props('color=negative')
     
     def run(self):
         pass
