@@ -1,0 +1,147 @@
+/* ===================================
+   TEMA GLOBAL - GENAI4DATA SECURITY
+   =================================== */
+
+:root {
+    /* Cores Principais */
+    --bg-primary: #0a0f1a;
+    --bg-secondary: #050810;
+    --bg-card: rgba(15, 25, 35, 0.9);
+    
+    /* Accent Colors */
+    --accent-primary: #00f3ff;      /* Ciano neon */
+    --accent-secondary: #5B9FED;     /* Azul original */
+    --accent-dim: rgba(0, 243, 255, 0.15);
+    
+    /* Texto */
+    --text-primary: #ffffff;
+    --text-secondary: #94a3b8;
+    --text-dim: #64748b;
+    
+    /* Borders */
+    --border-color: rgba(0, 243, 255, 0.2);
+    --border-bright: rgba(0, 243, 255, 0.5);
+    
+    /* Status Colors */
+    --status-success: #10b981;
+    --status-warning: #f59e0b;
+    --status-error: #ef4444;
+    --status-info: #3b82f6;
+}
+
+/* Fundo Global */
+body, .nicegui-content {
+    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-primary) 100%) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Header Customizado */
+.q-header {
+    background: linear-gradient(90deg, #0a0f1a 0%, #1a2535 100%) !important;
+    border-bottom: 1px solid var(--border-color) !important;
+    box-shadow: 0 4px 20px rgba(0, 243, 255, 0.1) !important;
+}
+
+/* Sidebar */
+.q-drawer {
+    background: var(--bg-card) !important;
+    border-right: 1px solid var(--border-color) !important;
+}
+
+/* Cards */
+.q-card {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-color) !important;
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.1) !important;
+    border-radius: 8px !important;
+}
+
+/* Botões */
+.q-btn {
+    border-radius: 6px !important;
+    text-transform: none !important;
+    font-weight: 600 !important;
+}
+
+.q-btn--primary {
+    background: var(--accent-primary) !important;
+    color: #000 !important;
+}
+
+.q-btn--secondary {
+    background: transparent !important;
+    border: 1px solid var(--accent-primary) !important;
+    color: var(--accent-primary) !important;
+}
+
+/* Inputs */
+.q-field__control {
+    background: rgba(15, 25, 35, 0.5) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 6px !important;
+}
+
+.q-field__control:hover {
+    border-color: var(--border-bright) !important;
+}
+
+/* Tabelas */
+.q-table {
+    background: var(--bg-card) !important;
+}
+
+.q-table thead {
+    background: rgba(0, 243, 255, 0.05) !important;
+}
+
+.q-table tbody tr:hover {
+    background: rgba(0, 243, 255, 0.08) !important;
+}
+
+/* Menu Lateral - Itens */
+.q-item {
+    color: var(--text-secondary) !important;
+    transition: all 0.3s ease !important;
+}
+
+.q-item:hover {
+    background: rgba(0, 243, 255, 0.1) !important;
+    color: var(--accent-primary) !important;
+}
+
+.q-item--active {
+    background: rgba(0, 243, 255, 0.15) !important;
+    color: var(--accent-primary) !important;
+    border-left: 3px solid var(--accent-primary) !important;
+}
+
+/* Ícones */
+.q-icon {
+    color: var(--accent-primary) !important;
+}
+
+/* Badges/Chips */
+.q-chip {
+    background: rgba(0, 243, 255, 0.1) !important;
+    color: var(--accent-primary) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+/* Scrollbar Customizada */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--accent-dim);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-primary);
+}
