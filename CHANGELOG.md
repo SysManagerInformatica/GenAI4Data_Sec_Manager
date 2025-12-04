@@ -1,7 +1,7 @@
 # CHANGELOG - GenAI4Data Security Manager
 
 **Projeto**: RLS + CLS Manager Integrated  
-**Última Atualização**: 04/12/2024  
+**Última Atualização**: 04/12/2025  
 **Versão Atual**: 2.0 - UI Overhaul & HUD Theme  
 **Status**: EM PRODUÇÃO
 
@@ -9,7 +9,7 @@
 
 ## ÍNDICE
 
-### VERSÃO 2.0 (04/12/2024)
+### VERSÃO 2.0 (04/12/2025)
 - [Estatísticas da v2.0](#estatísticas-desta-versão)
 - [Mudanças Principais](#mudanças-principais)
   - [1. static/login.html](#1-staticloginhtml)
@@ -23,7 +23,7 @@
 - [Checklist](#checklist-de-funcionalidades)
 - [Deploy v2.0](#instruções-de-deploy)
 
-### VERSÃO 1.0 (08/11/2024)
+### VERSÃO 1.0 (08/11/2025)
 - [Estatísticas da v1.0](#estatísticas-da-v10)
 - [Novos Arquivos (v1.0)](#novos-arquivos-criados-v10)
 - [Arquivos Atualizados (v1.0)](#arquivos-atualizados-v10)
@@ -40,7 +40,7 @@
 
 ---
 
-## VERSÃO 2.0 - UI OVERHAUL & HUD THEME (04/12/2024)
+## VERSÃO 2.0 - UI OVERHAUL & HUD THEME (04/12/2025)
 
 ### Estatísticas desta Versão
 
@@ -102,19 +102,19 @@ def login():
 ```
 
 **Características**:
-- Tema HUD/Sci-Fi: Fundo preto com elementos tech ← NOVO!
-- Cor Principal: Ciano Neon (#00f3ff) ← NOVO!
-- Hexágonos animados no fundo ← NOVO!
-- Grid milimétrico (40x40px) ← NOVO!
-- Círculos técnicos giratórios ← NOVO!
-- Crosshair/mira decorativo ← NOVO!
-- Efeito scanline (monitor CRT) ← NOVO!
-- Glassmorphism card com bordas ciano ← NOVO!
-- Cantos cortados (clip-path polygon) ← NOVO!
-- Ícone BigQuery + Shield badge ← NOVO!
+- Tema HUD/Sci-Fi: Fundo preto com elementos tech  
+- Cor Principal: Ciano Neon (#00f3ff)  
+- Hexágonos animados no fundo  
+- Grid milimétrico (40x40px)  
+- Círculos técnicos giratórios  
+- Crosshair/mira decorativo  
+- Efeito scanline (monitor CRT)  
+- Glassmorphism card com bordas ciano  
+- Cantos cortados (clip-path polygon)  
+- Ícone BigQuery + Shield badge  
 
 **Rotas Atualizadas**:
-- `/login` → FastAPI serve HTML puro ← MUDADO!
+- `/login` → FastAPI serve HTML puro   
 - `/callback` → NiceGUI mantido (lógica OAuth)
 
 **Linhas Criadas**: ~400 linhas
@@ -225,46 +225,46 @@ def frame(navtitle: str):
     
     with ui.header():
         with ui.row().classes('w-full items-center px-4'):
-            # SEM botão menu ← REMOVIDO!
+            # SEM botão menu   ← REMOVIDO
             ui.label('GenAI4Data - Security Manager')
             ui.label(f'| {navtitle}')
             ui.space()
             
             user_info = app.storage.user.get('user_info', {})
             if user_info:
-                # SEM "Your Role:" ← REMOVIDO!
-                # SEM badge de role ← REMOVIDO!
+                # SEM "Your Role:"   ← REMOVIDO
+                # SEM badge de role   ← REMOVIDO
                 ui.button('LOGOUT', ...)
     
     left_drawer = ui.left_drawer(value=True, fixed=True) ← SEMPRE ABERTA!
-    # SEM menu_button.on_click ← REMOVIDO!
+    # SEM menu_button.on_click   ← REMOVIDO
     
     # ... resto do código
 ```
 
 **Mudanças CSS Globais**:
-- Fundo: Gradiente preto (#0a0f1a → #050810) ← NOVO!
-- Grid sutil de fundo (50x50px, ciano 3%) ← NOVO!
-- Header: Gradiente + borda ciano + shadow ← NOVO!
-- Sidebar: Translúcida + backdrop-blur + sempre visível ← NOVO!
-- Cards: Fundo escuro + borda ciano + glow ← NOVO!
-- Botões: Border-radius 6px + hover ciano ← NOVO!
-- Inputs: Fundo escuro + borda ciano ← NOVO!
-- Tabelas: Thead ciano 5% + row hover 8% ← NOVO!
-- Scrollbar: Track escuro + thumb ciano ← NOVO!
-- Menu items: Hover ciano + slide direita ← NOVO!
+- Fundo: Gradiente preto (#0a0f1a → #050810)  
+- Grid sutil de fundo (50x50px, ciano 3%)  
+- Header: Gradiente + borda ciano + shadow  
+- Sidebar: Translúcida + backdrop-blur + sempre visível  
+- Cards: Fundo escuro + borda ciano + glow  
+- Botões: Border-radius 6px + hover ciano  
+- Inputs: Fundo escuro + borda ciano  
+- Tabelas: Thead ciano 5% + row hover 8%  
+- Scrollbar: Track escuro + thumb ciano  
+- Menu items: Hover ciano + slide direita  
 
 **Header Simplificado**:
-- Botão menu REMOVIDO ← MUDADO!
-- "Your Role:" REMOVIDO ← MUDADO!
-- Badge de role REMOVIDO (movido para footer) ← MUDADO!
-- Apenas título + LOGOUT ← MUDADO!
+- Botão menu REMOVIDO   
+- "Your Role:" REMOVIDO   
+- Badge de role REMOVIDO (movido para footer)   
+- Apenas título + LOGOUT   
 
 **Sidebar**:
-- `value=True` (sempre aberta) ← MUDADO!
-- `fixed=True` (não fecha) ← MUDADO!
-- Background translúcido ← NOVO!
-- Border ciano ← NOVO!
+- `value=True` (sempre aberta)   
+- `fixed=True` (não fecha)   
+- Background translúcido  
+- Border ciano  
 
 **Linhas Modificadas**: ~200 linhas
 
@@ -330,18 +330,18 @@ def content():
                 if user_info.get('department'):
                     ui.label(f'📁 {user_info.get("department")}')
         
-        # SEM "View My Permissions" ← REMOVIDO!
+        # SEM "View My Permissions" ← REMOVIDO
         
         # Novo título centralizado
         with ui.column().classes('w-full gap-4').style('align-items: center;'):
             ui.label('Enterprise Data Security Platform').style(
                 'color: #00f3ff; '
-                'text-shadow: 0 0 20px rgba(0, 243, 255, 0.3);'  ← NOVO!
+                'text-shadow: 0 0 20px rgba(0, 243, 255, 0.3);'   
             )
             
             ui.label('Advanced Row-Level and Column-Level Security...')
             
-            # 5 FEATURE CARDS com hover effects ← NOVO!
+            # 5 FEATURE CARDS com hover effects  
             with ui.column().classes('gap-4 mt-6 w-full'):
                 
                 # Linha 1: RLS, CLS, Masking
@@ -350,7 +350,7 @@ def content():
                     # Card 1 - RLS
                     card_rls = ui.card().style(
                         'width: 280px; '
-                        'transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);'  ← NOVO!
+                        'transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);'   
                     )
                     with card_rls:
                         ui.icon('shield', size='2.5rem').style('color: #00f3ff;')
@@ -388,7 +388,7 @@ def content():
                         ui.label('Audit & Compliance')
                         ui.label('Track all security changes...')
         
-        # CSS para hover effects ← NOVO!
+        # CSS para hover effects  
         ui.add_head_html('''
             <style>
                 .q-card:hover {
@@ -405,18 +405,18 @@ def content():
 ```
 
 **Removido**:
-- "View My Permissions" expansion ← REMOVIDO!
-- Lista de permissões por role ← REMOVIDO!
-- Card grande de boas-vindas ← REMOVIDO!
-- Texto simples de introdução ← REMOVIDO!
+- "View My Permissions" expansion   ← REMOVIDO
+- Lista de permissões por role   ← REMOVIDO
+- Card grande de boas-vindas   ← REMOVIDO
+- Texto simples de introdução   ← REMOVIDO
 
 **Adicionado**:
-- Welcome card compacto (40% menor) ← NOVO!
-- Layout centralizado ← NOVO!
-- 5 feature cards com descrições ← NOVO!
-- Hover effects (lift + scale + glow) ← NOVO!
-- Icon animations (scale + rotate) ← NOVO!
-- Título profissional ← NOVO!
+- Welcome card compacto (40% menor)  
+- Layout centralizado  
+- 5 feature cards com descrições  
+- Hover effects (lift + scale + glow)  
+- Icon animations (scale + rotate)  
+- Título profissional  
 
 **Linhas Modificadas**: ~150 linhas
 
@@ -476,108 +476,108 @@ def menu() -> None:
     user = get_current_user()
     
     with ui.list():
-        # HOME - CIANO ← MUDADO!
+        # HOME - CIANO   
         with ui.item(on_click=lambda: ui.navigate.to('/')):
             with ui.item_section().props('avatar'):
-                ui.icon('home').style('color: #00f3ff;')  ← NOVO!
+                ui.icon('home').style('color: #00f3ff;')   
             with ui.item_section():
                 ui.item_label('Home').style('color: #ffffff;')
         
-        # ROW LEVEL SECURITY - VERDE ← MUDADO!
+        # ROW LEVEL SECURITY - VERDE   
         with ui.expansion('Row Level Security', icon='policy').style('color: #ffffff;'):
             with ui.item(on_click=lambda: ui.navigate.to('/createrlsusers/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('person').style('color: #10b981;')  ← NOVO!
+                    ui.icon('person').style('color: #10b981;')   
                 with ui.item_section():
                     ui.item_label('Create RLS for Users').style('color: #94a3b8;')
             
             with ui.item(on_click=lambda: ui.navigate.to('/createrlsgroups/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('groups').style('color: #10b981;')  ← NOVO!
+                    ui.icon('groups').style('color: #10b981;')   
                 with ui.item_section():
                     ui.item_label('Create RLS for Groups').style('color: #94a3b8;')
             
             with ui.item(on_click=lambda: ui.navigate.to('/assignuserstopolicy/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('assignment_ind').style('color: #10b981;')  ← NOVO!
+                    ui.icon('assignment_ind').style('color: #10b981;')   
                 with ui.item_section():
                     ui.item_label('Assign Users to Policy').style('color: #94a3b8;')
             
             with ui.item(on_click=lambda: ui.navigate.to('/assignvaluestogroup/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('assignment').style('color: #10b981;')  ← NOVO!
+                    ui.icon('assignment').style('color: #10b981;')   
                 with ui.item_section():
                     ui.item_label('Assign Values to Groups').style('color: #94a3b8;')
         
-        # COLUMN LEVEL SECURITY - AMARELO ← MUDADO!
+        # COLUMN LEVEL SECURITY - AMARELO   
         with ui.expansion('Column Level Security', icon='security').style('color: #ffffff;'):
             with ui.item(on_click=lambda: ui.navigate.to('/clstaxonomies/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('folder').style('color: #f59e0b;')  ← NOVO!
+                    ui.icon('folder').style('color: #f59e0b;')   
                 with ui.item_section():
                     ui.item_label('Manage Taxonomies').style('color: #94a3b8;')
             
             with ui.item(on_click=lambda: ui.navigate.to('/clspolicytags/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('label').style('color: #f59e0b;')  ← NOVO!
+                    ui.icon('label').style('color: #f59e0b;')   
                 with ui.item_section():
                     ui.item_label('Manage Policy Tags').style('color: #94a3b8;')
             
             with ui.item(on_click=lambda: ui.navigate.to('/clsapplytags/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('build').style('color: #f59e0b;')  ← NOVO!
+                    ui.icon('build').style('color: #f59e0b;')   
                 with ui.item_section():
                     ui.item_label('Apply Tags to Columns').style('color: #94a3b8;')
             
             with ui.item(on_click=lambda: ui.navigate.to('/clsapplyiam/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('admin_panel_settings').style('color: #f59e0b;')  ← NOVO!
+                    ui.icon('admin_panel_settings').style('color: #f59e0b;')   
                 with ui.item_section():
                     ui.item_label('Policy Tag Permissions').style('color: #94a3b8;')
             
             with ui.item(on_click=lambda: ui.navigate.to('/clsdynamiccolumns/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('add_circle').style('color: #f59e0b;')  ← NOVO!
+                    ui.icon('add_circle').style('color: #f59e0b;')   
                 with ui.item_section():
                     ui.item_label('Create Protected View').style('color: #94a3b8;')
             
             with ui.item(on_click=lambda: ui.navigate.to('/clsdynamicmanage/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('settings').style('color: #f59e0b;')  ← NOVO!
+                    ui.icon('settings').style('color: #f59e0b;')   
                 with ui.item_section():
                     ui.item_label('Manage Protected Views').style('color: #94a3b8;')
             
             with ui.item(on_click=lambda: ui.navigate.to('/clsschemabrowser/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('search').style('color: #f59e0b;')  ← NOVO!
+                    ui.icon('search').style('color: #f59e0b;')   
                 with ui.item_section():
                     ui.item_label('Schema Browser').style('color: #94a3b8;')
         
-        # IAM & SECURITY - VERMELHO ← MUDADO!
+        # IAM & SECURITY - VERMELHO   
         with ui.expansion('IAM & Security', icon='admin_panel_settings').style('color: #ffffff;'):
             with ui.item(on_click=lambda: ui.navigate.to('/datasetiammanager/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('storage').style('color: #ef4444;')  ← NOVO!
+                    ui.icon('storage').style('color: #ef4444;')   
                 with ui.item_section():
                     ui.item_label('Dataset IAM Manager').style('color: #94a3b8;')
             
             with ui.item(on_click=lambda: ui.navigate.to('/projectiammanager/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('shield').style('color: #ef4444;')  ← NOVO!
+                    ui.icon('shield').style('color: #ef4444;')   
                 with ui.item_section():
                     ui.item_label('Project IAM Manager').style('color: #94a3b8;')
             
             if user.get('role') in ['OWNER', 'ADMIN']:
                 with ui.item(on_click=lambda: ui.navigate.to('/controlaccess/')):
                     with ui.item_section().props('avatar'):
-                        ui.icon('lock').style('color: #ef4444;')  ← NOVO!
+                        ui.icon('lock').style('color: #ef4444;')   
                     with ui.item_section():
                         ui.item_label('Control Access').style('color: #94a3b8;')
         
-        # AUDIT LOGS - ROXO ← MUDADO!
+        # AUDIT LOGS - ROXO   
         with ui.item(on_click=lambda: ui.navigate.to('/auditlogs/')):
             with ui.item_section().props('avatar'):
-                ui.icon('history').style('color: #a855f7;')  ← NOVO!
+                ui.icon('history').style('color: #a855f7;')   
             with ui.item_section():
                 ui.item_label('Audit Logs').style('color: #ffffff;')
 ```
@@ -586,11 +586,11 @@ def menu() -> None:
 
 | Seção | Cor | Hex | Ícones |
 |-------|-----|-----|--------|
-| Home | Ciano | #00f3ff | 1 ícone ← NOVO! |
-| RLS | Verde | #10b981 | 4 ícones ← NOVO! |
-| CLS | Amarelo | #f59e0b | 7 ícones ← NOVO! |
-| IAM | Vermelho | #ef4444 | 3 ícones ← NOVO! |
-| Audit | Roxo | #a855f7 | 1 ícone ← NOVO! |
+| Home | Ciano | #00f3ff | 1 ícone   |
+| RLS | Verde | #10b981 | 4 ícones   |
+| CLS | Amarelo | #f59e0b | 7 ícones   |
+| IAM | Vermelho | #ef4444 | 3 ícones   |
+| Audit | Roxo | #a855f7 | 1 ícone   |
 
 **Total de Ícones Coloridos**: 19 ícones
 
@@ -636,19 +636,19 @@ ui.run(
 import os
 import sys
 from nicegui import ui, app
-from fastapi.responses import HTMLResponse  ← NOVO!
-from fastapi.staticfiles import StaticFiles  ← NOVO!
+from fastapi.responses import HTMLResponse   
+from fastapi.staticfiles import StaticFiles   
 
 PORT = int(os.environ.get('PORT', 8080))
 STORAGE_SECRET = os.environ.get('SESSION_SECRET', 'default-secret-key')
 
 app.storage.secret = STORAGE_SECRET
 
-# Dark mode global ← NOVO!
+# Dark mode global  
 ui.dark_mode().enable()
 print("✓ Dark mode enabled globally")
 
-# Montar diretório static ← NOVO!
+# Montar diretório static  
 static_dir = os.path.join(os.path.dirname(__file__), 'static')
 if os.path.exists(static_dir):
     app.mount('/static', StaticFiles(directory=static_dir), name='static')
@@ -656,7 +656,7 @@ if os.path.exists(static_dir):
 else:
     print(f"✗ Warning: Static directory not found at {static_dir}")
 
-# Rota FastAPI para login HTML ← NOVO!
+# Rota FastAPI para login HTML  
 @app.get('/login', response_class=HTMLResponse)
 async def serve_login_html():
     """Serve a página HTML pura do login"""
@@ -711,11 +711,11 @@ ui.run(
 ```
 
 **Adicionado**:
-- `ui.dark_mode().enable()` - Dark mode global ← NOVO!
-- Montagem de `/static` directory ← NOVO!
-- Rota `/login` com FastAPI ← NOVO!
-- Injeção de variáveis OAuth no HTML ← NOVO!
-- Tratamento de erros robusto ← NOVO!
+- `ui.dark_mode().enable()` - Dark mode global  
+- Montagem de `/static` directory  
+- Rota `/login` com FastAPI  
+- Injeção de variáveis OAuth no HTML  
+- Tratamento de erros robusto  
 
 **Rotas Atualizadas**:
 
@@ -724,7 +724,7 @@ ui.run(
 | `/login` | NiceGUI page | FastAPI HTML |
 | `/callback` | NiceGUI page | NiceGUI page (mantido) |
 | `/` | NiceGUI page | NiceGUI page (mantido) |
-| `/static` | N/A | FastAPI StaticFiles ← NOVO! |
+| `/static` | N/A | FastAPI StaticFiles   |
 
 **Linhas Adicionadas**: ~40 linhas
 
@@ -790,9 +790,9 @@ def get_text(lang: str, key: str, **kwargs) -> str:
 ```
 
 **Idiomas Suportados**:
-- Português (Brasil) ← NOVO!
-- English (USA) ← NOVO!
-- Español ← NOVO!
+- Português (Brasil)  
+- English (USA)  
+- Español  
 
 **Pendente de Implementação**:
 - [ ] Integração no login.html
@@ -944,6 +944,7 @@ background: rgba(0, 243, 255, 0.1);
 - [ ] Light theme toggle
 - [ ] Personalização de cores por usuário
 - [ ] Dashboard com métricas
+- [ ] Integração com agentes de IA
 - [ ] Notificações push
 - [ ] Mais idiomas (fr/de/jp/cn)
 
@@ -1102,13 +1103,12 @@ Nenhum bug conhecido no momento.
 - [ ] PWA (Progressive Web App)
 - [ ] Offline mode
 - [ ] Mobile app nativo
-- [ ] API pública
 
 ---
 
 ## HISTÓRICO DE VERSÕES
 
-### v2.0 (04/12/2024) - UI Overhaul & HUD Theme
+### v2.0 (04/12/2025) - UI Overhaul & HUD Theme
 - Login page redesign (HTML puro + FastAPI)
 - Global dark theme (HUD/Sci-Fi)
 - 5 interactive feature cards
@@ -1118,7 +1118,7 @@ Nenhum bug conhecido no momento.
 - Compact welcome card
 - Translations structure (partial)
 
-### v1.0 (08/11/2024) - RLS + CLS Integration
+### v1.0 (08/11/2025) - RLS + CLS Integration
 - Column-Level Security integrated
 - Data Catalog service
 - Policy tags management
@@ -1129,7 +1129,7 @@ Nenhum bug conhecido no momento.
 
 ---
 
-## VERSÃO 1.0 - RLS + CLS INTEGRATION (08/11/2024)
+## VERSÃO 1.0 - RLS + CLS INTEGRATION (08/11/2025)
 
 ### Objetivo
 
@@ -1194,11 +1194,11 @@ Integrar funcionalidades de Column-Level Security (CLS) na aplicação existente
   ├─ Create RLS for Groups
   ├─ Assign Users to Policy
   └─ Assign Values to Groups
-- Column Level Security ← NOVO!
-  ├─ Manage Taxonomies ← NOVO!
-  ├─ Manage Policy Tags ← NOVO!
-  ├─ Apply Tags to Columns ← NOVO!
-  └─ Schema Browser ← NOVO!
+- Column Level Security  
+  ├─ Manage Taxonomies  
+  ├─ Manage Policy Tags  
+  ├─ Apply Tags to Columns  
+  └─ Schema Browser  
 - Audit Logs
 ```
 
@@ -1247,8 +1247,8 @@ google-cloud-core
 bigquery
 nicegui
 db-dtypes
-google-cloud-datacatalog==3.17.0 ← NOVO!
-google-cloud-bigquery==3.14.1    ← NOVO!
+google-cloud-datacatalog==3.17.0  
+google-cloud-bigquery==3.14.1     
 ```
 
 **Linhas Adicionadas**: 2 linhas
@@ -1271,7 +1271,7 @@ class Config:
 ```python
 class Config:
     PROJECT_ID = 'your-project-id'
-    LOCATION = 'us-central1'  ← NOVO!
+    LOCATION = 'us-central1'   
     RLS_MANAGER_DATASET = 'rls_security'
     POLICY_TABLE = f'{PROJECT_ID}.{RLS_MANAGER_DATASET}.policies'
     FILTER_TABLE = f'{PROJECT_ID}.{RLS_MANAGER_DATASET}.policies_filters'
@@ -1596,15 +1596,15 @@ python main.py
 
 ## LICENÇA
 
-Copyright 2024-2025 Sys Manager  
+Copyright 2025-2025 Sys Manager  
 Partner Google Cloud  
 Todos os direitos reservados.
 
 ---
 
 **Status Atual**: v2.0 COMPLETA E EM PRODUÇÃO  
-**Última Release**: v2.0 - UI Overhaul & HUD Theme (04/12/2024)  
-**Release Anterior**: v1.0 - RLS + CLS Integration (08/11/2024)  
+**Última Release**: v2.0 - UI Overhaul & HUD Theme (04/12/2025)  
+**Release Anterior**: v1.0 - RLS + CLS Integration (08/11/2025)  
 **Próxima Milestone**: v2.1 - Translations Complete  
 **Data Prevista**: Janeiro 2025
 
@@ -1615,7 +1615,7 @@ Todos os direitos reservados.
 ### Timeline do Projeto
 
 ```
-v1.0 (08/11/2024)
+v1.0 (08/11/2025)
     ├─ RLS + CLS Integration
     ├─ 7 novos arquivos
     ├─ 4 páginas CLS
@@ -1624,7 +1624,7 @@ v1.0 (08/11/2024)
          ↓
          ↓ 26 dias
          ↓
-v2.0 (04/12/2024)
+v2.0 (04/12/2025)
     ├─ UI Complete Overhaul
     ├─ Tema HUD/Sci-Fi
     ├─ Login HTML puro
@@ -1716,7 +1716,7 @@ python main.py
 
 ## ASSINATURA
 
-**Desenvolvido por**: Lucas Carvalhal (Carva)  
+**Desenvolvido por**: Lucas Carvalhal e Bruno Barreto
 **Empresa**: Sys Manager - Partner Google Cloud  
 **Projeto**: GenAI4Data Security Manager  
 **Repositório**: sys-googl-cortex-security  
