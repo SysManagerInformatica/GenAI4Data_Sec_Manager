@@ -12,7 +12,10 @@ STORAGE_SECRET = os.environ.get('SESSION_SECRET', 'default-secret-key')
 app.storage.secret = STORAGE_SECRET
 
 # ========================================
-# ADICIONAR: Montar diretório static e rota HTML
+# NOVO: Aplicar Dark Mode Globalmente
+# ========================================
+ui.dark_mode().enable()
+print("✓ Dark mode enabled globally")
 # ========================================
 
 # Montar diretório static para servir arquivos estáticos
@@ -56,10 +59,6 @@ async def serve_login_html():
             content=f"<h1>Error loading login page</h1><p>{str(e)}</p>", 
             status_code=500
         )
-
-# ========================================
-# FIM DAS ADIÇÕES
-# ========================================
 
 # Tentar importar login page (agora só registra o /callback)
 try:
