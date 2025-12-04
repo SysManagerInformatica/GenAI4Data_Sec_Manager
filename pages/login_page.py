@@ -1,9 +1,7 @@
 """
-Página de Login - HTML Estático + FastAPI + Callback NiceGUI
+Página de Login - Apenas Callback (Login HTML é servido pelo main.py)
 """
 from nicegui import ui, app
-from fastapi import Request
-from fastapi.responses import HTMLResponse
 import os
 import requests
 from google.cloud import bigquery
@@ -23,31 +21,13 @@ ALLOWED_DOMAINS = [
 ]
 
 def create_login_page():
-    """Configura rota de login HTML e callback NiceGUI"""
+    """Configura apenas o callback (a página /login é HTML servido pelo main.py)"""
 
-    # --- 1. ROTA FASTAPI PARA SERVIR HTML ESTÁTICO ---
-    @app.get('/login', response_class=HTMLResponse)
-    async def serve_login_html():
-        """Serve a página HTML pura com variáveis injetadas"""
-        
-        # Lê o arquivo HTML
-        html_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'login.html')
-        
-        with open(html_path, 'r', encoding='utf-8') as f:
-            html_content = f.read()
-        
-        # Injeta as variáveis de ambiente
-        html_content = html_content.replace('{{GOOGLE_CLIENT_ID}}', GOOGLE_CLIENT_ID)
-        html_content = html_content.replace('{{REDIRECT_URI}}', REDIRECT_URI)
-        
-        return HTMLResponse(content=html_content)
-
-
-    # --- 2. PÁGINA DE CALLBACK (NICEGUI COM VISUAL HEXAGONAL) ---
+    # --- PÁGINA DE CALLBACK ---
     @ui.page('/callback')
     def callback_page(code: str = None, error: str = None):
         
-        # CSS do fundo hexagonal para callback também
+        # CSS do fundo hexagonal
         ui.add_head_html('''
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400&display=swap');
