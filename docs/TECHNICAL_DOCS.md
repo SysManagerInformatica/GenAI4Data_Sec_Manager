@@ -5,7 +5,7 @@
 **Sistema Integrado de Segurança para BigQuery**
 
 **Versão**: 2.0  
-**Data**: 04/12/2024  
+**Data**: 04/12/2025  
 **Autor**: Lucas Carvalhal - Sys Manager  
 **Status**: Em Produção
 
@@ -1238,7 +1238,7 @@ FROM `project.dataset.users`
 **Estrutura do Log**:
 ```json
 {
-  "timestamp": "2024-12-04T15:30:00Z",
+  "timestamp": "2025-12-04T15:30:00Z",
   "user": "user@company.com",
   "operation": "APPLY_POLICY_TAG",
   "resource": "analytics.users.email",
@@ -2782,7 +2782,7 @@ logger.addFilter(SensitiveDataFilter())
 
 ```python
 {
-    "timestamp": "2024-12-04T15:30:00.000Z",
+    "timestamp": "2025-12-04T15:30:00.000Z",
     "user": "u***@sysmanager.com.br",
     "operation": "APPLY_POLICY_TAG",
     "resource": "analytics.users.email",
@@ -3353,7 +3353,7 @@ concurrency: 80
 
 ## 12. HISTÓRICO DE VERSÕES
 
-### 12.1 v1.0 - RLS + CLS Integration (08/11/2024)
+### 12.1 v1.0 - RLS + CLS Integration (08/11/2025)
 
 **Objetivo**: Integrar funcionalidades de Column-Level Security na aplicação RLS Manager.
 
@@ -3385,7 +3385,7 @@ concurrency: 80
 
 ---
 
-### 12.2 v2.0 - UI Overhaul & HUD Theme (04/12/2024)
+### 12.2 v2.0 - UI Overhaul & HUD Theme (04/12/2025)
 
 **Objetivo**: Modernizar interface com tema HUD/Sci-Fi e melhorar UX.
 
@@ -3524,14 +3524,14 @@ Este documento técnico cobre todos os aspectos do **RLS & CLS Security Manager*
 
 ### Principais Conquistas
 
-**v1.0 (08/11/2024)**:
+**v1.0 (08/11/2025)**:
 - ✅ Integração RLS + CLS completa
 - ✅ 7 novos arquivos criados
 - ✅ 4 páginas CLS funcionais
 - ✅ ~900 linhas de código
 - ✅ 100% retrocompatível
 
-**v2.0 (04/12/2024)**:
+**v2.0 (04/12/2025)**:
 - ✅ UI moderna com tema HUD/Sci-Fi
 - ✅ Login 75% mais rápido
 - ✅ Zero CSS conflicts
@@ -3567,12 +3567,12 @@ Este documento técnico cobre todos os aspectos do **RLS & CLS Security Manager*
 
 ## LICENÇA
 
-Copyright © 2024-2025 Sys Manager  
+Copyright © 2025-2025 Sys Manager  
 Partner Google Cloud  
 Todos os direitos reservados.
 
 ---
 
-**Última Atualização**: 04/12/2024  
+**Última Atualização**: 04/12/2025  
 **Versão do Documento**: 2.0  
 **Status**: Documentação Completa
