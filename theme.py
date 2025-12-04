@@ -265,7 +265,7 @@ def frame(navtitle: str):
     ):
         with ui.row().classes('w-full justify-between items-center px-6 py-3'):
             # Copyright
-            ui.label('Copyright 2024 CCW Latam - Concept Prototype').classes('text-sm').style(
+            ui.label('Copyright 2025 Sys Manager | Partner Google Cloud - Concept Prototype').classes('text-sm').style(
                 'color: #64748b; '
                 'font-family: "JetBrains Mono", monospace; '
                 'font-size: 0.75rem;'
