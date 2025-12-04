@@ -6,9 +6,17 @@
     <title>GenAI4Data - Security Manager</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     
     <style>
+        :root {
+            --bg-color: #000000;
+            --hud-color: #00f3ff; /* Ciano Neon da imagem */
+            --hud-dim: rgba(0, 243, 255, 0.15);
+            --glass-bg: rgba(5, 10, 15, 0.85);
+            --text-main: #ffffff;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -20,254 +28,327 @@
             height: 100%;
             font-family: 'Inter', sans-serif;
             overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--text-main);
         }
 
-        /* Fundo Hexagonal Tech */
+        /* --- Fundo Complexo (Blueprint Tech) --- */
         .tech-bg {
             position: fixed;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
-            background: linear-gradient(135deg, #0a1929 0%, #1a2942 50%, #0a1929 100%);
+            background: 
+                radial-gradient(circle at 15% 50%, rgba(0, 243, 255, 0.08) 0%, transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(0, 243, 255, 0.05) 0%, transparent 25%),
+                linear-gradient(180deg, #000000 0%, #050a10 50%, #000000 100%);
             display: flex;
             justify-content: center;
             align-items: center;
             overflow: hidden;
         }
 
-        /* Padrão Hexagonal SVG */
-        .tech-bg::before {
-            content: '';
+        /* Grid Milimétrico de Fundo */
+        .grid-overlay {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image: url("data:image/svg+xml,%3Csvg width='100' height='87' viewBox='0 0 100 87' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M25 0l25 14.43V43.3L25 57.74 0 43.3V14.43L25 0zm0 2.89L2 16.32v25.76L25 54.85l23-13.77V16.32L25 2.89z' fill='%232d5a8c' fill-opacity='0.7'/%3E%3C/svg%3E");
-            background-size: 100px 87px;
-            opacity: 0.9;
-            z-index: 1;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: 
+                linear-gradient(var(--hud-dim) 1px, transparent 1px),
+                linear-gradient(90deg, var(--hud-dim) 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.3;
+            z-index: 0;
+            mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
         }
 
-        /* Glow Central Intenso */
-        .tech-bg::after {
-            content: '';
+        /* --- Elementos HUD Decorativos (Inspirados na Imagem) --- */
+        
+        /* Círculo Técnico Giratório (Direita) */
+        .hud-circle-outer {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 1400px;
-            height: 1400px;
-            background: radial-gradient(
-                circle, 
-                rgba(100, 150, 255, 0.3) 0%, 
-                rgba(150, 100, 255, 0.2) 30%,
-                rgba(100, 150, 255, 0.1) 50%, 
-                transparent 70%
-            );
+            right: -100px;
+            bottom: -100px;
+            width: 600px;
+            height: 600px;
+            border: 1px dashed var(--hud-dim);
             border-radius: 50%;
-            z-index: 2;
-            animation: pulse-glow 6s ease-in-out infinite;
-        }
-
-        @keyframes pulse-glow {
-            0%, 100% { 
-                opacity: 0.7; 
-                transform: translate(-50%, -50%) scale(1); 
-            }
-            50% { 
-                opacity: 1; 
-                transform: translate(-50%, -50%) scale(1.1); 
-            }
-        }
-
-        /* Linhas Verticais (efeito circuito) */
-        .tech-lines {
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 80%;
-            height: 100%;
-            background: repeating-linear-gradient(
-                90deg,
-                transparent,
-                transparent 100px,
-                rgba(100, 150, 255, 0.05) 100px,
-                rgba(100, 150, 255, 0.05) 101px
-            );
+            opacity: 0.4;
+            animation: spin 60s linear infinite;
             z-index: 1;
+            pointer-events: none;
+        }
+        
+        .hud-circle-inner {
+            position: absolute;
+            right: 50px;
+            bottom: 50px;
+            width: 300px;
+            height: 300px;
+            border: 2px solid var(--hud-dim);
+            border-top: 2px solid var(--hud-color);
+            border-radius: 50%;
+            opacity: 0.6;
+            animation: spin-reverse 20s linear infinite;
+            z-index: 1;
+            pointer-events: none;
         }
 
-        /* Card Glassmorphism */
+        /* Mira/Target (Esquerda Superior) */
+        .hud-crosshair {
+            position: absolute;
+            top: 100px;
+            left: 100px;
+            width: 50px;
+            height: 50px;
+            z-index: 1;
+            opacity: 0.5;
+        }
+        .hud-crosshair::before, .hud-crosshair::after {
+            content: '';
+            position: absolute;
+            background: var(--hud-color);
+        }
+        .hud-crosshair::before { top: 24px; left: 0; width: 50px; height: 1px; }
+        .hud-crosshair::after { left: 24px; top: 0; height: 50px; width: 1px; }
+
+        /* Linhas de Dados Aleatórias */
+        .hud-lines {
+            position: absolute;
+            left: 50px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 2px;
+            height: 200px;
+            background: linear-gradient(to bottom, transparent, var(--hud-color), transparent);
+            opacity: 0.3;
+        }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes spin-reverse { 100% { transform: rotate(-360deg); } }
+
+        /* --- Card Principal --- */
         .glass-card {
             position: relative;
-            z-index: 100;
-            width: 520px;
+            z-index: 10;
+            width: 480px;
             max-width: 90%;
-            padding: 3rem;
-            background: rgba(15, 35, 65, 0.7);
-            backdrop-filter: blur(50px);
-            -webkit-backdrop-filter: blur(50px);
-            border: 2px solid rgba(120, 170, 255, 0.4);
+            padding: 3rem 2.5rem;
+            background: var(--glass-bg);
+            /* Borda Técnica Brilhante */
+            border: 1px solid rgba(0, 243, 255, 0.3);
             box-shadow: 
-                0 0 100px rgba(100, 150, 255, 0.4),
-                0 0 50px rgba(100, 150, 255, 0.3),
-                inset 0 0 40px rgba(100, 150, 255, 0.1);
-            border-radius: 24px;
+                0 0 40px rgba(0, 0, 0, 0.8),
+                0 0 15px rgba(0, 243, 255, 0.1),
+                inset 0 0 20px rgba(0, 243, 255, 0.05);
+            /* Cantos cortados (estilo sci-fi) usando clip-path ou border-radius misto */
+            border-radius: 4px; 
+            clip-path: polygon(
+                0 0, 
+                100% 0, 
+                100% 85%, 
+                92% 100%, 
+                0 100%
+            );
             display: flex;
             flex-direction: column;
             align-items: center;
             text-align: center;
         }
 
-        /* Ícone Container */
+        /* Cantos Decorativos do Card (Brackets) */
+        .card-corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-color: var(--hud-color);
+            border-style: solid;
+            transition: all 0.3s ease;
+            opacity: 0.8;
+        }
+        .tl { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+        .tr { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
+        .bl { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; }
+        /* Canto inferior direito cortado, sem bracket */
+
+        /* Ícone */
         .icon-container {
             position: relative;
             margin-bottom: 2rem;
+            width: 80px;
+            height: 80px;
             display: flex;
             justify-content: center;
-        }
-
-        .icon-glow {
-            position: absolute;
-            inset: 0;
-            background: #60a5fa;
-            filter: blur(60px);
-            opacity: 0.5;
-            border-radius: 50%;
-            width: 120px;
-            height: 120px;
-        }
-
-        .icon-wrapper {
-            position: relative;
-            width: 90px;
-            height: 90px;
-            display: flex;
             align-items: center;
-            justify-content: center;
         }
 
-        .shield-badge {
+        /* Glow atrás do ícone */
+        .icon-glow-bg {
             position: absolute;
-            bottom: -8px;
-            right: -8px;
-            background: #0A1929;
+            width: 100%;
+            height: 100%;
+            background: var(--hud-color);
+            filter: blur(40px);
+            opacity: 0.2;
             border-radius: 50%;
-            padding: 5px;
-            border: 2px solid rgba(120, 170, 255, 0.5);
+            animation: pulse-icon 3s ease-in-out infinite;
         }
 
-        /* Título */
+        @keyframes pulse-icon {
+            0%, 100% { opacity: 0.15; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(1.2); }
+        }
+
+        /* Títulos */
         .title {
-            font-size: 1.875rem;
+            font-family: 'Inter', sans-serif;
+            font-size: 1.75rem;
             font-weight: 800;
-            letter-spacing: -0.02em;
-            background: linear-gradient(to right, #ffffff 0%, #c7d2fe 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: white;
             margin-bottom: 0.5rem;
+            letter-spacing: -0.02em;
+            text-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
         }
 
-        /* Subtítulo */
         .subtitle {
             font-family: 'JetBrains Mono', monospace;
-            color: #bfdbfe;
-            font-size: 0.875rem;
-            letter-spacing: 0.05em;
-            opacity: 0.95;
+            color: var(--hud-color);
+            font-size: 0.75rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
             margin-bottom: 2.5rem;
+            opacity: 0.8;
+            position: relative;
+            padding-bottom: 10px;
+        }
+        
+        .subtitle::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 1px;
+            background: var(--hud-color);
+            opacity: 0.5;
         }
 
-        /* Botão Google */
+        /* Botão Google - Estilo Tech */
         .google-btn {
             width: 100%;
             padding: 1rem 2rem;
-            background-color: #ffffff;
-            color: #1f2937;
-            border: none;
-            border-radius: 9999px;
+            background: rgba(255, 255, 255, 0.05); /* Fundo escuro semi-transparente */
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px; /* Cantos retos */
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 0.75rem;
-            font-weight: 700;
-            font-size: 1rem;
+            gap: 1rem;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 0.95rem;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 6px 25px rgba(255, 255, 255, 0.25);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
             margin-bottom: 2rem;
         }
 
         .google-btn:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 15px 40px rgba(255, 255, 255, 0.4);
-            background-color: #f9fafb;
+            background: rgba(0, 243, 255, 0.1);
+            border-color: var(--hud-color);
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
+            transform: translateY(-2px);
         }
 
-        /* Separador */
-        .separator {
-            width: 75%;
-            height: 1px;
-            background: rgba(255, 255, 255, 0.15);
-            margin-bottom: 1.5rem;
+        /* Linha de "loading" no hover do botão */
+        .google-btn::before {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0%;
+            height: 2px;
+            background: var(--hud-color);
+            transition: width 0.3s ease;
+        }
+        .google-btn:hover::before {
+            width: 100%;
         }
 
         /* Footer */
         .footer {
+            font-size: 0.7rem;
+            color: #64748b;
             display: flex;
-            justify-content: center;
             align-items: center;
-            gap: 0.375rem;
-            font-size: 0.75rem;
+            justify-content: center;
+            gap: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
         }
-
-        .footer-text {
-            color: rgba(255, 255, 255, 0.6);
-        }
-
+        
         .footer-highlight {
-            color: rgba(255, 255, 255, 0.9);
-            font-weight: 600;
+            color: #94a3b8;
+            font-weight: 700;
         }
+
+        /* Efeito de Scanline Geral (Monitor CRT) */
+        .scanlines {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.2));
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 99;
+            opacity: 0.15;
+        }
+
     </style>
 </head>
 <body>
+    
     <div class="tech-bg">
-        <div class="tech-lines"></div>
+        <!-- Elementos de Fundo (Inspirados na Imagem) -->
+        <div class="grid-overlay"></div>
+        <div class="hud-circle-outer"></div>
+        <div class="hud-circle-inner"></div>
+        <div class="hud-crosshair"></div>
+        <div class="hud-lines"></div>
         
+        <!-- Efeito CRT -->
+        <div class="scanlines"></div>
+
+        <!-- Card Principal -->
         <div class="glass-card">
-            <!-- Ícone BigQuery + Shield -->
+            <!-- Cantos Tech -->
+            <div class="card-corner tl"></div>
+            <div class="card-corner tr"></div>
+            <div class="card-corner bl"></div>
+
+            <!-- Ícone -->
             <div class="icon-container">
-                <div class="icon-glow"></div>
-                <div class="icon-wrapper">
-                    <svg width="90" height="90" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2L2 7V17L12 22L22 17V7L12 2Z" fill="#4285F4" opacity="0.95"/>
-                        <path d="M12 2L2 7V17L12 22L22 17V7L12 2Z" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
-                        <path d="M11 7H13V17H11V7Z" fill="white" opacity="0.98"/>
-                        <path d="M7 10H9V17H7V10Z" fill="white" opacity="0.98"/>
-                        <path d="M15 13H17V17H15V13Z" fill="white" opacity="0.98"/>
-                    </svg>
-                    <div class="shield-badge">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="#60a5fa">
-                            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
-                        </svg>
-                    </div>
-                </div>
+                <div class="icon-glow-bg"></div>
+                <!-- SVG BigQuery + Escudo (Branco puro para contraste) -->
+                <svg width="70" height="70" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="z-index: 2;">
+                    <path d="M12 2L2 7V17L12 22L22 17V7L12 2Z" fill="#0f172a" stroke="#00f3ff" stroke-width="1.5"/>
+                    <path d="M11 7H13V17H11V7Z" fill="#00f3ff"/>
+                    <path d="M7 10H9V17H7V10Z" fill="#00f3ff"/>
+                    <path d="M15 13H17V17H15V13Z" fill="#00f3ff"/>
+                    <!-- Badge de Escudo -->
+                    <circle cx="19" cy="19" r="6" fill="#000000" stroke="#00f3ff" stroke-width="1"/>
+                    <path d="M19 15L17 16V18C17 19.5 17.8 20.8 19 21.5C20.2 20.8 21 19.5 21 18V16L19 15Z" fill="#00f3ff"/>
+                </svg>
             </div>
 
-            <!-- Título -->
-            <h1 class="title">GenAI4Data - Security Manager</h1>
-
-            <!-- Subtítulo -->
-            <p class="subtitle">Seamless Security for BigQuery Datasets</p>
+            <!-- Textos -->
+            <h1 class="title">GenAI4Data</h1>
+            <div class="subtitle">Seamless Security System</div>
 
             <!-- Botão Google -->
             <button class="google-btn" onclick="loginWithGoogle()">
-                <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.84z" fill="#FBBC05"/>
@@ -276,26 +357,30 @@
                 Sign in with Google
             </button>
 
-            <!-- Separador -->
-            <div class="separator"></div>
-
             <!-- Footer -->
             <div class="footer">
-                <span class="footer-text">Powered by Sys Manager |</span>
-                <span class="footer-highlight">Partner Google Cloud</span>
+                <span>Powered by Sys Manager</span>
+                <span style="color: var(--hud-color)">|</span>
+                <span>Partner Google Cloud</span>
             </div>
         </div>
     </div>
 
     <script>
         function loginWithGoogle() {
-            // Pega as variáveis do backend (serão injetadas pelo FastAPI)
+            // Lógica de Placeholder
             const clientId = "{{GOOGLE_CLIENT_ID}}";
             const redirectUri = "{{REDIRECT_URI}}";
             
-            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=openid%20email%20profile&access_type=online&prompt=select_account`;
+            // Simulação visual de clique (opcional)
+            const btn = document.querySelector('.google-btn');
+            btn.innerHTML = 'INITIALIZING HANDSHAKE...';
+            btn.style.color = '#00f3ff';
             
-            window.location.href = authUrl;
+            setTimeout(() => {
+                const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=openid%20email%20profile&access_type=online&prompt=select_account`;
+                window.location.href = authUrl;
+            }, 800);
         }
     </script>
 </body>
