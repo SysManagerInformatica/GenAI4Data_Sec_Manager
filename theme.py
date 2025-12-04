@@ -197,12 +197,7 @@ def frame(navtitle: str):
         'box-shadow: 0 4px 20px rgba(0, 243, 255, 0.15);'
     ):
         with ui.row().classes('w-full items-center px-4'):
-            # Menu button
-            menu_button = ui.button(icon='menu').props('flat').style(
-                'color: #00f3ff;'
-            )
-            
-            # Título principal
+            # Título principal (sem botão de menu)
             ui.label('GenAI4Data - Security Manager').classes('font-bold text-lg').style(
                 'color: #00f3ff; text-shadow: 0 0 10px rgba(0, 243, 255, 0.3);'
             )
@@ -212,51 +207,24 @@ def frame(navtitle: str):
             
             ui.space()
             
-            # User info and logout
+            # Apenas botão de logout (role está no footer)
             user_info = app.storage.user.get('user_info', {})
             if user_info:
-                # Label "Your Role"
-                ui.label("Your Role:").classes('text-sm').style('color: #94a3b8;')
-                
-                # Role badge com cores customizadas
-                role = user_info.get('role', 'VIEWER')
-                role_colors = {
-                    'OWNER': {'bg': 'rgba(239, 68, 68, 0.2)', 'border': '#ef4444', 'text': '#fca5a5'},
-                    'ADMIN': {'bg': 'rgba(249, 115, 22, 0.2)', 'border': '#f97316', 'text': '#fdba74'},
-                    'EDITOR': {'bg': 'rgba(59, 130, 246, 0.2)', 'border': '#3b82f6', 'text': '#93c5fd'},
-                    'VIEWER': {'bg': 'rgba(16, 185, 129, 0.2)', 'border': '#10b981', 'text': '#6ee7b7'}
-                }
-                colors = role_colors.get(role, {'bg': 'rgba(100, 116, 139, 0.2)', 'border': '#64748b', 'text': '#94a3b8'})
-                
-                ui.badge(role).style(
-                    f'background: {colors["bg"]}; '
-                    f'color: {colors["text"]}; '
-                    f'border: 1px solid {colors["border"]}; '
-                    f'padding: 4px 12px; '
-                    f'border-radius: 4px; '
-                    f'font-weight: 700; '
-                    f'font-size: 0.75rem; '
-                    f'letter-spacing: 0.05em;'
-                )
-                
-                # Logout button
                 ui.button('LOGOUT', 
                          icon='logout',
                          on_click=lambda: ui.run_javascript('window.location.href = "/login"')).props(
                     'flat'
                 ).style(
                     'color: #ef4444; '
-                    'font-weight: 700; '
-                    'margin-left: 16px;'
+                    'font-weight: 700;'
                 ).classes('hover:bg-red-900/20')
     
-    # Left drawer com tema tech
-    left_drawer = ui.left_drawer(value=False, fixed=False).style(
+    # Left drawer SEMPRE ABERTA
+    left_drawer = ui.left_drawer(value=True, fixed=True).style(
         'background: rgba(10, 15, 26, 0.95); '
         'border-right: 1px solid rgba(0, 243, 255, 0.3); '
         'backdrop-filter: blur(10px);'
     )
-    menu_button.on_click(left_drawer.toggle)
     
     with left_drawer:
         # Título da navegação
