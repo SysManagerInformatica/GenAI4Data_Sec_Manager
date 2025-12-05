@@ -72,6 +72,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         
         # Home
         'home_welcome': 'Bem-vindo de volta,',  # ← MODIFICADO
+        'home_title': 'Plataforma de Segurança de Dados Empresarial',  # ← NOVO
         'home_subtitle': 'Gerencie políticas RLS, CLS e permissões IAM de forma centralizada',
         'home_quick_start': 'Início Rápido',  # ← NOVO
         
@@ -89,7 +90,25 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         
         # RLS - Create for Users
         'rls_users_title': 'Criar Política RLS para Usuários',
+        'rls_users_page_title': 'Criar Política Row Level - Usuários',  # <- NOVO
+        'rls_users_subtitle': 'Criar Row Level Security para Usuários',  # <- NOVO
+        'rls_users_frame_title': 'Criar',  # <- NOVO
         'rls_users_desc': 'Crie políticas de segurança baseadas em usuários individuais',
+        'rls_users_step1_title': 'Selecionar Dataset',  # <- NOVO
+        'rls_users_step2_title': 'Selecionar Tabela',  # <- NOVO
+        'rls_users_step3_title': 'Selecionar Campo',  # <- NOVO
+        'rls_users_step4_title': 'Revisar e Executar',  # <- NOVO
+        'rls_users_select_dataset': 'Selecionar Dataset',  # <- NOVO
+        'rls_users_select_table': 'Selecionar Tabela',  # <- NOVO
+        'rls_users_select_field': 'Selecionar Campo',  # <- NOVO
+        'rls_users_review_title': 'A seguinte Política de Row Level Security será criada:',  # <- NOVO
+        'rls_users_review_policy_name': 'Nome da Política',  # <- NOVO
+        'rls_users_review_project_id': 'ID do Projeto',  # <- NOVO
+        'rls_users_review_dataset_id': 'ID do Dataset',  # <- NOVO
+        'rls_users_review_table_id': 'ID da Tabela',  # <- NOVO
+        'rls_users_review_field_id': 'ID do Campo',  # <- NOVO
+        'rls_users_review_code': 'Código',  # <- NOVO
+        'rls_users_success_message': 'Política Row Level criada em {table}.{field} com sucesso!',  # <- NOVO
         'rls_users_dataset': 'ID do Dataset',
         'rls_users_table': 'Nome da Tabela',
         'rls_users_policy_name': 'Nome da Política',
@@ -166,8 +185,11 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'iam_current_permissions': 'Permissões Atuais',
         
         # Audit
+        # Audit Page
         'audit_title': 'Logs de Auditoria',
+        'audit_subtitle': 'Rastreie todas as operações e mudanças de segurança',
         'audit_desc': 'Visualize todas as operações de segurança',
+        'audit_filters_title': 'Filtros',  # <- NOVO
         'audit_user': 'Usuário',
         'audit_operation': 'Operação',
         'audit_resource': 'Recurso',
@@ -177,7 +199,33 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'audit_filter_user': 'Filtrar por Usuário',
         'audit_filter_operation': 'Filtrar por Operação',
         'audit_filter_date': 'Filtrar por Data',
+        'audit_filter_date_range': 'Período',
+        'audit_filter_action': 'Ação',
         'audit_export': 'Exportar Relatório',
+        'audit_refresh': 'Atualizar',
+        
+        # Audit - Date Range Options
+        'audit_filter_last_hour': 'Última Hora',  # <- NOVO
+        'audit_filter_today': 'Hoje',  # <- NOVO
+        'audit_filter_last_7_days': 'Últimos 7 Dias',  # <- NOVO
+        'audit_filter_last_30_days': 'Últimos 30 Dias',  # <- NOVO
+        
+        # Audit - Statistics
+        'audit_stat_total_actions': 'Total de Ações',  # <- NOVO
+        'audit_stat_success_rate': 'Taxa de Sucesso',
+        'audit_stat_failed_actions': 'Ações Falhadas',  # <- NOVO
+        'audit_stat_active_users': 'Usuários Ativos',
+        
+        # Audit - Activity Labels
+        'audit_recent_activities': 'Atividades Recentes (mostrando {count} logs)',
+        'audit_no_logs': 'Nenhum log de auditoria encontrado com os filtros atuais',  # <- MODIFICADO
+        'audit_log_user': 'Usuário',  # <- NOVO
+        'audit_log_resource': 'Recurso',  # <- NOVO
+        'audit_log_taxonomy': 'Taxonomia',  # <- NOVO
+        'audit_log_error': 'Erro',  # <- NOVO
+        
+        # Audit - Action Filter  # <- NOVO
+        'audit_action_all': 'Todas',
         
         # Common buttons
         'btn_create': 'Criar',
@@ -191,6 +239,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'btn_refresh': 'Atualizar',
         'btn_export': 'Exportar',
         'btn_back': 'Voltar',
+        'btn_next': 'Próximo',  # <- NOVO
         
         # Messages
         'msg_success': 'Operação realizada com sucesso!',
@@ -198,6 +247,16 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'msg_loading': 'Carregando...',
         'msg_no_data': 'Nenhum dado disponível',
         'msg_confirm': 'Tem certeza?',
+        'msg_error_fetch_datasets': 'Erro ao buscar datasets: {error}',  # <- NOVO
+        'msg_error_fetch_tables': 'Erro ao buscar tabelas: {error}',  # <- NOVO
+        'msg_error_fetch_fields': 'Erro ao buscar campos: {error}',  # <- NOVO
+        'msg_error_create_policy': 'Erro ao criar política de row-level access: {error}',  # <- NOVO
+        'msg_error_unexpected': 'Ocorreu um erro inesperado: {error}',  # <- NOVO
+        'msg_select_dataset_first': 'Por favor, selecione um dataset primeiro.',  # <- NOVO
+        'msg_select_table_first': 'Por favor, selecione uma tabela primeiro.',  # <- NOVO
+        'msg_select_field_first': 'Por favor, selecione um campo primeiro.',  # <- NOVO
+        'msg_dataset_not_found': 'Dataset não encontrado: {dataset}',  # <- NOVO
+        'msg_table_not_found': 'Tabela não encontrada: {table}',  # <- NOVO
         
         # Footer
         'footer_version': 'Versão',
@@ -263,6 +322,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         
         # Home
         'home_welcome': 'Welcome back,',  # ← MODIFICADO
+        'home_title': 'Enterprise Data Security Platform',  # ← NOVO
         'home_subtitle': 'Manage RLS policies, CLS tags, and IAM permissions in one place',
         'home_quick_start': 'Quick Start',  # ← NOVO
         
@@ -280,7 +340,25 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         
         # RLS - Create for Users
         'rls_users_title': 'Create RLS Policy for Users',
+        'rls_users_page_title': 'Create Row Level Policy - Users',  # <- NOVO
+        'rls_users_subtitle': 'Create Row Level Security for Users',  # <- NOVO
+        'rls_users_frame_title': 'Create',  # <- NOVO
         'rls_users_desc': 'Create security policies based on individual users',
+        'rls_users_step1_title': 'Select Dataset',  # <- NOVO
+        'rls_users_step2_title': 'Select Table',  # <- NOVO
+        'rls_users_step3_title': 'Select Field',  # <- NOVO
+        'rls_users_step4_title': 'Review and Run',  # <- NOVO
+        'rls_users_select_dataset': 'Select Dataset',  # <- NOVO
+        'rls_users_select_table': 'Select Table',  # <- NOVO
+        'rls_users_select_field': 'Select Field',  # <- NOVO
+        'rls_users_review_title': 'The following Row Level Security Policy will be created:',  # <- NOVO
+        'rls_users_review_policy_name': 'Policy Name',  # <- NOVO
+        'rls_users_review_project_id': 'Project ID',  # <- NOVO
+        'rls_users_review_dataset_id': 'Dataset ID',  # <- NOVO
+        'rls_users_review_table_id': 'Table ID',  # <- NOVO
+        'rls_users_review_field_id': 'Field ID',  # <- NOVO
+        'rls_users_review_code': 'Code',  # <- NOVO
+        'rls_users_success_message': 'Row Level Policy created on {table}.{field} successfully!',  # <- NOVO
         'rls_users_dataset': 'Dataset ID',
         'rls_users_table': 'Table Name',
         'rls_users_policy_name': 'Policy Name',
@@ -356,9 +434,11 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'iam_remove': 'Remove',
         'iam_current_permissions': 'Current Permissions',
         
-        # Audit
+        # Audit Page
         'audit_title': 'Audit Logs',
+        'audit_subtitle': 'Track all security operations and changes',
         'audit_desc': 'View all security operations',
+        'audit_filters_title': 'Filters',  # <- NOVO
         'audit_user': 'User',
         'audit_operation': 'Operation',
         'audit_resource': 'Resource',
@@ -368,7 +448,33 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'audit_filter_user': 'Filter by User',
         'audit_filter_operation': 'Filter by Operation',
         'audit_filter_date': 'Filter by Date',
+        'audit_filter_date_range': 'Date Range',
+        'audit_filter_action': 'Action',
         'audit_export': 'Export Report',
+        'audit_refresh': 'Refresh',
+        
+        # Audit - Date Range Options
+        'audit_filter_last_hour': 'Last Hour',  # <- NOVO
+        'audit_filter_today': 'Today',  # <- NOVO
+        'audit_filter_last_7_days': 'Last 7 Days',  # <- NOVO
+        'audit_filter_last_30_days': 'Last 30 Days',  # <- NOVO
+        
+        # Audit - Statistics
+        'audit_stat_total_actions': 'Total Actions',  # <- NOVO
+        'audit_stat_success_rate': 'Success Rate',
+        'audit_stat_failed_actions': 'Failed Actions',  # <- NOVO
+        'audit_stat_active_users': 'Active Users',
+        
+        # Audit - Activity Labels
+        'audit_recent_activities': 'Recent Activities (showing {count} logs)',
+        'audit_no_logs': 'No audit logs found with current filters',  # <- MODIFICADO
+        'audit_log_user': 'User',  # <- NOVO
+        'audit_log_resource': 'Resource',  # <- NOVO
+        'audit_log_taxonomy': 'Taxonomy',  # <- NOVO
+        'audit_log_error': 'Error',  # <- NOVO
+        
+        # Audit - Action Filter  # <- NOVO
+        'audit_action_all': 'All',
         
         # Common buttons
         'btn_create': 'Create',
@@ -382,6 +488,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'btn_refresh': 'Refresh',
         'btn_export': 'Export',
         'btn_back': 'Back',
+        'btn_next': 'Next',  # <- NOVO
         
         # Messages
         'msg_success': 'Operation completed successfully!',
@@ -389,6 +496,16 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'msg_loading': 'Loading...',
         'msg_no_data': 'No data available',
         'msg_confirm': 'Are you sure?',
+        'msg_error_fetch_datasets': 'Error fetching datasets: {error}',  # <- NOVO
+        'msg_error_fetch_tables': 'Error fetching tables: {error}',  # <- NOVO
+        'msg_error_fetch_fields': 'Error fetching fields: {error}',  # <- NOVO
+        'msg_error_create_policy': 'Error creating row-level access policy: {error}',  # <- NOVO
+        'msg_error_unexpected': 'An unexpected error occurred: {error}',  # <- NOVO
+        'msg_select_dataset_first': 'Please select a dataset first.',  # <- NOVO
+        'msg_select_table_first': 'Please select a table first.',  # <- NOVO
+        'msg_select_field_first': 'Please select a field first.',  # <- NOVO
+        'msg_dataset_not_found': 'Dataset not found: {dataset}',  # <- NOVO
+        'msg_table_not_found': 'Table not found: {table}',  # <- NOVO
         
         # Footer
         'footer_version': 'Version',
@@ -454,6 +571,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         
         # Home
         'home_welcome': 'Bienvenido de nuevo,',  # ← MODIFICADO
+        'home_title': 'Plataforma de Seguridad de Datos Empresarial',  # ← NOVO
         'home_subtitle': 'Gestione políticas RLS, etiquetas CLS y permisos IAM en un solo lugar',
         'home_quick_start': 'Inicio Rápido',  # ← NOVO
         
@@ -471,7 +589,25 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         
         # RLS - Create for Users
         'rls_users_title': 'Crear Política RLS para Usuarios',
+        'rls_users_page_title': 'Crear Política Row Level - Usuarios',  # <- NOVO
+        'rls_users_subtitle': 'Crear Row Level Security para Usuarios',  # <- NOVO
+        'rls_users_frame_title': 'Crear',  # <- NOVO
         'rls_users_desc': 'Cree políticas de seguridad basadas en usuarios individuales',
+        'rls_users_step1_title': 'Seleccionar Dataset',  # <- NOVO
+        'rls_users_step2_title': 'Seleccionar Tabla',  # <- NOVO
+        'rls_users_step3_title': 'Seleccionar Campo',  # <- NOVO
+        'rls_users_step4_title': 'Revisar y Ejecutar',  # <- NOVO
+        'rls_users_select_dataset': 'Seleccionar Dataset',  # <- NOVO
+        'rls_users_select_table': 'Seleccionar Tabla',  # <- NOVO
+        'rls_users_select_field': 'Seleccionar Campo',  # <- NOVO
+        'rls_users_review_title': 'Se creará la siguiente Política de Row Level Security:',  # <- NOVO
+        'rls_users_review_policy_name': 'Nombre de la Política',  # <- NOVO
+        'rls_users_review_project_id': 'ID del Proyecto',  # <- NOVO
+        'rls_users_review_dataset_id': 'ID del Dataset',  # <- NOVO
+        'rls_users_review_table_id': 'ID de la Tabla',  # <- NOVO
+        'rls_users_review_field_id': 'ID del Campo',  # <- NOVO
+        'rls_users_review_code': 'Código',  # <- NOVO
+        'rls_users_success_message': '¡Política Row Level creada en {table}.{field} con éxito!',  # <- NOVO
         'rls_users_dataset': 'ID del Dataset',
         'rls_users_table': 'Nombre de la Tabla',
         'rls_users_policy_name': 'Nombre de la Política',
@@ -547,9 +683,11 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'iam_remove': 'Eliminar',
         'iam_current_permissions': 'Permisos Actuales',
         
-        # Audit
+        # Audit Page
         'audit_title': 'Registros de Auditoría',
+        'audit_subtitle': 'Rastree todas las operaciones y cambios de seguridad',
         'audit_desc': 'Visualice todas las operaciones de seguridad',
+        'audit_filters_title': 'Filtros',  # <- NOVO
         'audit_user': 'Usuario',
         'audit_operation': 'Operación',
         'audit_resource': 'Recurso',
@@ -559,7 +697,33 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'audit_filter_user': 'Filtrar por Usuario',
         'audit_filter_operation': 'Filtrar por Operación',
         'audit_filter_date': 'Filtrar por Fecha',
+        'audit_filter_date_range': 'Período',
+        'audit_filter_action': 'Acción',
         'audit_export': 'Exportar Informe',
+        'audit_refresh': 'Actualizar',
+        
+        # Audit - Date Range Options
+        'audit_filter_last_hour': 'Última Hora',  # <- NOVO
+        'audit_filter_today': 'Hoy',  # <- NOVO
+        'audit_filter_last_7_days': 'Últimos 7 Días',  # <- NOVO
+        'audit_filter_last_30_days': 'Últimos 30 Días',  # <- NOVO
+        
+        # Audit - Statistics
+        'audit_stat_total_actions': 'Total de Acciones',  # <- NOVO
+        'audit_stat_success_rate': 'Tasa de Éxito',
+        'audit_stat_failed_actions': 'Acciones Fallidas',  # <- NOVO
+        'audit_stat_active_users': 'Usuarios Activos',
+        
+        # Audit - Activity Labels
+        'audit_recent_activities': 'Actividades Recientes (mostrando {count} registros)',
+        'audit_no_logs': 'No se encontraron registros de auditoría con los filtros actuales',  # <- MODIFICADO
+        'audit_log_user': 'Usuario',  # <- NOVO
+        'audit_log_resource': 'Recurso',  # <- NOVO
+        'audit_log_taxonomy': 'Taxonomía',  # <- NOVO
+        'audit_log_error': 'Error',  # <- NOVO
+        
+        # Audit - Action Filter  # <- NOVO
+        'audit_action_all': 'Todas',
         
         # Common buttons
         'btn_create': 'Crear',
@@ -573,6 +737,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'btn_refresh': 'Actualizar',
         'btn_export': 'Exportar',
         'btn_back': 'Volver',
+        'btn_next': 'Siguiente',  # <- NOVO
         
         # Messages
         'msg_success': '¡Operación completada con éxito!',
@@ -580,6 +745,16 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'msg_loading': 'Cargando...',
         'msg_no_data': 'No hay datos disponibles',
         'msg_confirm': '¿Está seguro?',
+        'msg_error_fetch_datasets': 'Error al obtener datasets: {error}',  # <- NOVO
+        'msg_error_fetch_tables': 'Error al obtener tablas: {error}',  # <- NOVO
+        'msg_error_fetch_fields': 'Error al obtener campos: {error}',  # <- NOVO
+        'msg_error_create_policy': 'Error al crear política de row-level access: {error}',  # <- NOVO
+        'msg_error_unexpected': 'Ocurrió un error inesperado: {error}',  # <- NOVO
+        'msg_select_dataset_first': 'Por favor, seleccione un dataset primero.',  # <- NOVO
+        'msg_select_table_first': 'Por favor, seleccione una tabla primero.',  # <- NOVO
+        'msg_select_field_first': 'Por favor, seleccione un campo primero.',  # <- NOVO
+        'msg_dataset_not_found': 'Dataset no encontrado: {dataset}',  # <- NOVO
+        'msg_table_not_found': 'Tabla no encontrada: {table}',  # <- NOVO
         
         # Footer
         'footer_version': 'Versión',
