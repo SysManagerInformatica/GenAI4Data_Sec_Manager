@@ -1,6 +1,10 @@
 """
 Sistema de Traduções Multi-Idiomas
 Suporta: Português (pt), English (en), Español (es)
+
+VERSÃO: 2.1 - Completa
+Data: 05/12/2024
+Autor: Lucas Carvalhal - Sys Manager
 """
 
 from typing import Dict, Any, Optional
@@ -18,27 +22,60 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         
         # Login
         'login_title': 'GenAI4Data',
-        'login_subtitle': 'Sistema de Segurança Perfeito',
+        'login_subtitle': 'Sistema de Segurança Integrado',  # ← MODIFICADO
         'login_button': 'Entrar com Google',
-        'login_loading': 'CARREGANDO SISTEMA PERFEITO...',
+        'login_loading': 'CARREGANDO SISTEMA...',  # ← MODIFICADO
         'login_powered': 'Desenvolvido por Sys Manager',
         'login_partner': 'Partner Google Cloud',
+        
+        # Language Selector  # ← NOVO
+        'lang_selector_title': 'Idioma',
+        'lang_pt': 'Português',
+        'lang_en': 'English',
+        'lang_es': 'Español',
         
         # Header
         'header_logout': 'Sair',
         'header_welcome': 'Bem-vindo',
         'header_role': 'Função',
+        'header_user_role': 'Sua Função: {role}',  # ← NOVO
         
-        # Navigation
+        # Navigation (Main Sections)
         'nav_home': 'Início',
         'nav_rls': 'Row-Level Security',
         'nav_cls': 'Column-Level Security',
         'nav_iam': 'Gerenciamento IAM',
         'nav_audit': 'Auditoria',
         
+        # Navigation - RLS Submenu  # ← NOVO
+        'menu_rls_users': 'Criar por Usuários',
+        'menu_rls_groups': 'Criar por Grupos',
+        'menu_rls_assign_users': 'Atribuir Usuários à Política',
+        'menu_rls_assign_values': 'Atribuir Valores ao Grupo',
+        
+        # Navigation - CLS Submenu  # ← NOVO
+        'menu_cls_taxonomies': 'Gerenciar Taxonomias',
+        'menu_cls_tags': 'Gerenciar Policy Tags',
+        'menu_cls_apply': 'Aplicar Tags em Colunas',
+        'menu_cls_iam': 'Permissões de Policy Tags',
+        'menu_cls_create_view': 'Criar View Protegida',
+        'menu_cls_manage_views': 'Gerenciar Views Protegidas',
+        'menu_cls_schema': 'Navegador de Schemas',
+        
+        # Navigation - IAM Submenu  # ← NOVO
+        'menu_iam_dataset': 'Gerenciador IAM de Dataset',
+        'menu_iam_project': 'Gerenciador IAM de Projeto',
+        'menu_iam_control': 'Controlar Acesso',
+        
+        # Navigation - Audit Submenu  # ← NOVO
+        'menu_audit_logs': 'Visualizar Logs de Auditoria',
+        
         # Home
-        'home_welcome': 'Bem-vindo ao Sistema de Segurança',
+        'home_welcome': 'Bem-vindo de volta,',  # ← MODIFICADO
         'home_subtitle': 'Gerencie políticas RLS, CLS e permissões IAM de forma centralizada',
+        'home_quick_start': 'Início Rápido',  # ← NOVO
+        
+        # Home - Feature Cards
         'home_rls_title': 'Row-Level Security',
         'home_rls_desc': 'Controle o acesso a linhas específicas com base em usuários ou grupos',
         'home_cls_title': 'Column-Level Security',
@@ -178,25 +215,58 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'login_title': 'GenAI4Data',
         'login_subtitle': 'Seamless Security System',
         'login_button': 'Sign in with Google',
-        'login_loading': 'LOADING PERFECT SYSTEM...',
+        'login_loading': 'LOADING SYSTEM...',
         'login_powered': 'Powered by Sys Manager',
         'login_partner': 'Partner Google Cloud',
+        
+        # Language Selector  # ← NOVO
+        'lang_selector_title': 'Language',
+        'lang_pt': 'Português',
+        'lang_en': 'English',
+        'lang_es': 'Español',
         
         # Header
         'header_logout': 'Logout',
         'header_welcome': 'Welcome',
         'header_role': 'Role',
+        'header_user_role': 'Your Role: {role}',  # ← NOVO
         
-        # Navigation
+        # Navigation (Main Sections)
         'nav_home': 'Home',
         'nav_rls': 'Row-Level Security',
         'nav_cls': 'Column-Level Security',
         'nav_iam': 'IAM Management',
         'nav_audit': 'Audit',
         
+        # Navigation - RLS Submenu  # ← NOVO
+        'menu_rls_users': 'Create for Users',
+        'menu_rls_groups': 'Create for Groups',
+        'menu_rls_assign_users': 'Assign Users to Policy',
+        'menu_rls_assign_values': 'Assign Values to Group',
+        
+        # Navigation - CLS Submenu  # ← NOVO
+        'menu_cls_taxonomies': 'Manage Taxonomies',
+        'menu_cls_tags': 'Manage Policy Tags',
+        'menu_cls_apply': 'Apply Tags to Columns',
+        'menu_cls_iam': 'Policy Tag Permissions',
+        'menu_cls_create_view': 'Create Protected View',
+        'menu_cls_manage_views': 'Manage Protected Views',
+        'menu_cls_schema': 'Schema Browser',
+        
+        # Navigation - IAM Submenu  # ← NOVO
+        'menu_iam_dataset': 'Dataset IAM Manager',
+        'menu_iam_project': 'Project IAM Manager',
+        'menu_iam_control': 'Control Access',
+        
+        # Navigation - Audit Submenu  # ← NOVO
+        'menu_audit_logs': 'View Audit Logs',
+        
         # Home
-        'home_welcome': 'Welcome to Security Manager',
+        'home_welcome': 'Welcome back,',  # ← MODIFICADO
         'home_subtitle': 'Manage RLS policies, CLS tags, and IAM permissions in one place',
+        'home_quick_start': 'Quick Start',  # ← NOVO
+        
+        # Home - Feature Cards
         'home_rls_title': 'Row-Level Security',
         'home_rls_desc': 'Control access to specific rows based on users or groups',
         'home_cls_title': 'Column-Level Security',
@@ -334,27 +404,60 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         
         # Login
         'login_title': 'GenAI4Data',
-        'login_subtitle': 'Sistema de Seguridad Perfecto',
+        'login_subtitle': 'Sistema de Seguridad Integrado',
         'login_button': 'Iniciar sesión con Google',
-        'login_loading': 'CARGANDO SISTEMA PERFECTO...',
+        'login_loading': 'CARGANDO SISTEMA...',
         'login_powered': 'Desarrollado por Sys Manager',
         'login_partner': 'Partner Google Cloud',
+        
+        # Language Selector  # ← NOVO
+        'lang_selector_title': 'Idioma',
+        'lang_pt': 'Português',
+        'lang_en': 'English',
+        'lang_es': 'Español',
         
         # Header
         'header_logout': 'Cerrar sesión',
         'header_welcome': 'Bienvenido',
         'header_role': 'Rol',
+        'header_user_role': 'Su Rol: {role}',  # ← NOVO
         
-        # Navigation
+        # Navigation (Main Sections)
         'nav_home': 'Inicio',
         'nav_rls': 'Seguridad a Nivel de Fila',
         'nav_cls': 'Seguridad a Nivel de Columna',
         'nav_iam': 'Gestión IAM',
         'nav_audit': 'Auditoría',
         
+        # Navigation - RLS Submenu  # ← NOVO
+        'menu_rls_users': 'Crear por Usuarios',
+        'menu_rls_groups': 'Crear por Grupos',
+        'menu_rls_assign_users': 'Asignar Usuarios a Política',
+        'menu_rls_assign_values': 'Asignar Valores al Grupo',
+        
+        # Navigation - CLS Submenu  # ← NOVO
+        'menu_cls_taxonomies': 'Gestionar Taxonomías',
+        'menu_cls_tags': 'Gestionar Etiquetas de Política',
+        'menu_cls_apply': 'Aplicar Etiquetas a Columnas',
+        'menu_cls_iam': 'Permisos de Etiquetas de Política',
+        'menu_cls_create_view': 'Crear Vista Protegida',
+        'menu_cls_manage_views': 'Gestionar Vistas Protegidas',
+        'menu_cls_schema': 'Navegador de Esquemas',
+        
+        # Navigation - IAM Submenu  # ← NOVO
+        'menu_iam_dataset': 'Gestor IAM de Dataset',
+        'menu_iam_project': 'Gestor IAM de Proyecto',
+        'menu_iam_control': 'Controlar Acceso',
+        
+        # Navigation - Audit Submenu  # ← NOVO
+        'menu_audit_logs': 'Ver Registros de Auditoría',
+        
         # Home
-        'home_welcome': 'Bienvenido al Gestor de Seguridad',
+        'home_welcome': 'Bienvenido de nuevo,',  # ← MODIFICADO
         'home_subtitle': 'Gestione políticas RLS, etiquetas CLS y permisos IAM en un solo lugar',
+        'home_quick_start': 'Inicio Rápido',  # ← NOVO
+        
+        # Home - Feature Cards
         'home_rls_title': 'Seguridad a Nivel de Fila',
         'home_rls_desc': 'Controle el acceso a filas específicas según usuarios o grupos',
         'home_cls_title': 'Seguridad a Nivel de Columna',
@@ -505,19 +608,16 @@ def get_text(lang: str, key: str, **kwargs) -> str:
         >>> get_text('pt', 'rls_users_error', error='Invalid dataset')
         'Erro ao criar política: Invalid dataset'
     """
-    # Fallback to English if language not found
     if lang not in TRANSLATIONS:
         lang = 'en'
     
-    # Get translation
     text = TRANSLATIONS[lang].get(key, key)
     
-    # Format if kwargs provided
     if kwargs:
         try:
             text = text.format(**kwargs)
         except KeyError:
-            pass  # Return unformatted if keys don't match
+            pass
     
     return text
 
@@ -546,6 +646,19 @@ def validate_translations() -> Dict[str, list]:
     return missing
 
 
+def get_language_stats() -> Dict[str, int]:
+    """
+    Get statistics about translations
+    
+    Returns:
+        Dictionary with key counts per language
+    """
+    return {
+        lang: len(TRANSLATIONS[lang])
+        for lang in SUPPORTED_LANGUAGES
+    }
+
+
 # ============================================
 # LANGUAGE CONSTANTS
 # ============================================
@@ -564,3 +677,16 @@ LANGUAGE_FLAGS = {
     'en': '🇺🇸',
     'es': '🇪🇸'
 }
+
+
+# ============================================
+# VALIDATION ON IMPORT
+# ============================================
+
+_missing = validate_translations()
+if _missing:
+    import warnings
+    warnings.warn(
+        f"Missing translations detected: {_missing}",
+        UserWarning
+    )
