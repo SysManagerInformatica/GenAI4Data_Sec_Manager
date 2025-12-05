@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" id="html-root">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -32,45 +32,6 @@
             color: var(--text-main);
         }
 
-        /* --- Language Selector --- */
-        .language-selector {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-            display: flex;
-            gap: 8px;
-            background: rgba(10, 15, 26, 0.9);
-            padding: 8px 12px;
-            border-radius: 8px;
-            border: 1px solid rgba(0, 243, 255, 0.3);
-            backdrop-filter: blur(10px);
-        }
-
-        .lang-btn {
-            background: transparent;
-            border: 2px solid transparent;
-            border-radius: 4px;
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 4px 8px;
-            transition: all 0.3s ease;
-            line-height: 1;
-        }
-
-        .lang-btn:hover {
-            border-color: rgba(0, 243, 255, 0.5);
-            transform: scale(1.1);
-            box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
-        }
-
-        .lang-btn.active {
-            border-color: #00f3ff;
-            background: rgba(0, 243, 255, 0.1);
-            box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
-        }
-
-        /* --- Fundo Complexo (Blueprint Tech) --- */
         .tech-bg {
             position: fixed;
             top: 0;
@@ -87,7 +48,6 @@
             overflow: hidden;
         }
 
-        /* Grid Milimétrico de Fundo */
         .grid-overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -100,7 +60,53 @@
             mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
         }
 
-        /* Círculo Técnico Giratório */
+        /* Language Selector */
+        .language-selector {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            z-index: 100;
+            display: flex;
+            gap: 12px;
+            background: rgba(5, 10, 15, 0.7);
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 243, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .flag-btn {
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            border-radius: 4px;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 4px;
+        }
+
+        .flag-btn:hover {
+            border-color: var(--hud-color);
+            transform: scale(1.1);
+            box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+        }
+
+        .flag-btn.active {
+            border-color: var(--hud-color);
+            background: rgba(0, 243, 255, 0.1);
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
+        }
+
+        .flag-btn svg {
+            width: 100%;
+            height: 100%;
+            border-radius: 2px;
+        }
+
         .hud-circle-outer {
             position: absolute;
             right: -100px;
@@ -130,7 +136,6 @@
             pointer-events: none;
         }
 
-        /* Mira/Target */
         .hud-crosshair {
             position: absolute;
             top: 100px;
@@ -148,7 +153,6 @@
         .hud-crosshair::before { top: 24px; left: 0; width: 50px; height: 1px; }
         .hud-crosshair::after { left: 24px; top: 0; height: 50px; width: 1px; }
 
-        /* Linhas de Dados */
         .hud-lines {
             position: absolute;
             left: 50px;
@@ -163,7 +167,15 @@
         @keyframes spin { 100% { transform: rotate(360deg); } }
         @keyframes spin-reverse { 100% { transform: rotate(-360deg); } }
 
-        /* Card Principal */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+
         .glass-card {
             position: relative;
             z-index: 10;
@@ -177,14 +189,19 @@
                 0 0 15px rgba(0, 243, 255, 0.1),
                 inset 0 0 20px rgba(0, 243, 255, 0.05);
             border-radius: 4px; 
-            clip-path: polygon(0 0, 100% 0, 100% 85%, 92% 100%, 0 100%);
+            clip-path: polygon(
+                0 0, 
+                100% 0, 
+                100% 85%, 
+                92% 100%, 
+                0 100%
+            );
             display: flex;
             flex-direction: column;
             align-items: center;
             text-align: center;
         }
 
-        /* Cantos Decorativos */
         .card-corner {
             position: absolute;
             width: 20px;
@@ -198,7 +215,6 @@
         .tr { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
         .bl { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; }
 
-        /* Ícone */
         .icon-container {
             position: relative;
             margin-bottom: 2rem;
@@ -225,7 +241,6 @@
             50% { opacity: 0.3; transform: scale(1.2); }
         }
 
-        /* Títulos */
         .title {
             font-family: 'Inter', sans-serif;
             font-size: 1.75rem;
@@ -260,7 +275,6 @@
             opacity: 0.5;
         }
 
-        /* Botão Google */
         .google-btn {
             width: 100%;
             padding: 1rem 2rem;
@@ -303,7 +317,6 @@
             width: 100%;
         }
 
-        /* Footer */
         .footer {
             font-size: 0.7rem;
             color: #64748b;
@@ -313,8 +326,12 @@
             gap: 0.5rem;
             font-family: 'JetBrains Mono', monospace;
         }
+        
+        .footer-highlight {
+            color: #94a3b8;
+            font-weight: 700;
+        }
 
-        /* Scanlines */
         .scanlines {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -324,23 +341,74 @@
             z-index: 99;
             opacity: 0.15;
         }
+
+        @media (max-width: 600px) {
+            .language-selector {
+                top: 15px;
+                right: 15px;
+                padding: 8px 12px;
+                gap: 8px;
+            }
+            
+            .flag-btn {
+                width: 28px;
+                height: 28px;
+            }
+            
+            .glass-card {
+                padding: 2rem 1.5rem;
+            }
+            
+            .title {
+                font-size: 1.5rem;
+            }
+        }
+
     </style>
 </head>
 <body>
     
-    <!-- LANGUAGE SELECTOR -->
+    <!-- Language Selector -->
     <div class="language-selector">
-        <button class="lang-btn" onclick="changeLanguage('pt')" title="Português" id="lang-pt">
-            🇧🇷
+        <button class="flag-btn" id="flag-pt" onclick="changeLanguage('pt')" title="Português">
+            <svg viewBox="0 0 36 24" xmlns="http://www.w3.org/2000/svg">
+                <rect width="36" height="24" fill="#009739"/>
+                <path d="M18 3 L33 12 L18 21 L3 12 Z" fill="#FFDF00"/>
+                <circle cx="18" cy="12" r="4.5" fill="#002776"/>
+                <path d="M14 12 Q18 10, 22 12 Q18 14, 14 12" fill="#FFFFFF" opacity="0.9"/>
+            </svg>
         </button>
-        <button class="lang-btn" onclick="changeLanguage('en')" title="English" id="lang-en">
-            🇺🇸
+        
+        <button class="flag-btn" id="flag-en" onclick="changeLanguage('en')" title="English">
+            <svg viewBox="0 0 36 24" xmlns="http://www.w3.org/2000/svg">
+                <rect width="36" height="24" fill="#FFFFFF"/>
+                <rect y="0" width="36" height="2" fill="#B22234"/>
+                <rect y="4" width="36" height="2" fill="#B22234"/>
+                <rect y="8" width="36" height="2" fill="#B22234"/>
+                <rect y="12" width="36" height="2" fill="#B22234"/>
+                <rect y="16" width="36" height="2" fill="#B22234"/>
+                <rect y="20" width="36" height="2" fill="#B22234"/>
+                <rect width="14" height="12" fill="#3C3B6E"/>
+                <circle cx="3" cy="2" r="0.8" fill="#FFFFFF"/>
+                <circle cx="7" cy="2" r="0.8" fill="#FFFFFF"/>
+                <circle cx="11" cy="2" r="0.8" fill="#FFFFFF"/>
+                <circle cx="3" cy="6" r="0.8" fill="#FFFFFF"/>
+                <circle cx="7" cy="6" r="0.8" fill="#FFFFFF"/>
+                <circle cx="11" cy="6" r="0.8" fill="#FFFFFF"/>
+                <circle cx="3" cy="10" r="0.8" fill="#FFFFFF"/>
+                <circle cx="7" cy="10" r="0.8" fill="#FFFFFF"/>
+                <circle cx="11" cy="10" r="0.8" fill="#FFFFFF"/>
+            </svg>
         </button>
-        <button class="lang-btn" onclick="changeLanguage('es')" title="Español" id="lang-es">
-            🇪🇸
+        
+        <button class="flag-btn" id="flag-es" onclick="changeLanguage('es')" title="Español">
+            <svg viewBox="0 0 36 24" xmlns="http://www.w3.org/2000/svg">
+                <rect width="36" height="24" fill="#AA151B"/>
+                <rect y="6" width="36" height="12" fill="#F1BF00"/>
+            </svg>
         </button>
     </div>
-
+    
     <div class="tech-bg">
         <div class="grid-overlay"></div>
         <div class="hud-circle-outer"></div>
@@ -349,13 +417,11 @@
         <div class="hud-lines"></div>
         <div class="scanlines"></div>
 
-        <!-- Card Principal -->
         <div class="glass-card">
             <div class="card-corner tl"></div>
             <div class="card-corner tr"></div>
             <div class="card-corner bl"></div>
 
-            <!-- Ícone -->
             <div class="icon-container">
                 <div class="icon-glow-bg"></div>
                 <svg width="70" height="70" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="z-index: 2;">
@@ -368,22 +434,19 @@
                 </svg>
             </div>
 
-            <!-- Textos -->
-            <h1 class="title" id="login-title">GenAI4Data</h1>
-            <div class="subtitle" id="login-subtitle">Seamless Security System</div>
+            <h1 class="title" id="app-title">GenAI4Data</h1>
+            <div class="subtitle" id="app-subtitle">Seamless Security System</div>
 
-            <!-- Botão Google -->
-            <button class="google-btn" onclick="loginWithGoogle()" id="google-btn">
+            <button class="google-btn" id="login-btn" onclick="loginWithGoogle()">
                 <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.84z" fill="#FBBC05"/>
                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                 </svg>
-                <span id="btn-text">Sign in with Google</span>
+                <span id="login-btn-text">Sign in with Google</span>
             </button>
 
-            <!-- Footer -->
             <div class="footer">
                 <span id="footer-powered">Powered by Sys Manager</span>
                 <span style="color: var(--hud-color)">|</span>
@@ -393,89 +456,129 @@
     </div>
 
     <script>
-        // TRANSLATIONS
         const translations = {
             pt: {
-                title: 'GenAI4Data',
-                subtitle: 'Sistema de Segurança Perfeito',
-                button: 'Entrar com Google',
-                loading: 'CARREGANDO SISTEMA PERFEITO...',
-                poweredBy: 'Desenvolvido por Sys Manager',
-                partner: 'Partner Google Cloud'
+                app_title: 'GenAI4Data',
+                app_subtitle: 'Sistema de Segurança Integrado',
+                login_button: 'Entrar com Google',
+                login_loading: 'CARREGANDO SISTEMA...',
+                footer_powered: 'Desenvolvido por Sys Manager',
+                footer_partner: 'Partner Google Cloud'
             },
             en: {
-                title: 'GenAI4Data',
-                subtitle: 'Seamless Security System',
-                button: 'Sign in with Google',
-                loading: 'LOADING PERFECT SYSTEM...',
-                poweredBy: 'Powered by Sys Manager',
-                partner: 'Partner Google Cloud'
+                app_title: 'GenAI4Data',
+                app_subtitle: 'Seamless Security System',
+                login_button: 'Sign in with Google',
+                login_loading: 'LOADING SYSTEM...',
+                footer_powered: 'Powered by Sys Manager',
+                footer_partner: 'Partner Google Cloud'
             },
             es: {
-                title: 'GenAI4Data',
-                subtitle: 'Sistema de Seguridad Perfecto',
-                button: 'Iniciar sesión con Google',
-                loading: 'CARGANDO SISTEMA PERFECTO...',
-                poweredBy: 'Desarrollado por Sys Manager',
-                partner: 'Partner Google Cloud'
+                app_title: 'GenAI4Data',
+                app_subtitle: 'Sistema de Seguridad Integrado',
+                login_button: 'Iniciar sesión con Google',
+                login_loading: 'CARGANDO SISTEMA...',
+                footer_powered: 'Desarrollado por Sys Manager',
+                footer_partner: 'Partner Google Cloud'
             }
         };
 
-        // Get saved language or default to 'en'
-        let currentLang = localStorage.getItem('app_language') || 'en';
+        function detectBrowserLanguage() {
+            const browserLang = navigator.language || navigator.userLanguage;
+            if (browserLang.startsWith('pt')) return 'pt';
+            if (browserLang.startsWith('es')) return 'es';
+            return 'en';
+        }
 
-        // Apply translations
+        function loadSavedLanguage() {
+            const savedLang = localStorage.getItem('preferred_language');
+            if (savedLang && translations[savedLang]) {
+                return savedLang;
+            }
+            return detectBrowserLanguage();
+        }
+
+        function saveLanguage(lang) {
+            localStorage.setItem('preferred_language', lang);
+            console.log('Language saved: ' + lang);
+        }
+
         function applyTranslations(lang) {
             const t = translations[lang];
-            document.getElementById('login-title').textContent = t.title;
-            document.getElementById('login-subtitle').textContent = t.subtitle;
-            document.getElementById('btn-text').textContent = t.button;
-            document.getElementById('footer-powered').textContent = t.poweredBy;
-            document.getElementById('footer-partner').textContent = t.partner;
             
-            // Update active button
-            document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById('lang-' + lang).classList.add('active');
-            document.documentElement.lang = lang;
+            const elements = [
+                { id: 'app-subtitle', key: 'app_subtitle' },
+                { id: 'login-btn-text', key: 'login_button' },
+                { id: 'footer-powered', key: 'footer_powered' },
+                { id: 'footer-partner', key: 'footer_partner' }
+            ];
+
+            elements.forEach(function(item) {
+                const el = document.getElementById(item.id);
+                if (el) {
+                    el.classList.remove('fade-in');
+                    void el.offsetWidth;
+                    el.textContent = t[item.key];
+                    el.classList.add('fade-in');
+                }
+            });
+
+            document.getElementById('html-root').setAttribute('lang', lang);
+            console.log('Language applied: ' + lang);
         }
 
-        // Change language
+        function updateFlagButtons(activeLang) {
+            document.querySelectorAll('.flag-btn').forEach(function(btn) {
+                btn.classList.remove('active');
+            });
+            
+            const activeBtn = document.getElementById('flag-' + activeLang);
+            if (activeBtn) {
+                activeBtn.classList.add('active');
+            }
+        }
+
         function changeLanguage(lang) {
-            currentLang = lang;
-            localStorage.setItem('app_language', lang);
+            console.log('Changing language to: ' + lang);
             applyTranslations(lang);
+            saveLanguage(lang);
+            updateFlagButtons(lang);
         }
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
+        function initLanguageSystem() {
+            const currentLang = loadSavedLanguage();
+            console.log('Initializing with language: ' + currentLang);
             applyTranslations(currentLang);
-        });
+            updateFlagButtons(currentLang);
+        }
 
-        // Google OAuth
         function loginWithGoogle() {
+            const currentLang = localStorage.getItem('preferred_language') || 'en';
+            const loadingText = translations[currentLang].login_loading;
+            
             const clientId = "{{GOOGLE_CLIENT_ID}}";
             const redirectUri = "{{REDIRECT_URI}}";
             
-            const btn = document.getElementById('google-btn');
-            const btnText = document.getElementById('btn-text');
-            btnText.textContent = translations[currentLang].loading;
+            const btn = document.getElementById('login-btn');
+            const btnText = document.getElementById('login-btn-text');
+            
+            btnText.textContent = loadingText;
             btn.style.color = '#00f3ff';
-            btn.style.borderColor = '#00f3ff';
+            btn.style.borderColor = 'var(--hud-color)';
             
-            localStorage.setItem('app_language', currentLang);
-            
-            setTimeout(() => {
+            setTimeout(function() {
                 const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?client_id=' + clientId + '&redirect_uri=' + redirectUri + '&response_type=code&scope=openid%20email%20profile&access_type=online&prompt=select_account';
                 window.location.href = authUrl;
             }, 800);
         }
 
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === '1') { e.preventDefault(); changeLanguage('pt'); }
-            if ((e.ctrlKey || e.metaKey) && e.key === '2') { e.preventDefault(); changeLanguage('en'); }
-            if ((e.ctrlKey || e.metaKey) && e.key === '3') { e.preventDefault(); changeLanguage('es'); }
-        });
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initLanguageSystem);
+        } else {
+            initLanguageSystem();
+        }
+        
+        console.log('Language system initialized');
     </script>
 </body>
 </html>
