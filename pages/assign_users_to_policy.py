@@ -22,6 +22,7 @@
 # Use of this tool is at your own discretion and risk."
 
 import theme
+from theme import get_text  # <- NOVO
 from config import Config
 from nicegui import ui
 from google.cloud import bigquery
@@ -29,36 +30,25 @@ from google.api_core.exceptions import GoogleAPIError
 from services.audit_service import AuditService
 
 config = Config()
-
-# Initialize BigQuery client globally
 client = bigquery.Client(project=config.PROJECT_ID)
 
-
 class RLSAssignUserstoPolicy:
-
     def __init__(self):
         self.project_id = config.PROJECT_ID
         self.audit_service = AuditService(config.PROJECT_ID)
-        self.page_title = "Assign Users to Row Level Policy"
-
+        self.page_title = get_text('rls_assign_users_page_title')  # <- TRADUZIDO
         self.selected_policy_name = None
         self.selected_policy_dataset = None
         self.selected_policy_table = None
         self.selected_policy_field = None
         self.selected_policy = {}
-
         self.user_list = []
         self.filter_values = []
-        
-        # Para tracking de seleção
         self.selected_users = set()
         self.selected_filters = set()
-        
-        # Containers para UI
         self.user_container = None
         self.filter_container = None
         self.existing_policies_grid = None
-
         self.headers()
         self.stepper_setup()
 
@@ -87,7 +77,7 @@ class RLSAssignUserstoPolicy:
             results = [dict(row) for row in query_job]
             return results
         except Exception as e:
-            ui.notify(f"Error loading existing policies: {e}", type="negative")
+            ui.notify(get_text('msg_error_loading_policies', error=str(e)), type="negative")  # <- TRADUZIDO
             return []
 
     def delete_policy_from_db(self, username, filter_value):
@@ -106,7 +96,6 @@ class RLSAssignUserstoPolicy:
             query_job = client.query(query)
             query_job.result()
             
-            # Log audit
             self.audit_service.log_action(
                 action='DELETE_USER_POLICY',
                 resource_type='USER_ASSIGNMENT',
@@ -120,24 +109,21 @@ class RLSAssignUserstoPolicy:
                 }
             )
             
-            ui.notify(f"Policy deleted: {username} → {filter_value}", type="positive")
-            # Recarregar grid
+            ui.notify(get_text('msg_policy_deleted', username=username, filter_value=filter_value), type="positive")  # <- TRADUZIDO
             self.refresh_existing_policies_grid()
             
         except Exception as e:
-            ui.notify(f"Error deleting policy: {e}", type="negative")
+            ui.notify(get_text('msg_error_deleting_policy', error=str(e)), type="negative")  # <- TRADUZIDO
 
     def delete_rls_policy_from_bigquery(self, policy_name, dataset, table):
         """Deleta a política RLS completa do BigQuery"""
         try:
-            # 1. DROP ROW ACCESS POLICY no BigQuery
             query_drop_policy = f"""
             DROP ROW ACCESS POLICY `{policy_name}`
             ON `{self.project_id}.{dataset}.{table}`;
             """
             client.query(query_drop_policy).result()
             
-            # 2. Deletar da tabela de políticas
             query_delete_from_policy_table = f"""
             DELETE FROM `{config.POLICY_TABLE}`
             WHERE policy_name = '{policy_name}'
@@ -147,7 +133,6 @@ class RLSAssignUserstoPolicy:
             """
             client.query(query_delete_from_policy_table).result()
             
-            # 3. Deletar todos os filtros associados
             query_delete_filters = f"""
             DELETE FROM `{config.FILTER_TABLE}`
             WHERE policy_name = '{policy_name}'
@@ -157,7 +142,6 @@ class RLSAssignUserstoPolicy:
             """
             client.query(query_delete_filters).result()
             
-            # Log success
             self.audit_service.log_action(
                 action='DELETE_RLS_POLICY',
                 resource_type='RLS_POLICY',
@@ -174,7 +158,6 @@ class RLSAssignUserstoPolicy:
             return True
             
         except Exception as e:
-            # Log failure
             self.audit_service.log_action(
                 action='DELETE_RLS_POLICY',
                 resource_type='RLS_POLICY',
@@ -187,31 +170,31 @@ class RLSAssignUserstoPolicy:
                     'table': table
                 }
             )
-            ui.notify(f"Error deleting policy '{policy_name}': {str(e)}", type="negative")
+            ui.notify(get_text('msg_error_deleting_policy_name', policy_name=policy_name, error=str(e)), type="negative")  # <- TRADUZIDO
             return False
 
     async def delete_selected_policies(self):
         """Deleta políticas selecionadas no grid do Step 1"""
         rows = await self.grid_step1.get_selected_rows()
         if not rows:
-            ui.notify('No policies selected to delete.', type="warning")
+            ui.notify(get_text('msg_no_policies_selected_delete'), type="warning")  # <- TRADUZIDO
             return
         
         policy_names = [row['Policy Name'] for row in rows]
         
         with ui.dialog() as confirm_dialog, ui.card():
-            ui.label(f"Delete {len(policy_names)} policy(ies)?").classes('text-h6 mb-2')
+            ui.label(get_text('msg_delete_policies_confirm', count=len(policy_names))).classes('text-h6 mb-2')  # <- TRADUZIDO
             with ui.column().classes('mb-4 max-h-64 overflow-auto'):
                 for name in policy_names[:10]:
                     ui.label(f"• {name}").classes('text-sm')
                 if len(policy_names) > 10:
-                    ui.label(f"... and {len(policy_names) - 10} more").classes('text-sm italic text-grey-7')
-            ui.label('⚠️ This will delete the RLS policy from BigQuery and all associated filters!').classes('text-negative font-bold mb-2')
-            ui.label('This action cannot be undone.').classes('text-sm text-grey-7 mb-4')
+                    ui.label(get_text('msg_and_more', count=len(policy_names) - 10)).classes('text-sm italic text-grey-7')  # <- TRADUZIDO
+            ui.label(get_text('msg_delete_warning_rls')).classes('text-negative font-bold mb-2')  # <- TRADUZIDO
+            ui.label(get_text('msg_action_cannot_undone')).classes('text-sm text-grey-7 mb-4')  # <- TRADUZIDO
             with ui.row().classes('w-full justify-end gap-2'):
-                ui.button('Cancel', on_click=confirm_dialog.close).props('flat')
+                ui.button(get_text('btn_cancel'), on_click=confirm_dialog.close).props('flat')  # <- TRADUZIDO
                 ui.button(
-                    'DELETE', 
+                    get_text('btn_delete_upper'),  # <- TRADUZIDO
                     on_click=lambda: self.execute_policy_deletion(rows, confirm_dialog)
                 ).props('color=negative')
         
@@ -234,26 +217,22 @@ class RLSAssignUserstoPolicy:
             else:
                 fail_count += 1
         
-        # Refresh grid
         self.policy_list = self.get_policies()
         self.grid_step1.options['rowData'] = self.policy_list
         self.grid_step1.update()
         
-        # Summary message
         if fail_count == 0:
-            ui.notify(f"✅ Successfully deleted {success_count} policy(ies)!", type="positive")
+            ui.notify(get_text('msg_deleted_success', count=success_count), type="positive")  # <- TRADUZIDO
         else:
-            ui.notify(f"⚠️ Deleted {success_count}, {fail_count} failed.", type="warning")
+            ui.notify(get_text('msg_deleted_partial', success=success_count, failed=fail_count), type="warning")  # <- TRADUZIDO
 
-    # ✅ NOVO MÉTODO: DROP ALL FROM TABLE
     async def drop_all_from_selected_tables(self):
         """Remove TODAS as políticas RLS das tabelas selecionadas (DROP ALL)"""
         rows = await self.grid_step1.get_selected_rows()
         if not rows:
-            ui.notify('No policies selected', type="warning")
+            ui.notify(get_text('msg_no_policies_selected'), type="warning")  # <- TRADUZIDO
             return
         
-        # Agrupar policies por tabela
         tables_map = {}
         for policy in rows:
             table_key = f"{policy['Dataset ID']}.{policy['Table Name']}"
@@ -265,41 +244,38 @@ class RLSAssignUserstoPolicy:
                 }
             tables_map[table_key]['policies'].append(policy['Policy Name'])
         
-        # Dialog de confirmação CRÍTICO
         with ui.dialog() as confirm_dialog, ui.card().classes('w-full max-w-2xl'):
-            ui.label('⚠️ DROP ALL ROW ACCESS POLICIES').classes('text-h5 font-bold text-red-600 mb-4')
+            ui.label(get_text('msg_drop_all_title')).classes('text-h5 font-bold text-red-600 mb-4')  # <- TRADUZIDO
             
             with ui.card().classes('w-full bg-red-50 p-4 mb-4 border-2 border-red-500'):
-                ui.label('🚨 CRITICAL WARNING').classes('text-red-700 font-bold mb-2')
-                ui.label('This will remove ALL Row Access Policies from the selected tables!').classes('text-sm mb-2')
-                ui.label('After this action, tables will be ACCESSIBLE TO ALL USERS with table permissions.').classes('text-sm font-bold text-red-600')
+                ui.label(get_text('msg_critical_warning')).classes('text-red-700 font-bold mb-2')  # <- TRADUZIDO
+                ui.label(get_text('msg_drop_all_warning1')).classes('text-sm mb-2')  # <- TRADUZIDO
+                ui.label(get_text('msg_drop_all_warning2')).classes('text-sm font-bold text-red-600')  # <- TRADUZIDO
             
-            ui.label('Affected Tables:').classes('font-bold mb-2')
+            ui.label(get_text('msg_affected_tables')).classes('font-bold mb-2')  # <- TRADUZIDO
             
             for table_key, table_info in tables_map.items():
                 with ui.card().classes('w-full bg-orange-50 p-3 mb-2'):
                     ui.label(f"📋 {table_key}").classes('font-bold text-sm mb-1')
-                    ui.label(f"   Policies to remove: {len(table_info['policies'])}").classes('text-xs text-grey-7')
+                    ui.label(get_text('msg_policies_to_remove', count=len(table_info['policies']))).classes('text-xs text-grey-7')  # <- TRADUZIDO
                     
-                    # Mostrar nomes das policies
-                    with ui.expansion('Show policy names', icon='list').classes('w-full text-xs'):
+                    with ui.expansion(get_text('msg_show_policy_names'), icon='list').classes('w-full text-xs'):  # <- TRADUZIDO
                         for policy_name in table_info['policies']:
                             ui.label(f"  • {policy_name}").classes('text-xs')
             
             with ui.card().classes('w-full bg-yellow-50 p-3 mt-4'):
-                ui.label('💡 Alternative: If you want to keep access control, create a new policy before dropping these.').classes('text-xs')
+                ui.label(get_text('msg_drop_all_alternative')).classes('text-xs')  # <- TRADUZIDO
             
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
-                ui.button('CANCEL', on_click=confirm_dialog.close).props('flat')
+                ui.button(get_text('btn_cancel_upper'), on_click=confirm_dialog.close).props('flat')  # <- TRADUZIDO
                 ui.button(
-                    'DROP ALL POLICIES',
+                    get_text('btn_drop_all_policies'),  # <- TRADUZIDO
                     icon='delete_forever',
                     on_click=lambda: self.execute_drop_all(tables_map, confirm_dialog)
                 ).props('color=negative')
         
         confirm_dialog.open()
 
-    # ✅ NOVO MÉTODO: EXECUTAR DROP ALL
     def execute_drop_all(self, tables_map, dialog):
         """Executa DROP ALL ROW ACCESS POLICIES para cada tabela"""
         total_policies = 0
@@ -312,16 +288,11 @@ class RLSAssignUserstoPolicy:
                 table_name = table_info['table_name']
                 policies_count = len(table_info['policies'])
                 
-                # DROP ALL para remover todas de uma vez
                 sql = f"""DROP ALL ROW ACCESS POLICIES ON `{self.project_id}.{dataset_id}.{table_name}`;"""
-                
-                print(f"[DEBUG] Executing DROP ALL for {table_key}")
-                print(f"[DEBUG] SQL: {sql}")
                 
                 query_job = client.query(sql)
                 query_job.result()
                 
-                # Deletar da tabela de políticas
                 query_delete_policies = f"""
                 DELETE FROM `{config.POLICY_TABLE}`
                 WHERE project_id = '{self.project_id}'
@@ -331,7 +302,6 @@ class RLSAssignUserstoPolicy:
                 """
                 client.query(query_delete_policies).result()
                 
-                # Deletar filtros associados
                 query_delete_filters = f"""
                 DELETE FROM `{config.FILTER_TABLE}`
                 WHERE project_id = '{self.project_id}'
@@ -341,7 +311,6 @@ class RLSAssignUserstoPolicy:
                 """
                 client.query(query_delete_filters).result()
                 
-                # Log audit
                 self.audit_service.log_action(
                     action='DROP_ALL_RLS_POLICIES',
                     resource_type='TABLE',
@@ -357,11 +326,7 @@ class RLSAssignUserstoPolicy:
                 success_tables += 1
                 total_policies += policies_count
                 
-                print(f"[SUCCESS] Dropped {policies_count} policies from {table_key}")
-                
             except Exception as e:
-                print(f"[ERROR] Failed to drop policies from {table_key}: {e}")
-                
                 self.audit_service.log_action(
                     action='DROP_ALL_RLS_POLICIES',
                     resource_type='TABLE',
@@ -374,22 +339,20 @@ class RLSAssignUserstoPolicy:
         
         dialog.close()
         
-        # Notificações
         if success_tables > 0:
             ui.notify(
-                f"✅ Dropped {total_policies} policies from {success_tables} table(s)!",
+                get_text('msg_dropped_success', policies=total_policies, tables=success_tables),  # <- TRADUZIDO
                 type="positive",
                 timeout=5000
             )
         
         if failed_tables > 0:
             ui.notify(
-                f"❌ Failed to drop policies from {failed_tables} table(s)",
+                get_text('msg_dropped_failed', tables=failed_tables),  # <- TRADUZIDO
                 type="negative",
                 timeout=5000
             )
         
-        # Refresh grid
         self.policy_list = self.get_policies()
         self.grid_step1.options['rowData'] = self.policy_list
         self.grid_step1.update()
@@ -407,7 +370,7 @@ class RLSAssignUserstoPolicy:
             self.user_container.clear()
             with self.user_container:
                 if not self.user_list:
-                    ui.label("No users added yet").classes('text-grey-5 italic')
+                    ui.label(get_text('msg_no_users_added')).classes('text-grey-5 italic')  # <- TRADUZIDO
                 else:
                     for user_email in self.user_list:
                         with ui.row().classes('w-full items-center justify-between p-2 border rounded hover:bg-grey-1'):
@@ -419,7 +382,7 @@ class RLSAssignUserstoPolicy:
                             ui.button(
                                 icon='delete',
                                 on_click=lambda u=user_email: self.remove_user_from_list(u)
-                            ).props('flat dense color=negative').tooltip('Remove from list')
+                            ).props('flat dense color=negative').tooltip(get_text('tooltip_remove_from_list'))  # <- TRADUZIDO
 
     def refresh_filter_list(self):
         """Atualiza a lista de filtros na UI com checkboxes"""
@@ -427,7 +390,7 @@ class RLSAssignUserstoPolicy:
             self.filter_container.clear()
             with self.filter_container:
                 if not self.filter_values:
-                    ui.label("No filters added yet").classes('text-grey-5 italic')
+                    ui.label(get_text('msg_no_filters_added')).classes('text-grey-5 italic')  # <- TRADUZIDO
                 else:
                     for filter_value in self.filter_values:
                         with ui.row().classes('w-full items-center justify-between p-2 border rounded hover:bg-grey-1'):
@@ -439,7 +402,7 @@ class RLSAssignUserstoPolicy:
                             ui.button(
                                 icon='delete',
                                 on_click=lambda f=filter_value: self.remove_filter_from_list(f)
-                            ).props('flat dense color=negative').tooltip('Remove from list')
+                            ).props('flat dense color=negative').tooltip(get_text('tooltip_remove_from_list'))  # <- TRADUZIDO
 
     def toggle_user_selection(self, user_email, is_selected):
         """Toggle seleção de usuário"""
@@ -460,7 +423,7 @@ class RLSAssignUserstoPolicy:
         if email in self.user_list:
             self.user_list.remove(email)
             self.selected_users.discard(email)
-            ui.notify(f"User {email} removed from list", type="info")
+            ui.notify(get_text('msg_user_removed', email=email), type="info")  # <- TRADUZIDO
             self.refresh_user_list()
 
     def remove_filter_from_list(self, filter_value):
@@ -468,17 +431,17 @@ class RLSAssignUserstoPolicy:
         if filter_value in self.filter_values:
             self.filter_values.remove(filter_value)
             self.selected_filters.discard(filter_value)
-            ui.notify(f"Filter '{filter_value}' removed from list", type="info")
+            ui.notify(get_text('msg_filter_removed', filter_value=filter_value), type="info")  # <- TRADUZIDO
             self.refresh_filter_list()
 
     def headers(self):
         ui.page_title(self.page_title)
-        ui.label('Assign Users to Row Level Policy').classes('text-primary text-center text-bold')
+        ui.label(get_text('rls_assign_users_subtitle')).classes('text-primary text-center text-bold')  # <- TRADUZIDO
 
     def stepper_setup(self):
         self.stepper = ui.stepper().props("vertical").classes("w-full")
-        self.step1_title = "Select Policy"
-        self.step2_title = "Manage Assignments"
+        self.step1_title = get_text('rls_assign_users_step1_title')  # <- TRADUZIDO
+        self.step2_title = get_text('rls_assign_users_step2_title')  # <- TRADUZIDO
 
         with self.stepper:
             self.step1()
@@ -502,20 +465,20 @@ class RLSAssignUserstoPolicy:
             results = [dict(row) for row in query_job]
             return results
         except GoogleAPIError as e:
-            ui.notify(f"Error fetching policies: {e}", type="negative")
+            ui.notify(get_text('msg_error_fetch_policies', error=str(e)), type="negative")  # <- TRADUZIDO
             return []
         except Exception as e:
-            ui.notify(f"Unexpected error fetching policies: {e}", type="negative")
+            ui.notify(get_text('msg_error_unexpected_fetch_policies', error=str(e)), type="negative")  # <- TRADUZIDO
             return []
 
     def run_insert_users_and_values(self):
         """Insere apenas os usuários e filtros SELECIONADOS"""
         if not self.selected_users:
-            ui.notify("Please select at least one user to insert.", type="warning")
+            ui.notify(get_text('msg_select_at_least_one_user'), type="warning")  # <- TRADUZIDO
             return
 
         if not self.selected_filters:
-            ui.notify("Please select at least one filter to insert.", type="warning")
+            ui.notify(get_text('msg_select_at_least_one_filter'), type="warning")  # <- TRADUZIDO
             return
 
         try:
@@ -529,12 +492,10 @@ class RLSAssignUserstoPolicy:
                         ('users', '{self.selected_policy_name}', '{self.project_id}', '{self.selected_policy_dataset}', '{self.selected_policy_table}', '{self.selected_policy_field}', '{filter_value}', '{user}')
                     """)
 
-            # Execute all inserts
             for insert_statement in insert_statements:
                 query_job = client.query(insert_statement)
                 query_job.result()
 
-            # Log success
             for user in self.selected_users:
                 self.audit_service.log_action(
                     action='ASSIGN_USER_TO_POLICY',
@@ -552,13 +513,11 @@ class RLSAssignUserstoPolicy:
                     }
                 )
 
-            ui.notify(f"Successfully inserted {len(self.selected_users)} users × {len(self.selected_filters)} filters", type="positive")
+            ui.notify(get_text('msg_inserted_success', users=len(self.selected_users), filters=len(self.selected_filters)), type="positive")  # <- TRADUZIDO
             
-            # Limpar seleções
             self.selected_users.clear()
             self.selected_filters.clear()
             
-            # Recarregar grid de políticas existentes
             self.refresh_existing_policies_grid()
             self.refresh_user_list()
             self.refresh_filter_list()
@@ -577,7 +536,7 @@ class RLSAssignUserstoPolicy:
                     'table': self.selected_policy_table
                 }
             )
-            ui.notify(f"Error inserting data: {error}", type="negative")
+            ui.notify(get_text('msg_error_inserting_data', error=str(error)), type="negative")  # <- TRADUZIDO
             
         except Exception as error:
             self.audit_service.log_action(
@@ -591,26 +550,24 @@ class RLSAssignUserstoPolicy:
                     'policy_name': self.selected_policy_name
                 }
             )
-            ui.notify(f"An unexpected error occurred: {error}", type="negative")
+            ui.notify(get_text('msg_error_unexpected', error=str(error)), type="negative")  # <- TRADUZIDO
 
     async def get_selected_row(self):
         rows = await self.grid_step1.get_selected_rows()
         if not rows:
-            ui.notify('No rows selected.', type="warning")
+            ui.notify(get_text('msg_no_rows_selected'), type="warning")  # <- TRADUZIDO
             self.step1_next_button.set_visibility(False)
             return
 
-        # Para avançar, precisa selecionar apenas 1 política
         if len(rows) == 1:
             self.selected_policy = [dict(row) for row in rows]
             self.step1_next_button.set_visibility(True)
         else:
-            # Múltiplas seleções são apenas para deletar
             self.step1_next_button.set_visibility(False)
 
     def update_policy_values(self):
         if not self.selected_policy:
-            ui.notify("No policy selected.", type="warning")
+            ui.notify(get_text('msg_no_policy_selected'), type="warning")  # <- TRADUZIDO
             return
 
         self.selected_policy_name = self.selected_policy[0]['Policy Name']
@@ -622,7 +579,7 @@ class RLSAssignUserstoPolicy:
 
     def step1(self):
         with ui.step(self.step1_title):
-            ui.label("Select ONE policy to manage, or select MULTIPLE to delete").classes('text-caption text-grey-7 mb-2')
+            ui.label(get_text('rls_assign_users_step1_desc')).classes('text-caption text-grey-7 mb-2')  # <- TRADUZIDO
             
             self.policy_list = self.get_policies()
 
@@ -640,24 +597,21 @@ class RLSAssignUserstoPolicy:
 
             with ui.stepper_navigation():
                 with ui.row().classes('w-full justify-between'):
-                    # Lado esquerdo: Botões DELETE
                     with ui.row().classes('gap-2'):
                         ui.button(
-                            "DELETE SELECTED", 
+                            get_text('btn_delete_selected'),  # <- TRADUZIDO
                             icon="delete", 
                             on_click=self.delete_selected_policies
                         ).props('color=negative flat')
                         
-                        # ✅ NOVO: Botão DROP ALL FROM TABLE
                         ui.button(
-                            "DROP ALL FROM TABLE",
+                            get_text('btn_drop_all_from_table'),  # <- TRADUZIDO
                             icon="delete_forever",
                             on_click=self.drop_all_from_selected_tables
-                        ).props('color=red outline').style('border: 2px solid red;').tooltip('⚠️ Removes ALL policies from selected tables')
+                        ).props('color=red outline').style('border: 2px solid red;').tooltip(get_text('tooltip_drop_all'))  # <- TRADUZIDO
                     
-                    # Lado direito: Botão NEXT
                     self.step1_next_button = ui.button(
-                        "NEXT", 
+                        get_text('btn_next'),  # <- TRADUZIDO
                         icon="arrow_forward_ios",
                         on_click=self.update_policy_values
                     )
@@ -671,11 +625,11 @@ class RLSAssignUserstoPolicy:
                 self.selected_users.add(email)
                 self.user_input.value = ''
                 self.refresh_user_list()
-                ui.notify(f"User {email} added", type="positive")
+                ui.notify(get_text('msg_user_added', email=email), type="positive")  # <- TRADUZIDO
             else:
-                ui.notify("User already added.", type="warning")
+                ui.notify(get_text('msg_user_already_added'), type="warning")  # <- TRADUZIDO
         else:
-            ui.notify("Invalid email address.", type="warning")
+            ui.notify(get_text('msg_invalid_email'), type="warning")  # <- TRADUZIDO
 
     def add_filter(self):
         filter_value = self.filter_input.value.strip()
@@ -685,17 +639,17 @@ class RLSAssignUserstoPolicy:
                 self.selected_filters.add(filter_value)
                 self.filter_input.value = ''
                 self.refresh_filter_list()
-                ui.notify(f"Filter '{filter_value}' added", type="positive")
+                ui.notify(get_text('msg_filter_added', filter_value=filter_value), type="positive")  # <- TRADUZIDO
             else:
-                ui.notify("Filter already added.", type="warning")
+                ui.notify(get_text('msg_filter_already_added'), type="warning")  # <- TRADUZIDO
         else:
-            ui.notify("Invalid filter value.", type="warning")
+            ui.notify(get_text('msg_invalid_filter'), type="warning")  # <- TRADUZIDO
 
     async def delete_selected_existing_policy(self):
         """Deleta política selecionada no grid"""
         rows = await self.existing_policies_grid.get_selected_rows()
         if not rows:
-            ui.notify('No rows selected to delete.', type="warning")
+            ui.notify(get_text('msg_no_rows_selected_delete'), type="warning")  # <- TRADUZIDO
             return
         
         for row in rows:
@@ -705,74 +659,70 @@ class RLSAssignUserstoPolicy:
         """Step 2 com duas abas: Existing Policies e Add New"""
         with ui.step(self.step2_title):
             with ui.tabs().classes('w-full') as tabs:
-                tab_existing = ui.tab('Existing Policies', icon='list')
-                tab_new = ui.tab('Add New Assignments', icon='add_circle')
+                tab_existing = ui.tab(get_text('tab_existing_policies'), icon='list')  # <- TRADUZIDO
+                tab_new = ui.tab(get_text('tab_add_new_assignments'), icon='add_circle')  # <- TRADUZIDO
             
             with ui.tab_panels(tabs, value=tab_existing).classes('w-full'):
-                # TAB 1: Existing Policies
                 with ui.tab_panel(tab_existing):
-                    ui.label("Current Policy Assignments").classes('text-h6 font-bold mb-4')
-                    ui.label("Select rows and click DELETE to remove from database").classes('text-caption text-grey-7 mb-2')
+                    ui.label(get_text('rls_assign_users_current_assignments')).classes('text-h6 font-bold mb-4')  # <- TRADUZIDO
+                    ui.label(get_text('rls_assign_users_select_delete_desc')).classes('text-caption text-grey-7 mb-2')  # <- TRADUZIDO
                     
                     existing_data = self.load_existing_policies_from_db()
                     
                     self.existing_policies_grid = ui.aggrid({
                         'columnDefs': [
-                            {'field': 'username', 'headerName': 'User Email', 'checkboxSelection': True, 'filter': 'agTextColumnFilter'},
-                            {'field': 'filter_value', 'headerName': 'Filter Value', 'filter': 'agTextColumnFilter'},
-                            {'field': 'policy_name', 'headerName': 'Policy Name', 'filter': 'agTextColumnFilter'},
-                            {'field': 'field_id', 'headerName': 'Field', 'filter': 'agTextColumnFilter'},
-                            {'field': 'created_at', 'headerName': 'Created At', 'filter': 'agTextColumnFilter'},
+                            {'field': 'username', 'headerName': get_text('col_user_email'), 'checkboxSelection': True, 'filter': 'agTextColumnFilter'},  # <- TRADUZIDO
+                            {'field': 'filter_value', 'headerName': get_text('col_filter_value'), 'filter': 'agTextColumnFilter'},  # <- TRADUZIDO
+                            {'field': 'policy_name', 'headerName': get_text('col_policy_name'), 'filter': 'agTextColumnFilter'},  # <- TRADUZIDO
+                            {'field': 'field_id', 'headerName': get_text('col_field'), 'filter': 'agTextColumnFilter'},  # <- TRADUZIDO
+                            {'field': 'created_at', 'headerName': get_text('col_created_at'), 'filter': 'agTextColumnFilter'},  # <- TRADUZIDO
                         ],
                         'rowData': existing_data,
                         'rowSelection': 'multiple',
                     }).classes('w-full max-h-96 ag-theme-quartz')
                     
                     with ui.row().classes('mt-4'):
-                        ui.button("DELETE SELECTED", icon="delete", on_click=self.delete_selected_existing_policy).props('color=negative')
-                        ui.button("REFRESH", icon="refresh", on_click=self.refresh_existing_policies_grid).props('flat')
+                        ui.button(get_text('btn_delete_selected'), icon="delete", on_click=self.delete_selected_existing_policy).props('color=negative')  # <- TRADUZIDO
+                        ui.button(get_text('btn_refresh'), icon="refresh", on_click=self.refresh_existing_policies_grid).props('flat')  # <- TRADUZIDO
                 
-                # TAB 2: Add New Assignments
                 with ui.tab_panel(tab_new):
-                    ui.label("Add New User-Filter Assignments").classes('text-h6 font-bold mb-4')
-                    ui.label("Add users and filters, select checkboxes, then click INSERT").classes('text-caption text-grey-7 mb-2')
+                    ui.label(get_text('rls_assign_users_add_new_title')).classes('text-h6 font-bold mb-4')  # <- TRADUZIDO
+                    ui.label(get_text('rls_assign_users_add_new_desc')).classes('text-caption text-grey-7 mb-2')  # <- TRADUZIDO
                     
                     with ui.row().classes('w-full justify-center'):
                         with ui.grid(columns=2).classes('gap-8 w-full justify-center'):
-                            # LEFT SIDE: User Emails
                             with ui.column().classes('items-left text-left w-full'):
-                                ui.label("Add User Emails:").classes('font-bold')
+                                ui.label(get_text('rls_assign_users_add_emails')).classes('font-bold')  # <- TRADUZIDO
                                 
                                 with ui.row().classes('w-full gap-2'):
-                                    self.user_input = ui.input(placeholder="user@example.com").classes('flex-1')
-                                    ui.button("ADD USER", on_click=self.add_user).props('color=primary')
+                                    self.user_input = ui.input(placeholder=get_text('placeholder_user_email')).classes('flex-1')  # <- TRADUZIDO
+                                    ui.button(get_text('btn_add_user'), on_click=self.add_user).props('color=primary')  # <- TRADUZIDO
                                 
                                 ui.separator()
-                                ui.label("User Email (check to insert)").classes('font-bold text-sm text-grey-7')
+                                ui.label(get_text('rls_assign_users_user_list_label')).classes('font-bold text-sm text-grey-7')  # <- TRADUZIDO
                                 
                                 with ui.card().classes('w-full min-h-48 max-h-96 overflow-auto'):
                                     self.user_container = ui.column().classes('w-full gap-1')
                                     self.refresh_user_list()
 
-                            # RIGHT SIDE: Filter Values
                             with ui.column().classes('items-left text-left w-full'):
-                                ui.label("Add Filter Values:").classes('font-bold')
+                                ui.label(get_text('rls_assign_users_add_filters')).classes('font-bold')  # <- TRADUZIDO
                                 
                                 with ui.row().classes('w-full gap-2'):
-                                    self.filter_input = ui.input(placeholder="Tecnologia da Informação").classes('flex-1')
-                                    ui.button("ADD FILTER", on_click=self.add_filter).props('color=primary')
+                                    self.filter_input = ui.input(placeholder=get_text('placeholder_filter_value')).classes('flex-1')  # <- TRADUZIDO
+                                    ui.button(get_text('btn_add_filter'), on_click=self.add_filter).props('color=primary')  # <- TRADUZIDO
                                 
                                 ui.separator()
-                                ui.label("Filter Values (check to insert)").classes('font-bold text-sm text-grey-7')
+                                ui.label(get_text('rls_assign_users_filter_list_label')).classes('font-bold text-sm text-grey-7')  # <- TRADUZIDO
                                 
                                 with ui.card().classes('w-full min-h-48 max-h-96 overflow-auto'):
                                     self.filter_container = ui.column().classes('w-full gap-1')
                                     self.refresh_filter_list()
 
             with ui.stepper_navigation():
-                ui.button("BACK", icon="arrow_back_ios", on_click=self.stepper.previous)
-                ui.button("INSERT SELECTED", icon="enhanced_encryption", on_click=self.run_insert_users_and_values).props('color=primary')
+                ui.button(get_text('btn_back'), icon="arrow_back_ios", on_click=self.stepper.previous)  # <- TRADUZIDO
+                ui.button(get_text('btn_insert_selected'), icon="enhanced_encryption", on_click=self.run_insert_users_and_values).props('color=primary')  # <- TRADUZIDO
 
     def run(self):
-        with theme.frame('Assign Users to Policy'):
+        with theme.frame(get_text('rls_assign_users_frame_title')):  # <- TRADUZIDO
             pass
