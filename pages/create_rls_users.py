@@ -22,6 +22,7 @@
 # Use of this tool is at your own discretion and risk."
 
 import theme
+from theme import get_text  # <- NOVO: importar função de tradução
 from wonderwords import RandomWord
 from config import Config
 from nicegui import ui
@@ -45,15 +46,15 @@ class RLSCreateforUsers:
         self.table_list = None
         self.field_list = None
 
-        self.page_title = "Create Row Level Policy - Users"
+        self.page_title = get_text('rls_users_page_title')  # <- TRADUZIDO
         self.headers()
 
         self.stepper = ui.stepper().props("vertical").classes("w-full")
 
-        self.step1_title = "Select Dataset"
-        self.step2_title = "Select Table"
-        self.step3_title = "Select Field"
-        self.step4_title = "Review and Run"
+        self.step1_title = get_text('rls_users_step1_title')  # <- TRADUZIDO
+        self.step2_title = get_text('rls_users_step2_title')  # <- TRADUZIDO
+        self.step3_title = get_text('rls_users_step3_title')  # <- TRADUZIDO
+        self.step4_title = get_text('rls_users_step4_title')  # <- TRADUZIDO
 
         # Initialize selected values properly
         self.selected_dataset = None
@@ -83,12 +84,12 @@ class RLSCreateforUsers:
         self._step1_next_button_visibility()  
 
     def _step1_next_button_visibility(self):
-         self.step1_next_button.set_visibility(bool(self.selected_dataset)) # 
+         self.step1_next_button.set_visibility(bool(self.selected_dataset))
 
 
     def headers(self):
         ui.page_title(self.page_title)
-        ui.label('Create Row Level Security to Users').classes('text-primary text-center text-bold') # Subtitle, color, spacing
+        ui.label(get_text('rls_users_subtitle')).classes('text-primary text-center text-bold')  # <- TRADUZIDO
 
 
     def get_datasets(self):
@@ -96,16 +97,16 @@ class RLSCreateforUsers:
             datasets = list(client.list_datasets())
             return [dataset.dataset_id for dataset in datasets]
         except GoogleAPIError as e:
-            ui.notify(f"Error fetching datasets: {e}", type="negative")
+            ui.notify(get_text('msg_error_fetch_datasets', error=str(e)), type="negative")  # <- TRADUZIDO
             return []  # Return empty list on error
         except Exception as e:
-            ui.notify(f"An unexpected error occurred: {e}", type="negative")
+            ui.notify(get_text('msg_error_unexpected', error=str(e)), type="negative")  # <- TRADUZIDO
             return []
 
 
     def get_tables_in_dataset(self):
         if not self.selected_dataset:
-            ui.notify("Please select a dataset first.", type="warning")
+            ui.notify(get_text('msg_select_dataset_first'), type="warning")  # <- TRADUZIDO
             return
 
         try:
@@ -117,17 +118,17 @@ class RLSCreateforUsers:
             self.stepper.next()
             self.step2_next_button.set_visibility(False)
         except NotFound:
-            ui.notify(f"Dataset not found: {self.selected_dataset}", type="negative")
+            ui.notify(get_text('msg_dataset_not_found', dataset=self.selected_dataset), type="negative")  # <- TRADUZIDO
         except GoogleAPIError as e:
-            ui.notify(f"Error fetching tables: {e}", type="negative")
+            ui.notify(get_text('msg_error_fetch_tables', error=str(e)), type="negative")  # <- TRADUZIDO
         except Exception as e:
-            ui.notify(f"An unexpected error occurred: {e}", type="negative")
+            ui.notify(get_text('msg_error_unexpected', error=str(e)), type="negative")  # <- TRADUZIDO
 
 
 
     def get_fields_in_table(self):
         if not self.selected_table:
-            ui.notify("Please select a table first.", type="warning")
+            ui.notify(get_text('msg_select_table_first'), type="warning")  # <- TRADUZIDO
             return
 
         try:
@@ -140,28 +141,30 @@ class RLSCreateforUsers:
             self.stepper.next()
             self.step3_next_button.set_visibility(False) 
         except NotFound:
-            ui.notify(f"Table not found: {self.selected_table}", type="negative")
+            ui.notify(get_text('msg_table_not_found', table=self.selected_table), type="negative")  # <- TRADUZIDO
         except GoogleAPIError as e:
-            ui.notify(f"Error fetching fields: {e}", type="negative")
+            ui.notify(get_text('msg_error_fetch_fields', error=str(e)), type="negative")  # <- TRADUZIDO
         except Exception as e:
-            ui.notify(f"An unexpected error occurred: {e}", type="negative")
+            ui.notify(get_text('msg_error_unexpected', error=str(e)), type="negative")  # <- TRADUZIDO
 
     def get_resume(self):
         if not self.selected_field:
-            ui.notify("Please select a field first.", type="warning")
+            ui.notify(get_text('msg_select_field_first'), type="warning")  # <- TRADUZIDO
             return
 
         self.policy_name = f'{self.selected_dataset}_{self.selected_table}_{self.selected_field[0]}_{self.randon_word}'
+        
+        # Resumo traduzido  # <- TRADUZIDO
         self.resume.content = f""" 
-            ###**The following Row Level Security Policy will be created:**<br>
+            ###**{get_text('rls_users_review_title')}**<br>
 
-            **Policy Name**: {self.policy_name}<br>
-            **Project ID**: {self.project_id}<br>
-            **Dataset ID**: {self.selected_dataset}<br>
-            **Table ID**: {self.selected_table}<br>
-            **Field ID**: {self.selected_field[0]}<br>
+            **{get_text('rls_users_review_policy_name')}**: {self.policy_name}<br>
+            **{get_text('rls_users_review_project_id')}**: {self.project_id}<br>
+            **{get_text('rls_users_review_dataset_id')}**: {self.selected_dataset}<br>
+            **{get_text('rls_users_review_table_id')}**: {self.selected_table}<br>
+            **{get_text('rls_users_review_field_id')}**: {self.selected_field[0]}<br>
             <br>
-            **Code**:
+            **{get_text('rls_users_review_code')}**:
 
         """
 
@@ -214,10 +217,15 @@ class RLSCreateforUsers:
                 }
             )
             
+            # Mensagem de sucesso traduzida  # <- TRADUZIDO
             with ui.dialog() as dialog, ui.card():
-                ui.label(f'Row Level Policy Created on {self.selected_table}.{self.selected_field[0]} successfully!').classes(replace='text-positive').classes('font-bold')
+                ui.label(
+                    get_text('rls_users_success_message', 
+                            table=self.selected_table, 
+                            field=self.selected_field[0])
+                ).classes(replace='text-positive').classes('font-bold')
                 with ui.row().classes('w-full justify-center'): 
-                    ui.button('Close', on_click=ui.navigate.reload)  
+                    ui.button(get_text('btn_close'), on_click=ui.navigate.reload)  # <- TRADUZIDO
             dialog.open()
             
         except GoogleAPIError as error:
@@ -234,7 +242,7 @@ class RLSCreateforUsers:
                     'field': self.selected_field[0] if self.selected_field else 'unknown'
                 }
             )
-            ui.notify(f"Error creating row-level access policy: {error}", type="negative")
+            ui.notify(get_text('msg_error_create_policy', error=str(error)), type="negative")  # <- TRADUZIDO
             
         except Exception as error:
             # Log exception
@@ -250,32 +258,32 @@ class RLSCreateforUsers:
                     'field': self.selected_field[0] if self.selected_field else 'unknown'
                 }
             )
-            ui.notify(f"An unexpected error occurred: {error}", type="negative")
+            ui.notify(get_text('msg_error_unexpected', error=str(error)), type="negative")  # <- TRADUZIDO
 
     def step1(self):
         with ui.step(self.step1_title):
             dataset_list = self.get_datasets()
-            ui.select(dataset_list, label="Select Dataset", on_change=self._update_selected_dataset)
+            ui.select(dataset_list, label=get_text('rls_users_select_dataset'), on_change=self._update_selected_dataset)  # <- TRADUZIDO
             with ui.stepper_navigation():
-                self.step1_next_button = ui.button("NEXT", icon="arrow_forward_ios", on_click=self.get_tables_in_dataset)
+                self.step1_next_button = ui.button(get_text('btn_next'), icon="arrow_forward_ios", on_click=self.get_tables_in_dataset)  # <- TRADUZIDO
                 self.step1_next_button.set_visibility(False)
 
     def step2(self):
         with ui.step(self.step2_title):
-            self.table_list = ui.select([], label="Select Table", on_change=self._update_selected_table)
+            self.table_list = ui.select([], label=get_text('rls_users_select_table'), on_change=self._update_selected_table)  # <- TRADUZIDO
             with ui.stepper_navigation():
-                ui.button("BACK", icon="arrow_back_ios", on_click=self.stepper.previous)
-                self.step2_next_button = ui.button("NEXT", icon="arrow_forward_ios", on_click=self.get_fields_in_table)
+                ui.button(get_text('btn_back'), icon="arrow_back_ios", on_click=self.stepper.previous)  # <- TRADUZIDO
+                self.step2_next_button = ui.button(get_text('btn_next'), icon="arrow_forward_ios", on_click=self.get_fields_in_table)  # <- TRADUZIDO
                 
                 self.step2_next_button.set_visibility(False)
             return
 
     def step3(self):
         with ui.step(self.step3_title):
-            self.field_list = ui.select([], label="Select Field", on_change=self._update_selected_field)
+            self.field_list = ui.select([], label=get_text('rls_users_select_field'), on_change=self._update_selected_field)  # <- TRADUZIDO
             with ui.stepper_navigation():
-                ui.button("BACK", icon="arrow_back_ios", on_click=self.stepper.previous)
-                self.step3_next_button = ui.button("NEXT", icon="arrow_forward_ios", on_click=self.get_resume)
+                ui.button(get_text('btn_back'), icon="arrow_back_ios", on_click=self.stepper.previous)  # <- TRADUZIDO
+                self.step3_next_button = ui.button(get_text('btn_next'), icon="arrow_forward_ios", on_click=self.get_resume)  # <- TRADUZIDO
                 
                 self.step3_next_button.set_visibility(False)
 
@@ -286,12 +294,12 @@ class RLSCreateforUsers:
             self.resume = ui.markdown().classes(replace='text-primary')
             self.code = ui.code(content='', language="SQL")  
             with ui.stepper_navigation():
-                ui.button("BACK", icon="arrow_back_ios", on_click=self.stepper.previous)
-                ui.button("CREATE", icon="policy", on_click=self.run_creation_policy)
+                ui.button(get_text('btn_back'), icon="arrow_back_ios", on_click=self.stepper.previous)  # <- TRADUZIDO
+                ui.button(get_text('btn_create'), icon="policy", on_click=self.run_creation_policy)  # <- TRADUZIDO
             return
 
     def run(self):
-        with theme.frame('Create'):
+        with theme.frame(get_text('rls_users_frame_title')):  # <- TRADUZIDO
             with self.stepper:
                 self.step1()
                 self.step2()
