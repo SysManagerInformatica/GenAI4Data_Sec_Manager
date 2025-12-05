@@ -1,10 +1,12 @@
 """
 Audit Logs Page
 View and filter security audit logs
+VERSION: 2.1 - Multi-Language Support
 """
 
 from nicegui import ui
 import theme
+from theme import get_text  # <- NOVO: importar função de tradução
 from config import Config
 from services.audit_service import AuditService
 from datetime import datetime
@@ -22,9 +24,9 @@ class AuditLogs:
         }
     
     def run(self):
-        with theme.frame('Audit Logs'):
-            ui.label('📊 Audit Logs').classes('text-3xl font-bold mb-4')
-            ui.label('Track all security operations and changes').classes('text-gray-600 mb-6')
+        with theme.frame(get_text('audit_title')):  # <- TRADUZIDO
+            ui.label(f'📊 {get_text("audit_title")}').classes('text-3xl font-bold mb-4')  # <- TRADUZIDO
+            ui.label(get_text('audit_subtitle')).classes('text-gray-600 mb-6')  # <- TRADUZIDO
             
             # Statistics cards
             self.stats_container = ui.row().classes('gap-4 mb-6 w-full')
@@ -32,22 +34,24 @@ class AuditLogs:
             
             # Filters
             with ui.card().classes('w-full mb-4'):
-                ui.label('🔍 Filters').classes('text-xl font-bold mb-3')
+                ui.label(f'🔍 {get_text("audit_filters_title")}').classes('text-xl font-bold mb-3')  # <- TRADUZIDO
                 
                 with ui.row().classes('gap-4 items-end'):
                     # Date range filter
-                    date_options = [
-                        'last_hour',
-                        'today', 
-                        'last_7_days',
-                        'last_30_days'
-                    ]
+                    date_options = {
+                        'last_hour': get_text('audit_filter_last_hour'),  # <- TRADUZIDO
+                        'today': get_text('audit_filter_today'),  # <- TRADUZIDO
+                        'last_7_days': get_text('audit_filter_last_7_days'),  # <- TRADUZIDO
+                        'last_30_days': get_text('audit_filter_last_30_days')  # <- TRADUZIDO
+                    }
                     ui.select(
-                        label='Date Range',
-                        options=date_options,
+                        label=get_text('audit_filter_date_range'),  # <- TRADUZIDO
+                        options=list(date_options.keys()),
                         value='last_7_days',
                         on_change=lambda e: self.update_filter('date_range', e.value)
-                    ).classes('w-48')
+                    ).classes('w-48').bind_value_to(
+                        self, 'filters', lambda v: date_options.get(v, v)
+                    )
                     
                     # Action filter
                     action_options = [
@@ -61,14 +65,17 @@ class AuditLogs:
                         'ASSIGN_USER_TO_POLICY', 'ASSIGN_VALUE_TO_GROUP'
                     ]
                     ui.select(
-                        label='Action',
+                        label=get_text('audit_filter_action'),  # <- TRADUZIDO
                         options=action_options,
                         value='ALL',
                         on_change=lambda e: self.update_filter('action', e.value)
                     ).classes('w-64')
                     
                     # Refresh button
-                    ui.button('🔄 Refresh', on_click=self.refresh_logs).props('color=primary')
+                    ui.button(
+                        f'🔄 {get_text("btn_refresh")}',  # <- TRADUZIDO
+                        on_click=self.refresh_logs
+                    ).props('color=primary')
             
             # Logs container
             self.logs_container = ui.column().classes('gap-4 w-full')
@@ -84,24 +91,24 @@ class AuditLogs:
             if stats:
                 # Total actions
                 with ui.card().classes('p-4'):
-                    ui.label('Total Actions').classes('text-sm text-gray-600')
+                    ui.label(get_text('audit_stat_total_actions')).classes('text-sm text-gray-600')  # <- TRADUZIDO
                     ui.label(str(stats.get('total_actions', 0))).classes('text-3xl font-bold text-blue-600')
                 
                 # Success rate
                 with ui.card().classes('p-4'):
-                    ui.label('Success Rate').classes('text-sm text-gray-600')
+                    ui.label(get_text('audit_stat_success_rate')).classes('text-sm text-gray-600')  # <- TRADUZIDO
                     success_rate = stats.get('success_rate', 0)
                     color = 'text-green-600' if success_rate >= 95 else 'text-yellow-600' if success_rate >= 80 else 'text-red-600'
                     ui.label(f"{success_rate}%").classes(f'text-3xl font-bold {color}')
                 
                 # Failed actions
                 with ui.card().classes('p-4'):
-                    ui.label('Failed Actions').classes('text-sm text-gray-600')
+                    ui.label(get_text('audit_stat_failed_actions')).classes('text-sm text-gray-600')  # <- TRADUZIDO
                     ui.label(str(stats.get('failed_actions', 0))).classes('text-3xl font-bold text-red-600')
                 
                 # Unique users
                 with ui.card().classes('p-4'):
-                    ui.label('Active Users').classes('text-sm text-gray-600')
+                    ui.label(get_text('audit_stat_active_users')).classes('text-sm text-gray-600')  # <- TRADUZIDO
                     ui.label(str(stats.get('unique_users', 0))).classes('text-3xl font-bold text-purple-600')
     
     def update_filter(self, filter_name, value):
@@ -118,12 +125,16 @@ class AuditLogs:
             logs = self.audit_service.get_recent_logs(limit=50, filters=self.filters)
             
             if logs:
-                ui.label(f'📋 Recent Activities (showing {len(logs)} logs)').classes('text-xl font-bold mb-4')
+                ui.label(
+                    f'📋 {get_text("audit_recent_activities", count=len(logs))}'  # <- TRADUZIDO com formatação
+                ).classes('text-xl font-bold mb-4')
                 
                 for log in logs:
                     self.render_log_card(log)
             else:
-                ui.label('⚠️ No audit logs found with current filters').classes('text-gray-500 text-center mt-8')
+                ui.label(
+                    f'⚠️ {get_text("audit_no_logs")}'  # <- TRADUZIDO
+                ).classes('text-gray-500 text-center mt-8')
     
     def render_log_card(self, log):
         """Render a single log entry"""
@@ -162,14 +173,14 @@ class AuditLogs:
                     
                     # Details
                     with ui.column().classes('gap-1 text-sm text-gray-600'):
-                        ui.label(f"👤 User: {log['user_email']}")
-                        ui.label(f"📦 Resource: {log['resource_name']} ({log['resource_type']})")
+                        ui.label(f"👤 {get_text('audit_log_user')}: {log['user_email']}")  # <- TRADUZIDO
+                        ui.label(f"📦 {get_text('audit_log_resource')}: {log['resource_name']} ({log['resource_type']})")  # <- TRADUZIDO
                         
                         if log.get('taxonomy'):
-                            ui.label(f"📁 Taxonomy: {log['taxonomy']}")
+                            ui.label(f"📁 {get_text('audit_log_taxonomy')}: {log['taxonomy']}")  # <- TRADUZIDO
                         
                         if log.get('error_message'):
-                            ui.label(f"⚠️ Error: {log['error_message']}").classes('text-red-600')
+                            ui.label(f"⚠️ {get_text('audit_log_error')}: {log['error_message']}").classes('text-red-600')  # <- TRADUZIDO
                 
                 # Timestamp
                 with ui.column().classes('text-right'):
