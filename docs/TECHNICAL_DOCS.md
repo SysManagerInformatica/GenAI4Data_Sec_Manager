@@ -3557,9 +3557,9 @@ Este documento técnico cobre todos os aspectos do **RLS & CLS Security Manager*
 
 ## INFORMAÇÕES DE CONTATO
 
-**Desenvolvedor**: Lucas Carvalhal  
+**Desenvolvedor**: Lucas Carvalhal e Bruno Barreto
 **Empresa**: Sys Manager - Partner Google Cloud  
-**Email**: lucas.carvalhal@sysmanager.com.br  
+**Email**: lucas.carvalhal@sysmanager.com.br | bruno.barreto@sysmanager.com.br
 **Projeto**: sys-googl-cortex-security  
 **Deploy**: Cloud Run (us-central1)
 
