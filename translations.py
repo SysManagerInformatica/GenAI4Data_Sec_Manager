@@ -133,6 +133,131 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'rls_groups_filter_value': 'Valor do Filtro',
         'rls_groups_filter_column': 'Coluna de Filtro',
         
+        # RLS - Assign Users to Policy
+        'rls_assign_users_page_title': 'Atribuir Usuários à Política Row Level',
+        'rls_assign_users_subtitle': 'Atribuir Usuários à Política Row Level',
+        'rls_assign_users_frame_title': 'Atribuir Usuários à Política',
+        'rls_assign_users_step1_title': 'Selecionar Política',
+        'rls_assign_users_step2_title': 'Gerenciar Atribuições',
+        'rls_assign_users_step1_desc': 'Selecione UMA política para gerenciar, ou selecione MÚLTIPLAS para deletar',
+        'rls_assign_users_current_assignments': 'Atribuições de Política Atuais',
+        'rls_assign_users_select_delete_desc': 'Selecione linhas e clique em DELETAR para remover do banco de dados',
+        'rls_assign_users_add_new_title': 'Adicionar Novas Atribuições Usuário-Filtro',
+        'rls_assign_users_add_new_desc': 'Adicione usuários e filtros, selecione checkboxes, depois clique em INSERIR',
+        'rls_assign_users_add_emails': 'Adicionar Emails de Usuários:',
+        'rls_assign_users_add_filters': 'Adicionar Valores de Filtro:',
+        'rls_assign_users_user_list_label': 'Email do Usuário (marque para inserir)',
+        'rls_assign_users_filter_list_label': 'Valores de Filtro (marque para inserir)',
+        
+        # Messages - Assign Users
+        'msg_error_loading_policies': 'Erro ao carregar políticas existentes: {error}',
+        'msg_policy_deleted': 'Política deletada: {username} → {filter_value}',
+        'msg_error_deleting_policy': 'Erro ao deletar política: {error}',
+        'msg_error_deleting_policy_name': 'Erro ao deletar política \'{policy_name}\': {error}',
+        'msg_no_policies_selected_delete': 'Nenhuma política selecionada para deletar.',
+        'msg_delete_policies_confirm': 'Deletar {count} política(s)?',
+        'msg_and_more': '... e mais {count}',
+        'msg_delete_warning_rls': '⚠️ Isto irá deletar a política RLS do BigQuery e todos os filtros associados!',
+        'msg_action_cannot_undone': 'Esta ação não pode ser desfeita.',
+        'msg_deleted_success': '✅ {count} política(s) deletada(s) com sucesso!',
+        'msg_deleted_partial': '⚠️ {success} deletadas, {failed} falharam.',
+        'msg_no_policies_selected': 'Nenhuma política selecionada',
+        'msg_drop_all_title': '⚠️ REMOVER TODAS AS POLÍTICAS DE ACESSO POR LINHA',
+        'msg_critical_warning': '🚨 AVISO CRÍTICO',
+        'msg_drop_all_warning1': 'Isto irá remover TODAS as Políticas de Acesso por Linha das tabelas selecionadas!',
+        'msg_drop_all_warning2': 'Após esta ação, as tabelas estarão ACESSÍVEIS A TODOS OS USUÁRIOS com permissões de tabela.',
+        'msg_affected_tables': 'Tabelas Afetadas:',
+        'msg_policies_to_remove': '   Políticas a remover: {count}',
+        'msg_show_policy_names': 'Mostrar nomes das políticas',
+        'msg_drop_all_alternative': '💡 Alternativa: Se quiser manter controle de acesso, crie uma nova política antes de remover estas.',
+        'msg_dropped_success': '✅ Removidas {policies} políticas de {tables} tabela(s)!',
+        'msg_dropped_failed': '❌ Falha ao remover políticas de {tables} tabela(s)',
+        'msg_no_users_added': 'Nenhum usuário adicionado ainda',
+        'msg_no_filters_added': 'Nenhum filtro adicionado ainda',
+        'msg_user_removed': 'Usuário {email} removido da lista',
+        'msg_filter_removed': 'Filtro \'{filter_value}\' removido da lista',
+        'msg_error_fetch_policies': 'Erro ao buscar políticas: {error}',
+        'msg_error_unexpected_fetch_policies': 'Erro inesperado ao buscar políticas: {error}',
+        'msg_select_at_least_one_user': 'Por favor, selecione pelo menos um usuário para inserir.',
+        'msg_select_at_least_one_filter': 'Por favor, selecione pelo menos um filtro para inserir.',
+        'msg_inserted_success': 'Inseridos com sucesso {users} usuários × {filters} filtros',
+        'msg_error_inserting_data': 'Erro ao inserir dados: {error}',
+        'msg_no_rows_selected': 'Nenhuma linha selecionada.',
+        'msg_no_policy_selected': 'Nenhuma política selecionada.',
+        'msg_user_added': 'Usuário {email} adicionado',
+        'msg_user_already_added': 'Usuário já adicionado.',
+        'msg_invalid_email': 'Endereço de email inválido.',
+        'msg_filter_added': 'Filtro \'{filter_value}\' adicionado',
+        'msg_filter_already_added': 'Filtro já adicionado.',
+        'msg_invalid_filter': 'Valor de filtro inválido.',
+        'msg_no_rows_selected_delete': 'Nenhuma linha selecionada para deletar.',
+        
+        # Buttons - Assign Users
+        'btn_delete_upper': 'DELETAR',
+        'btn_cancel_upper': 'CANCELAR',
+        'btn_delete_selected': 'DELETAR SELECIONADOS',
+        'btn_drop_all_from_table': 'REMOVER TODAS DA TABELA',
+        'btn_drop_all_policies': 'REMOVER TODAS AS POLÍTICAS',
+        'btn_add_user': 'ADICIONAR USUÁRIO',
+        'btn_add_filter': 'ADICIONAR FILTRO',
+        'btn_insert_selected': 'INSERIR SELECIONADOS',
+        
+        # Tooltips - Assign Users
+        'tooltip_remove_from_list': 'Remover da lista',
+        'tooltip_drop_all': '⚠️ Remove TODAS as políticas das tabelas selecionadas',
+        
+        # Tabs - Assign Users
+        'tab_existing_policies': 'Políticas Existentes',
+        'tab_add_new_assignments': 'Adicionar Novas Atribuições',
+        
+        # Grid Columns - Assign Users
+        'col_user_email': 'Email do Usuário',
+        'col_filter_value': 'Valor do Filtro',
+        'col_policy_name': 'Nome da Política',
+        'col_field': 'Campo',
+        'col_created_at': 'Criado em',
+        
+        # Placeholders - Assign Users
+        'placeholder_user_email': 'usuario@exemplo.com',
+        'placeholder_filter_value': 'Tecnologia da Informação',
+        
+        # RLS - Assign Users to Policy
+        'rls_assign_users_page_title': 'Atribuir Usuários à Política Row Level',
+        'rls_assign_users_subtitle': 'Atribuir Usuários à Política Row Level',
+        'rls_assign_users_frame_title': 'Atribuir Usuários à Política',
+        'rls_assign_users_step1_title': 'Selecionar Política',
+        'rls_assign_users_step2_title': 'Gerenciar Atribuições',
+        'rls_assign_users_step1_desc': 'Selecione UMA política para gerenciar, ou MÚLTIPLAS para deletar',
+        
+        # RLS Assign - Tabs
+        'tab_existing_policies': 'Políticas Existentes',
+        'tab_add_new_assignments': 'Adicionar Novas Atribuições',
+        
+        # RLS Assign - Labels
+        'label_current_policy_assignments': 'Atribuições de Política Atuais',
+        'label_select_rows_delete': 'Selecione linhas e clique DELETAR para remover do banco de dados',
+        'label_add_new_assignments': 'Adicionar Novas Atribuições Usuário-Filtro',
+        'label_add_users_filters_instruction': 'Adicione usuários e filtros, marque as checkboxes e clique INSERIR',
+        'label_add_user_emails': 'Adicionar Emails de Usuários:',
+        'label_user_email_check_insert': 'Email do Usuário (marque para inserir)',
+        'label_add_filter_values': 'Adicionar Valores de Filtro:',
+        'label_filter_values_check_insert': 'Valores de Filtro (marque para inserir)',
+        
+        # RLS Assign - Grid Headers
+        'grid_header_user_email': 'Email do Usuário',
+        'grid_header_filter_value': 'Valor do Filtro',
+        'grid_header_policy_name': 'Nome da Política',
+        'grid_header_field': 'Campo',
+        'grid_header_created_at': 'Criado Em',
+        
+        # RLS Assign - Placeholders
+        'placeholder_user_email': 'usuario@exemplo.com',
+        'placeholder_filter_value': 'Tecnologia da Informação',
+        
+        # RLS Assign - Tooltips
+        'tooltip_remove_from_list': 'Remover da lista',
+        'tooltip_drop_all': '⚠️ Remove TODAS as políticas das tabelas selecionadas',
+        
         # CLS - Taxonomies
         'cls_tax_title': 'Gerenciar Taxonomias',
         'cls_tax_desc': 'Crie e organize taxonomias no Data Catalog',
@@ -246,7 +371,13 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'btn_refresh': 'Atualizar',
         'btn_export': 'Exportar',
         'btn_back': 'Voltar',
-        'btn_next': 'Próximo',  # <- NOVO
+        'btn_next': 'Próximo',
+        'btn_delete_selected': 'DELETAR SELECIONADOS',  # <- NOVO
+        'btn_drop_all_from_table': 'REMOVER TODAS DA TABELA',  # <- NOVO
+        'btn_add_user': 'ADICIONAR USUÁRIO',  # <- NOVO
+        'btn_add_filter': 'ADICIONAR FILTRO',  # <- NOVO
+        'btn_insert_selected': 'INSERIR SELECIONADOS',  # <- NOVO
+        'btn_drop_all_policies': 'REMOVER TODAS AS POLÍTICAS',  # <- NOVO
         
         # Messages
         'msg_success': 'Operação realizada com sucesso!',
@@ -263,7 +394,47 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'msg_select_table_first': 'Por favor, selecione uma tabela primeiro.',  # <- NOVO
         'msg_select_field_first': 'Por favor, selecione um campo primeiro.',  # <- NOVO
         'msg_dataset_not_found': 'Dataset não encontrado: {dataset}',  # <- NOVO
-        'msg_table_not_found': 'Tabela não encontrada: {table}',  # <- NOVO
+        'msg_table_not_found': 'Tabela não encontrada: {table}',
+        # RLS Assign - Messages
+        'msg_error_load_policies': 'Erro ao carregar políticas existentes: {error}',
+        'msg_error_delete_policy': 'Erro ao deletar política: {error}',
+        'msg_error_delete_policy_full': "Erro ao deletar política '{policy}': {error}",
+        'msg_error_fetch_policies': 'Erro ao buscar políticas: {error}',
+        'msg_error_insert_data': 'Erro ao inserir dados: {error}',
+        'msg_no_policies_selected': 'Nenhuma política selecionada.',
+        'msg_no_rows_selected': 'Nenhuma linha selecionada.',
+        'msg_no_policy_selected': 'Nenhuma política selecionada.',
+        'msg_no_rows_selected_delete': 'Nenhuma linha selecionada para deletar.',
+        'msg_no_users_added': 'Nenhum usuário adicionado ainda',
+        'msg_no_filters_added': 'Nenhum filtro adicionado ainda',
+        'msg_select_at_least_one_user': 'Por favor, selecione pelo menos um usuário para inserir.',
+        'msg_select_at_least_one_filter': 'Por favor, selecione pelo menos um filtro para inserir.',
+        'msg_user_already_added': 'Usuário já adicionado.',
+        'msg_filter_already_added': 'Filtro já adicionado.',
+        'msg_invalid_email': 'Endereço de email inválido.',
+        'msg_invalid_filter': 'Valor de filtro inválido.',
+        'msg_policy_deleted': 'Política deletada: {username} → {filter}',
+        'msg_user_removed': 'Usuário {email} removido da lista',
+        'msg_filter_removed': "Filtro '{filter}' removido da lista",
+        'msg_user_added': 'Usuário {email} adicionado',
+        'msg_filter_added': "Filtro '{filter}' adicionado",
+        'msg_insert_success': '{users} usuários × {filters} filtros inseridos com sucesso',
+        'msg_delete_success': '✅ {count} política(s) deletada(s) com sucesso!',
+        'msg_delete_partial': '⚠️ {success} deletada(s), {failed} falharam.',
+        'msg_drop_all_success': '✅ {policies} políticas removidas de {tables} tabela(s)!',
+        'msg_drop_all_failed': '❌ Falha ao remover políticas de {tables} tabela(s)',
+        'msg_delete_confirm_title': 'Deletar {count} política(s)?',
+        'msg_and_more': '... e mais {count}',
+        'msg_delete_warning': '⚠️ Isto irá deletar a política RLS do BigQuery e todos os filtros associados!',
+        'msg_action_cannot_undone': 'Esta ação não pode ser desfeita.',
+        'msg_drop_all_title': '⚠️ REMOVER TODAS AS POLÍTICAS ROW ACCESS',
+        'msg_critical_warning': '🚨 AVISO CRÍTICO',
+        'msg_drop_all_warning1': 'Isto irá remover TODAS as Políticas Row Access das tabelas selecionadas!',
+        'msg_drop_all_warning2': 'Após esta ação, as tabelas estarão ACESSÍVEIS A TODOS OS USUÁRIOS com permissões de tabela.',
+        'msg_affected_tables': 'Tabelas Afetadas:',
+        'msg_policies_to_remove': 'Políticas a remover: {count}',
+        'msg_show_policy_names': 'Mostrar nomes das políticas',
+        'msg_alternative_hint': '💡 Alternativa: Se você deseja manter o controle de acesso, crie uma nova política antes de remover estas.',
         
         # Footer
         'footer_version': 'Versão',
@@ -390,6 +561,131 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'rls_groups_filter_value': 'Filter Value',
         'rls_groups_filter_column': 'Filter Column',
         
+        # RLS - Assign Users to Policy
+        'rls_assign_users_page_title': 'Assign Users to Row Level Policy',
+        'rls_assign_users_subtitle': 'Assign Users to Row Level Policy',
+        'rls_assign_users_frame_title': 'Assign Users to Policy',
+        'rls_assign_users_step1_title': 'Select Policy',
+        'rls_assign_users_step2_title': 'Manage Assignments',
+        'rls_assign_users_step1_desc': 'Select ONE policy to manage, or select MULTIPLE to delete',
+        'rls_assign_users_current_assignments': 'Current Policy Assignments',
+        'rls_assign_users_select_delete_desc': 'Select rows and click DELETE to remove from database',
+        'rls_assign_users_add_new_title': 'Add New User-Filter Assignments',
+        'rls_assign_users_add_new_desc': 'Add users and filters, select checkboxes, then click INSERT',
+        'rls_assign_users_add_emails': 'Add User Emails:',
+        'rls_assign_users_add_filters': 'Add Filter Values:',
+        'rls_assign_users_user_list_label': 'User Email (check to insert)',
+        'rls_assign_users_filter_list_label': 'Filter Values (check to insert)',
+        
+        # Messages - Assign Users
+        'msg_error_loading_policies': 'Error loading existing policies: {error}',
+        'msg_policy_deleted': 'Policy deleted: {username} → {filter_value}',
+        'msg_error_deleting_policy': 'Error deleting policy: {error}',
+        'msg_error_deleting_policy_name': 'Error deleting policy \'{policy_name}\': {error}',
+        'msg_no_policies_selected_delete': 'No policies selected to delete.',
+        'msg_delete_policies_confirm': 'Delete {count} policy(ies)?',
+        'msg_and_more': '... and {count} more',
+        'msg_delete_warning_rls': '⚠️ This will delete the RLS policy from BigQuery and all associated filters!',
+        'msg_action_cannot_undone': 'This action cannot be undone.',
+        'msg_deleted_success': '✅ Successfully deleted {count} policy(ies)!',
+        'msg_deleted_partial': '⚠️ Deleted {success}, {failed} failed.',
+        'msg_no_policies_selected': 'No policies selected',
+        'msg_drop_all_title': '⚠️ DROP ALL ROW ACCESS POLICIES',
+        'msg_critical_warning': '🚨 CRITICAL WARNING',
+        'msg_drop_all_warning1': 'This will remove ALL Row Access Policies from the selected tables!',
+        'msg_drop_all_warning2': 'After this action, tables will be ACCESSIBLE TO ALL USERS with table permissions.',
+        'msg_affected_tables': 'Affected Tables:',
+        'msg_policies_to_remove': '   Policies to remove: {count}',
+        'msg_show_policy_names': 'Show policy names',
+        'msg_drop_all_alternative': '💡 Alternative: If you want to keep access control, create a new policy before dropping these.',
+        'msg_dropped_success': '✅ Dropped {policies} policies from {tables} table(s)!',
+        'msg_dropped_failed': '❌ Failed to drop policies from {tables} table(s)',
+        'msg_no_users_added': 'No users added yet',
+        'msg_no_filters_added': 'No filters added yet',
+        'msg_user_removed': 'User {email} removed from list',
+        'msg_filter_removed': 'Filter \'{filter_value}\' removed from list',
+        'msg_error_fetch_policies': 'Error fetching policies: {error}',
+        'msg_error_unexpected_fetch_policies': 'Unexpected error fetching policies: {error}',
+        'msg_select_at_least_one_user': 'Please select at least one user to insert.',
+        'msg_select_at_least_one_filter': 'Please select at least one filter to insert.',
+        'msg_inserted_success': 'Successfully inserted {users} users × {filters} filters',
+        'msg_error_inserting_data': 'Error inserting data: {error}',
+        'msg_no_rows_selected': 'No rows selected.',
+        'msg_no_policy_selected': 'No policy selected.',
+        'msg_user_added': 'User {email} added',
+        'msg_user_already_added': 'User already added.',
+        'msg_invalid_email': 'Invalid email address.',
+        'msg_filter_added': 'Filter \'{filter_value}\' added',
+        'msg_filter_already_added': 'Filter already added.',
+        'msg_invalid_filter': 'Invalid filter value.',
+        'msg_no_rows_selected_delete': 'No rows selected to delete.',
+        
+        # Buttons - Assign Users
+        'btn_delete_upper': 'DELETE',
+        'btn_cancel_upper': 'CANCEL',
+        'btn_delete_selected': 'DELETE SELECTED',
+        'btn_drop_all_from_table': 'DROP ALL FROM TABLE',
+        'btn_drop_all_policies': 'DROP ALL POLICIES',
+        'btn_add_user': 'ADD USER',
+        'btn_add_filter': 'ADD FILTER',
+        'btn_insert_selected': 'INSERT SELECTED',
+        
+        # Tooltips - Assign Users
+        'tooltip_remove_from_list': 'Remove from list',
+        'tooltip_drop_all': '⚠️ Removes ALL policies from selected tables',
+        
+        # Tabs - Assign Users
+        'tab_existing_policies': 'Existing Policies',
+        'tab_add_new_assignments': 'Add New Assignments',
+        
+        # Grid Columns - Assign Users
+        'col_user_email': 'User Email',
+        'col_filter_value': 'Filter Value',
+        'col_policy_name': 'Policy Name',
+        'col_field': 'Field',
+        'col_created_at': 'Created At',
+        
+        # Placeholders - Assign Users
+        'placeholder_user_email': 'user@example.com',
+        'placeholder_filter_value': 'Information Technology',
+        
+        # RLS - Assign Users to Policy
+        'rls_assign_users_page_title': 'Assign Users to Row Level Policy',
+        'rls_assign_users_subtitle': 'Assign Users to Row Level Policy',
+        'rls_assign_users_frame_title': 'Assign Users to Policy',
+        'rls_assign_users_step1_title': 'Select Policy',
+        'rls_assign_users_step2_title': 'Manage Assignments',
+        'rls_assign_users_step1_desc': 'Select ONE policy to manage, or MULTIPLE to delete',
+        
+        # RLS Assign - Tabs
+        'tab_existing_policies': 'Existing Policies',
+        'tab_add_new_assignments': 'Add New Assignments',
+        
+        # RLS Assign - Labels
+        'label_current_policy_assignments': 'Current Policy Assignments',
+        'label_select_rows_delete': 'Select rows and click DELETE to remove from database',
+        'label_add_new_assignments': 'Add New User-Filter Assignments',
+        'label_add_users_filters_instruction': 'Add users and filters, check boxes, then click INSERT',
+        'label_add_user_emails': 'Add User Emails:',
+        'label_user_email_check_insert': 'User Email (check to insert)',
+        'label_add_filter_values': 'Add Filter Values:',
+        'label_filter_values_check_insert': 'Filter Values (check to insert)',
+        
+        # RLS Assign - Grid Headers
+        'grid_header_user_email': 'User Email',
+        'grid_header_filter_value': 'Filter Value',
+        'grid_header_policy_name': 'Policy Name',
+        'grid_header_field': 'Field',
+        'grid_header_created_at': 'Created At',
+        
+        # RLS Assign - Placeholders
+        'placeholder_user_email': 'user@example.com',
+        'placeholder_filter_value': 'Information Technology',
+        
+        # RLS Assign - Tooltips
+        'tooltip_remove_from_list': 'Remove from list',
+        'tooltip_drop_all': '⚠️ Removes ALL policies from selected tables',
+        
         # CLS - Taxonomies
         'cls_tax_title': 'Manage Taxonomies',
         'cls_tax_desc': 'Create and organize taxonomies in Data Catalog',
@@ -502,7 +798,13 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'btn_refresh': 'Refresh',
         'btn_export': 'Export',
         'btn_back': 'Back',
-        'btn_next': 'Next',  # <- NOVO
+        'btn_next': 'Next',
+        'btn_delete_selected': 'DELETE SELECTED',  # <- NOVO
+        'btn_drop_all_from_table': 'DROP ALL FROM TABLE',  # <- NOVO
+        'btn_add_user': 'ADD USER',  # <- NOVO
+        'btn_add_filter': 'ADD FILTER',  # <- NOVO
+        'btn_insert_selected': 'INSERT SELECTED',  # <- NOVO
+        'btn_drop_all_policies': 'DROP ALL POLICIES',  # <- NOVO
         
         # Messages
         'msg_success': 'Operation completed successfully!',
@@ -519,7 +821,47 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'msg_select_table_first': 'Please select a table first.',  # <- NOVO
         'msg_select_field_first': 'Please select a field first.',  # <- NOVO
         'msg_dataset_not_found': 'Dataset not found: {dataset}',  # <- NOVO
-        'msg_table_not_found': 'Table not found: {table}',  # <- NOVO
+        'msg_table_not_found': 'Table not found: {table}',
+        # RLS Assign - Messages
+        'msg_error_load_policies': 'Error loading existing policies: {error}',
+        'msg_error_delete_policy': 'Error deleting policy: {error}',
+        'msg_error_delete_policy_full': "Error deleting policy '{policy}': {error}",
+        'msg_error_fetch_policies': 'Error fetching policies: {error}',
+        'msg_error_insert_data': 'Error inserting data: {error}',
+        'msg_no_policies_selected': 'No policies selected.',
+        'msg_no_rows_selected': 'No rows selected.',
+        'msg_no_policy_selected': 'No policy selected.',
+        'msg_no_rows_selected_delete': 'No rows selected to delete.',
+        'msg_no_users_added': 'No users added yet',
+        'msg_no_filters_added': 'No filters added yet',
+        'msg_select_at_least_one_user': 'Please select at least one user to insert.',
+        'msg_select_at_least_one_filter': 'Please select at least one filter to insert.',
+        'msg_user_already_added': 'User already added.',
+        'msg_filter_already_added': 'Filter already added.',
+        'msg_invalid_email': 'Invalid email address.',
+        'msg_invalid_filter': 'Invalid filter value.',
+        'msg_policy_deleted': 'Policy deleted: {username} → {filter}',
+        'msg_user_removed': 'User {email} removed from list',
+        'msg_filter_removed': "Filter '{filter}' removed from list",
+        'msg_user_added': 'User {email} added',
+        'msg_filter_added': "Filter '{filter}' added",
+        'msg_insert_success': '{users} users × {filters} filters inserted successfully',
+        'msg_delete_success': '✅ {count} policy(ies) deleted successfully!',
+        'msg_delete_partial': '⚠️ {success} deleted, {failed} failed.',
+        'msg_drop_all_success': '✅ {policies} policies removed from {tables} table(s)!',
+        'msg_drop_all_failed': '❌ Failed to remove policies from {tables} table(s)',
+        'msg_delete_confirm_title': 'Delete {count} policy(ies)?',
+        'msg_and_more': '... and {count} more',
+        'msg_delete_warning': '⚠️ This will delete the RLS policy from BigQuery and all associated filters!',
+        'msg_action_cannot_undone': 'This action cannot be undone.',
+        'msg_drop_all_title': '⚠️ DROP ALL ROW ACCESS POLICIES',
+        'msg_critical_warning': '🚨 CRITICAL WARNING',
+        'msg_drop_all_warning1': 'This will remove ALL Row Access Policies from selected tables!',
+        'msg_drop_all_warning2': 'After this action, tables will be ACCESSIBLE TO ALL USERS with table permissions.',
+        'msg_affected_tables': 'Affected Tables:',
+        'msg_policies_to_remove': 'Policies to remove: {count}',
+        'msg_show_policy_names': 'Show policy names',
+        'msg_alternative_hint': '💡 Alternative: If you want to keep access control, create a new policy before dropping these.',
         
         # Footer
         'footer_version': 'Version',
@@ -646,6 +988,131 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'rls_groups_filter_value': 'Valor del Filtro',
         'rls_groups_filter_column': 'Columna de Filtro',
         
+        # RLS - Assign Users to Policy
+        'rls_assign_users_page_title': 'Asignar Usuarios a Política Row Level',
+        'rls_assign_users_subtitle': 'Asignar Usuarios a Política Row Level',
+        'rls_assign_users_frame_title': 'Asignar Usuarios a Política',
+        'rls_assign_users_step1_title': 'Seleccionar Política',
+        'rls_assign_users_step2_title': 'Gestionar Asignaciones',
+        'rls_assign_users_step1_desc': 'Seleccione UNA política para gestionar, o seleccione MÚLTIPLES para eliminar',
+        'rls_assign_users_current_assignments': 'Asignaciones de Política Actuales',
+        'rls_assign_users_select_delete_desc': 'Seleccione filas y haga clic en ELIMINAR para remover de la base de datos',
+        'rls_assign_users_add_new_title': 'Agregar Nuevas Asignaciones Usuario-Filtro',
+        'rls_assign_users_add_new_desc': 'Agregue usuarios y filtros, seleccione checkboxes, luego haga clic en INSERTAR',
+        'rls_assign_users_add_emails': 'Agregar Correos de Usuarios:',
+        'rls_assign_users_add_filters': 'Agregar Valores de Filtro:',
+        'rls_assign_users_user_list_label': 'Correo del Usuario (marque para insertar)',
+        'rls_assign_users_filter_list_label': 'Valores de Filtro (marque para insertar)',
+        
+        # Messages - Assign Users
+        'msg_error_loading_policies': 'Error al cargar políticas existentes: {error}',
+        'msg_policy_deleted': 'Política eliminada: {username} → {filter_value}',
+        'msg_error_deleting_policy': 'Error al eliminar política: {error}',
+        'msg_error_deleting_policy_name': 'Error al eliminar política \'{policy_name}\': {error}',
+        'msg_no_policies_selected_delete': 'No se seleccionaron políticas para eliminar.',
+        'msg_delete_policies_confirm': '¿Eliminar {count} política(s)?',
+        'msg_and_more': '... y {count} más',
+        'msg_delete_warning_rls': '⚠️ ¡Esto eliminará la política RLS de BigQuery y todos los filtros asociados!',
+        'msg_action_cannot_undone': 'Esta acción no se puede deshacer.',
+        'msg_deleted_success': '✅ ¡{count} política(s) eliminada(s) con éxito!',
+        'msg_deleted_partial': '⚠️ {success} eliminadas, {failed} fallaron.',
+        'msg_no_policies_selected': 'No se seleccionaron políticas',
+        'msg_drop_all_title': '⚠️ ELIMINAR TODAS LAS POLÍTICAS DE ACCESO POR FILA',
+        'msg_critical_warning': '🚨 ADVERTENCIA CRÍTICA',
+        'msg_drop_all_warning1': '¡Esto eliminará TODAS las Políticas de Acceso por Fila de las tablas seleccionadas!',
+        'msg_drop_all_warning2': 'Después de esta acción, las tablas estarán ACCESIBLES A TODOS LOS USUARIOS con permisos de tabla.',
+        'msg_affected_tables': 'Tablas Afectadas:',
+        'msg_policies_to_remove': '   Políticas a eliminar: {count}',
+        'msg_show_policy_names': 'Mostrar nombres de políticas',
+        'msg_drop_all_alternative': '💡 Alternativa: Si desea mantener el control de acceso, cree una nueva política antes de eliminar estas.',
+        'msg_dropped_success': '✅ ¡Eliminadas {policies} políticas de {tables} tabla(s)!',
+        'msg_dropped_failed': '❌ Falló al eliminar políticas de {tables} tabla(s)',
+        'msg_no_users_added': 'No se agregaron usuarios aún',
+        'msg_no_filters_added': 'No se agregaron filtros aún',
+        'msg_user_removed': 'Usuario {email} eliminado de la lista',
+        'msg_filter_removed': 'Filtro \'{filter_value}\' eliminado de la lista',
+        'msg_error_fetch_policies': 'Error al obtener políticas: {error}',
+        'msg_error_unexpected_fetch_policies': 'Error inesperado al obtener políticas: {error}',
+        'msg_select_at_least_one_user': 'Por favor, seleccione al menos un usuario para insertar.',
+        'msg_select_at_least_one_filter': 'Por favor, seleccione al menos un filtro para insertar.',
+        'msg_inserted_success': 'Insertados con éxito {users} usuarios × {filters} filtros',
+        'msg_error_inserting_data': 'Error al insertar datos: {error}',
+        'msg_no_rows_selected': 'No se seleccionaron filas.',
+        'msg_no_policy_selected': 'No se seleccionó política.',
+        'msg_user_added': 'Usuario {email} agregado',
+        'msg_user_already_added': 'Usuario ya agregado.',
+        'msg_invalid_email': 'Dirección de correo inválida.',
+        'msg_filter_added': 'Filtro \'{filter_value}\' agregado',
+        'msg_filter_already_added': 'Filtro ya agregado.',
+        'msg_invalid_filter': 'Valor de filtro inválido.',
+        'msg_no_rows_selected_delete': 'No se seleccionaron filas para eliminar.',
+        
+        # Buttons - Assign Users
+        'btn_delete_upper': 'ELIMINAR',
+        'btn_cancel_upper': 'CANCELAR',
+        'btn_delete_selected': 'ELIMINAR SELECCIONADOS',
+        'btn_drop_all_from_table': 'ELIMINAR TODAS DE LA TABLA',
+        'btn_drop_all_policies': 'ELIMINAR TODAS LAS POLÍTICAS',
+        'btn_add_user': 'AGREGAR USUARIO',
+        'btn_add_filter': 'AGREGAR FILTRO',
+        'btn_insert_selected': 'INSERTAR SELECCIONADOS',
+        
+        # Tooltips - Assign Users
+        'tooltip_remove_from_list': 'Eliminar de la lista',
+        'tooltip_drop_all': '⚠️ Elimina TODAS las políticas de las tablas seleccionadas',
+        
+        # Tabs - Assign Users
+        'tab_existing_policies': 'Políticas Existentes',
+        'tab_add_new_assignments': 'Agregar Nuevas Asignaciones',
+        
+        # Grid Columns - Assign Users
+        'col_user_email': 'Correo del Usuario',
+        'col_filter_value': 'Valor del Filtro',
+        'col_policy_name': 'Nombre de la Política',
+        'col_field': 'Campo',
+        'col_created_at': 'Creado en',
+        
+        # Placeholders - Assign Users
+        'placeholder_user_email': 'usuario@ejemplo.com',
+        'placeholder_filter_value': 'Tecnología de la Información',
+        
+        # RLS - Assign Users to Policy
+        'rls_assign_users_page_title': 'Asignar Usuarios a la Política Row Level',
+        'rls_assign_users_subtitle': 'Asignar Usuarios a la Política Row Level',
+        'rls_assign_users_frame_title': 'Asignar Usuarios a la Política',
+        'rls_assign_users_step1_title': 'Seleccionar Política',
+        'rls_assign_users_step2_title': 'Gestionar Asignaciones',
+        'rls_assign_users_step1_desc': 'Seleccione UNA política para gestionar, o MÚLTIPLES para eliminar',
+        
+        # RLS Assign - Tabs
+        'tab_existing_policies': 'Políticas Existentes',
+        'tab_add_new_assignments': 'Agregar Nuevas Asignaciones',
+        
+        # RLS Assign - Labels
+        'label_current_policy_assignments': 'Asignaciones de Política Actuales',
+        'label_select_rows_delete': 'Seleccione filas y haga clic en ELIMINAR para remover de la base de datos',
+        'label_add_new_assignments': 'Agregar Nuevas Asignaciones Usuario-Filtro',
+        'label_add_users_filters_instruction': 'Agregue usuarios y filtros, marque las casillas y haga clic en INSERTAR',
+        'label_add_user_emails': 'Agregar Correos de Usuarios:',
+        'label_user_email_check_insert': 'Correo del Usuario (marque para insertar)',
+        'label_add_filter_values': 'Agregar Valores de Filtro:',
+        'label_filter_values_check_insert': 'Valores de Filtro (marque para insertar)',
+        
+        # RLS Assign - Grid Headers
+        'grid_header_user_email': 'Correo del Usuario',
+        'grid_header_filter_value': 'Valor del Filtro',
+        'grid_header_policy_name': 'Nombre de la Política',
+        'grid_header_field': 'Campo',
+        'grid_header_created_at': 'Creado En',
+        
+        # RLS Assign - Placeholders
+        'placeholder_user_email': 'usuario@ejemplo.com',
+        'placeholder_filter_value': 'Tecnología de la Información',
+        
+        # RLS Assign - Tooltips
+        'tooltip_remove_from_list': 'Remover de la lista',
+        'tooltip_drop_all': '⚠️ Elimina TODAS las políticas de las tablas seleccionadas',
+        
         # CLS - Taxonomies
         'cls_tax_title': 'Gestionar Taxonomías',
         'cls_tax_desc': 'Cree y organice taxonomías en Data Catalog',
@@ -758,7 +1225,13 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'btn_refresh': 'Actualizar',
         'btn_export': 'Exportar',
         'btn_back': 'Volver',
-        'btn_next': 'Siguiente',  # <- NOVO
+        'btn_next': 'Siguiente',
+        'btn_delete_selected': 'ELIMINAR SELECCIONADOS',  # <- NOVO
+        'btn_drop_all_from_table': 'ELIMINAR TODAS DE LA TABLA',  # <- NOVO
+        'btn_add_user': 'AGREGAR USUARIO',  # <- NOVO
+        'btn_add_filter': 'AGREGAR FILTRO',  # <- NOVO
+        'btn_insert_selected': 'INSERTAR SELECCIONADOS',  # <- NOVO
+        'btn_drop_all_policies': 'ELIMINAR TODAS LAS POLÍTICAS',  # <- NOVO
         
         # Messages
         'msg_success': '¡Operación completada con éxito!',
@@ -775,7 +1248,47 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         'msg_select_table_first': 'Por favor, seleccione una tabla primero.',  # <- NOVO
         'msg_select_field_first': 'Por favor, seleccione un campo primero.',  # <- NOVO
         'msg_dataset_not_found': 'Dataset no encontrado: {dataset}',  # <- NOVO
-        'msg_table_not_found': 'Tabla no encontrada: {table}',  # <- NOVO
+        'msg_table_not_found': 'Tabla no encontrada: {table}',
+        # RLS Assign - Messages
+        'msg_error_load_policies': 'Error al cargar políticas existentes: {error}',
+        'msg_error_delete_policy': 'Error al eliminar política: {error}',
+        'msg_error_delete_policy_full': "Error al eliminar política '{policy}': {error}",
+        'msg_error_fetch_policies': 'Error al obtener políticas: {error}',
+        'msg_error_insert_data': 'Error al insertar datos: {error}',
+        'msg_no_policies_selected': 'No hay políticas seleccionadas.',
+        'msg_no_rows_selected': 'No hay filas seleccionadas.',
+        'msg_no_policy_selected': 'No hay política seleccionada.',
+        'msg_no_rows_selected_delete': 'No hay filas seleccionadas para eliminar.',
+        'msg_no_users_added': 'No se han agregado usuarios aún',
+        'msg_no_filters_added': 'No se han agregado filtros aún',
+        'msg_select_at_least_one_user': 'Por favor, seleccione al menos un usuario para insertar.',
+        'msg_select_at_least_one_filter': 'Por favor, seleccione al menos un filtro para insertar.',
+        'msg_user_already_added': 'Usuario ya agregado.',
+        'msg_filter_already_added': 'Filtro ya agregado.',
+        'msg_invalid_email': 'Dirección de correo inválida.',
+        'msg_invalid_filter': 'Valor de filtro inválido.',
+        'msg_policy_deleted': 'Política eliminada: {username} → {filter}',
+        'msg_user_removed': 'Usuario {email} eliminado de la lista',
+        'msg_filter_removed': "Filtro '{filter}' eliminado de la lista",
+        'msg_user_added': 'Usuario {email} agregado',
+        'msg_filter_added': "Filtro '{filter}' agregado",
+        'msg_insert_success': '{users} usuarios × {filters} filtros insertados con éxito',
+        'msg_delete_success': '✅ ¡{count} política(s) eliminada(s) con éxito!',
+        'msg_delete_partial': '⚠️ {success} eliminada(s), {failed} fallaron.',
+        'msg_drop_all_success': '✅ ¡{policies} políticas eliminadas de {tables} tabla(s)!',
+        'msg_drop_all_failed': '❌ Error al eliminar políticas de {tables} tabla(s)',
+        'msg_delete_confirm_title': '¿Eliminar {count} política(s)?',
+        'msg_and_more': '... y {count} más',
+        'msg_delete_warning': '⚠️ ¡Esto eliminará la política RLS de BigQuery y todos los filtros asociados!',
+        'msg_action_cannot_undone': 'Esta acción no se puede deshacer.',
+        'msg_drop_all_title': '⚠️ ELIMINAR TODAS LAS POLÍTICAS ROW ACCESS',
+        'msg_critical_warning': '🚨 ADVERTENCIA CRÍTICA',
+        'msg_drop_all_warning1': '¡Esto eliminará TODAS las Políticas Row Access de las tablas seleccionadas!',
+        'msg_drop_all_warning2': 'Después de esta acción, las tablas estarán ACCESIBLES PARA TODOS LOS USUARIOS con permisos de tabla.',
+        'msg_affected_tables': 'Tablas Afectadas:',
+        'msg_policies_to_remove': 'Políticas a eliminar: {count}',
+        'msg_show_policy_names': 'Mostrar nombres de las políticas',
+        'msg_alternative_hint': '💡 Alternativa: Si desea mantener el control de acceso, cree una nueva política antes de eliminar estas.',
         
         # Footer
         'footer_version': 'Versión',
