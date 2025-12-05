@@ -11,7 +11,7 @@
     <style>
         :root {
             --bg-color: #000000;
-            --hud-color: #00f3ff; /* Ciano Neon da imagem */
+            --hud-color: #00f3ff;
             --hud-dim: rgba(0, 243, 255, 0.15);
             --glass-bg: rgba(5, 10, 15, 0.85);
             --text-main: #ffffff;
@@ -30,6 +30,44 @@
             overflow: hidden;
             background-color: var(--bg-color);
             color: var(--text-main);
+        }
+
+        /* --- Language Selector --- */
+        .language-selector {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            gap: 8px;
+            background: rgba(10, 15, 26, 0.9);
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 243, 255, 0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        .lang-btn {
+            background: transparent;
+            border: 2px solid transparent;
+            border-radius: 4px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 4px 8px;
+            transition: all 0.3s ease;
+            line-height: 1;
+        }
+
+        .lang-btn:hover {
+            border-color: rgba(0, 243, 255, 0.5);
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
+        }
+
+        .lang-btn.active {
+            border-color: #00f3ff;
+            background: rgba(0, 243, 255, 0.1);
+            box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
         }
 
         /* --- Fundo Complexo (Blueprint Tech) --- */
@@ -62,9 +100,7 @@
             mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
         }
 
-        /* --- Elementos HUD Decorativos (Inspirados na Imagem) --- */
-        
-        /* Círculo Técnico Giratório (Direita) */
+        /* Círculo Técnico Giratório */
         .hud-circle-outer {
             position: absolute;
             right: -100px;
@@ -94,7 +130,7 @@
             pointer-events: none;
         }
 
-        /* Mira/Target (Esquerda Superior) */
+        /* Mira/Target */
         .hud-crosshair {
             position: absolute;
             top: 100px;
@@ -112,7 +148,7 @@
         .hud-crosshair::before { top: 24px; left: 0; width: 50px; height: 1px; }
         .hud-crosshair::after { left: 24px; top: 0; height: 50px; width: 1px; }
 
-        /* Linhas de Dados Aleatórias */
+        /* Linhas de Dados */
         .hud-lines {
             position: absolute;
             left: 50px;
@@ -127,7 +163,7 @@
         @keyframes spin { 100% { transform: rotate(360deg); } }
         @keyframes spin-reverse { 100% { transform: rotate(-360deg); } }
 
-        /* --- Card Principal --- */
+        /* Card Principal */
         .glass-card {
             position: relative;
             z-index: 10;
@@ -135,28 +171,20 @@
             max-width: 90%;
             padding: 3rem 2.5rem;
             background: var(--glass-bg);
-            /* Borda Técnica Brilhante */
             border: 1px solid rgba(0, 243, 255, 0.3);
             box-shadow: 
                 0 0 40px rgba(0, 0, 0, 0.8),
                 0 0 15px rgba(0, 243, 255, 0.1),
                 inset 0 0 20px rgba(0, 243, 255, 0.05);
-            /* Cantos cortados (estilo sci-fi) usando clip-path ou border-radius misto */
             border-radius: 4px; 
-            clip-path: polygon(
-                0 0, 
-                100% 0, 
-                100% 85%, 
-                92% 100%, 
-                0 100%
-            );
+            clip-path: polygon(0 0, 100% 0, 100% 85%, 92% 100%, 0 100%);
             display: flex;
             flex-direction: column;
             align-items: center;
             text-align: center;
         }
 
-        /* Cantos Decorativos do Card (Brackets) */
+        /* Cantos Decorativos */
         .card-corner {
             position: absolute;
             width: 20px;
@@ -169,7 +197,6 @@
         .tl { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
         .tr { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
         .bl { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; }
-        /* Canto inferior direito cortado, sem bracket */
 
         /* Ícone */
         .icon-container {
@@ -182,7 +209,6 @@
             align-items: center;
         }
 
-        /* Glow atrás do ícone */
         .icon-glow-bg {
             position: absolute;
             width: 100%;
@@ -234,14 +260,14 @@
             opacity: 0.5;
         }
 
-        /* Botão Google - Estilo Tech */
+        /* Botão Google */
         .google-btn {
             width: 100%;
             padding: 1rem 2rem;
-            background: rgba(255, 255, 255, 0.05); /* Fundo escuro semi-transparente */
+            background: rgba(255, 255, 255, 0.05);
             color: white;
             border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 4px; /* Cantos retos */
+            border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -263,7 +289,6 @@
             transform: translateY(-2px);
         }
 
-        /* Linha de "loading" no hover do botão */
         .google-btn::before {
             content: '';
             position: absolute;
@@ -288,13 +313,8 @@
             gap: 0.5rem;
             font-family: 'JetBrains Mono', monospace;
         }
-        
-        .footer-highlight {
-            color: #94a3b8;
-            font-weight: 700;
-        }
 
-        /* Efeito de Scanline Geral (Monitor CRT) */
+        /* Scanlines */
         .scanlines {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -304,25 +324,33 @@
             z-index: 99;
             opacity: 0.15;
         }
-
     </style>
 </head>
 <body>
     
+    <!-- LANGUAGE SELECTOR -->
+    <div class="language-selector">
+        <button class="lang-btn" onclick="changeLanguage('pt')" title="Português" id="lang-pt">
+            🇧🇷
+        </button>
+        <button class="lang-btn" onclick="changeLanguage('en')" title="English" id="lang-en">
+            🇺🇸
+        </button>
+        <button class="lang-btn" onclick="changeLanguage('es')" title="Español" id="lang-es">
+            🇪🇸
+        </button>
+    </div>
+
     <div class="tech-bg">
-        <!-- Elementos de Fundo (Inspirados na Imagem) -->
         <div class="grid-overlay"></div>
         <div class="hud-circle-outer"></div>
         <div class="hud-circle-inner"></div>
         <div class="hud-crosshair"></div>
         <div class="hud-lines"></div>
-        
-        <!-- Efeito CRT -->
         <div class="scanlines"></div>
 
         <!-- Card Principal -->
         <div class="glass-card">
-            <!-- Cantos Tech -->
             <div class="card-corner tl"></div>
             <div class="card-corner tr"></div>
             <div class="card-corner bl"></div>
@@ -330,58 +358,124 @@
             <!-- Ícone -->
             <div class="icon-container">
                 <div class="icon-glow-bg"></div>
-                <!-- SVG BigQuery + Escudo (Branco puro para contraste) -->
                 <svg width="70" height="70" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="z-index: 2;">
                     <path d="M12 2L2 7V17L12 22L22 17V7L12 2Z" fill="#0f172a" stroke="#00f3ff" stroke-width="1.5"/>
                     <path d="M11 7H13V17H11V7Z" fill="#00f3ff"/>
                     <path d="M7 10H9V17H7V10Z" fill="#00f3ff"/>
                     <path d="M15 13H17V17H15V13Z" fill="#00f3ff"/>
-                    <!-- Badge de Escudo -->
                     <circle cx="19" cy="19" r="6" fill="#000000" stroke="#00f3ff" stroke-width="1"/>
                     <path d="M19 15L17 16V18C17 19.5 17.8 20.8 19 21.5C20.2 20.8 21 19.5 21 18V16L19 15Z" fill="#00f3ff"/>
                 </svg>
             </div>
 
             <!-- Textos -->
-            <h1 class="title">GenAI4Data</h1>
-            <div class="subtitle">Seamless Security System</div>
+            <h1 class="title" id="login-title">GenAI4Data</h1>
+            <div class="subtitle" id="login-subtitle">Seamless Security System</div>
 
             <!-- Botão Google -->
-            <button class="google-btn" onclick="loginWithGoogle()">
+            <button class="google-btn" onclick="loginWithGoogle()" id="google-btn">
                 <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.84z" fill="#FBBC05"/>
                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                 </svg>
-                Sign in with Google
+                <span id="btn-text">Sign in with Google</span>
             </button>
 
             <!-- Footer -->
             <div class="footer">
-                <span>Powered by Sys Manager</span>
+                <span id="footer-powered">Powered by Sys Manager</span>
                 <span style="color: var(--hud-color)">|</span>
-                <span>Partner Google Cloud</span>
+                <span id="footer-partner">Partner Google Cloud</span>
             </div>
         </div>
     </div>
 
     <script>
+        // TRANSLATIONS
+        const translations = {
+            pt: {
+                title: 'GenAI4Data',
+                subtitle: 'Sistema de Segurança Perfeito',
+                button: 'Entrar com Google',
+                loading: 'CARREGANDO SISTEMA PERFEITO...',
+                poweredBy: 'Desenvolvido por Sys Manager',
+                partner: 'Partner Google Cloud'
+            },
+            en: {
+                title: 'GenAI4Data',
+                subtitle: 'Seamless Security System',
+                button: 'Sign in with Google',
+                loading: 'LOADING PERFECT SYSTEM...',
+                poweredBy: 'Powered by Sys Manager',
+                partner: 'Partner Google Cloud'
+            },
+            es: {
+                title: 'GenAI4Data',
+                subtitle: 'Sistema de Seguridad Perfecto',
+                button: 'Iniciar sesión con Google',
+                loading: 'CARGANDO SISTEMA PERFECTO...',
+                poweredBy: 'Desarrollado por Sys Manager',
+                partner: 'Partner Google Cloud'
+            }
+        };
+
+        // Get saved language or default to 'en'
+        let currentLang = localStorage.getItem('app_language') || 'en';
+
+        // Apply translations
+        function applyTranslations(lang) {
+            const t = translations[lang];
+            document.getElementById('login-title').textContent = t.title;
+            document.getElementById('login-subtitle').textContent = t.subtitle;
+            document.getElementById('btn-text').textContent = t.button;
+            document.getElementById('footer-powered').textContent = t.poweredBy;
+            document.getElementById('footer-partner').textContent = t.partner;
+            
+            // Update active button
+            document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('lang-' + lang).classList.add('active');
+            document.documentElement.lang = lang;
+        }
+
+        // Change language
+        function changeLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('app_language', lang);
+            applyTranslations(lang);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            applyTranslations(currentLang);
+        });
+
+        // Google OAuth
         function loginWithGoogle() {
-            // Lógica de Placeholder
             const clientId = "{{GOOGLE_CLIENT_ID}}";
             const redirectUri = "{{REDIRECT_URI}}";
             
-            // Simulação visual de clique (opcional)
-            const btn = document.querySelector('.google-btn');
-            btn.innerHTML = 'LOADING PERFECT SYSTEM...';
+            const btn = document.getElementById('google-btn');
+            const btnText = document.getElementById('btn-text');
+            btnText.textContent = translations[currentLang].loading;
             btn.style.color = '#00f3ff';
+            btn.style.borderColor = '#00f3ff';
+            
+            localStorage.setItem('app_language', currentLang);
             
             setTimeout(() => {
-                const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=openid%20email%20profile&access_type=online&prompt=select_account`;
+                const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?client_id=' + clientId + '&redirect_uri=' + redirectUri + '&response_type=code&scope=openid%20email%20profile&access_type=online&prompt=select_account';
                 window.location.href = authUrl;
             }, 800);
         }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === '1') { e.preventDefault(); changeLanguage('pt'); }
+            if ((e.ctrlKey || e.metaKey) && e.key === '2') { e.preventDefault(); changeLanguage('en'); }
+            if ((e.ctrlKey || e.metaKey) && e.key === '3') { e.preventDefault(); changeLanguage('es'); }
+        });
     </script>
 </body>
 </html>
