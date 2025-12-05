@@ -121,7 +121,14 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         
         # RLS - Create for Groups
         'rls_groups_title': 'Criar Política RLS para Grupos',
+        'rls_groups_page_title': 'Criar Política Row Level - Grupos',  # <- NOVO
+        'rls_groups_subtitle': 'Criar Row Level Security para Grupos',  # <- NOVO
+        'rls_groups_frame_title': 'Criar',  # <- NOVO
         'rls_groups_desc': 'Crie políticas de segurança baseadas em grupos',
+        'rls_groups_step4_title': 'Inserir o Grupo',  # <- NOVO
+        'rls_groups_enter_group_email': 'Insira o email do grupo',  # <- NOVO
+        'rls_groups_review_group_email': 'Email do Grupo',  # <- NOVO
+        'rls_groups_success_message': 'Política Row Level criada em {table}.{field} com sucesso!',  # <- NOVO
         'rls_groups_group_email': 'Email do Grupo',
         'rls_groups_filter_value': 'Valor do Filtro',
         'rls_groups_filter_column': 'Coluna de Filtro',
@@ -371,7 +378,14 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         
         # RLS - Create for Groups
         'rls_groups_title': 'Create RLS Policy for Groups',
+        'rls_groups_page_title': 'Create Row Level Policy - Groups',  # <- NOVO
+        'rls_groups_subtitle': 'Create Row Level Security for Groups',  # <- NOVO
+        'rls_groups_frame_title': 'Create',  # <- NOVO
         'rls_groups_desc': 'Create security policies based on groups',
+        'rls_groups_step4_title': 'Enter the Group',  # <- NOVO
+        'rls_groups_enter_group_email': 'Enter the group email',  # <- NOVO
+        'rls_groups_review_group_email': 'Group Email',  # <- NOVO
+        'rls_groups_success_message': 'Row Level Policy created on {table}.{field} successfully!',  # <- NOVO
         'rls_groups_group_email': 'Group Email',
         'rls_groups_filter_value': 'Filter Value',
         'rls_groups_filter_column': 'Filter Column',
@@ -620,7 +634,14 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         
         # RLS - Create for Groups
         'rls_groups_title': 'Crear Política RLS para Grupos',
+        'rls_groups_page_title': 'Crear Política Row Level - Grupos',  # <- NOVO
+        'rls_groups_subtitle': 'Crear Row Level Security para Grupos',  # <- NOVO
+        'rls_groups_frame_title': 'Crear',  # <- NOVO
         'rls_groups_desc': 'Cree políticas de seguridad basadas en grupos',
+        'rls_groups_step4_title': 'Ingresar el Grupo',  # <- NOVO
+        'rls_groups_enter_group_email': 'Ingrese el correo del grupo',  # <- NOVO
+        'rls_groups_review_group_email': 'Correo del Grupo',  # <- NOVO
+        'rls_groups_success_message': '¡Política Row Level creada en {table}.{field} con éxito!',  # <- NOVO
         'rls_groups_group_email': 'Correo del Grupo',
         'rls_groups_filter_value': 'Valor del Filtro',
         'rls_groups_filter_column': 'Columna de Filtro',
