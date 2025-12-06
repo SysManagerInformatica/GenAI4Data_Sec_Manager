@@ -22,6 +22,7 @@
 # Use of this tool is at your own discretion and risk."
 
 import theme
+from theme import get_text  # <- NOVO
 from config import Config
 from nicegui import ui
 from google.cloud import bigquery
@@ -30,7 +31,6 @@ from services.audit_service import AuditService
 
 config = Config()
 
-# Initialize BigQuery client globally
 client = bigquery.Client(project=config.PROJECT_ID)
 
 
@@ -39,7 +39,7 @@ class RLSAssignValuestoGroup:
     def __init__(self):
         self.project_id = config.PROJECT_ID
         self.audit_service = AuditService(config.PROJECT_ID)
-        self.page_title = "Assign Values to Row Level Policy (Groups)"
+        self.page_title = get_text('rls_assign_groups_page_title')  # <- TRADUZIDO
 
         self.selected_policy_name = None
         self.selected_policy_dataset = None
@@ -82,7 +82,7 @@ class RLSAssignValuestoGroup:
             results = [dict(row) for row in query_job]
             return results
         except Exception as e:
-            ui.notify(f"Error loading existing policies: {e}", type="negative")
+            ui.notify(get_text('msg_error_loading_policies', error=str(e)), type="negative")  # <- TRADUZIDO
             return []
 
     def delete_policy_from_db(self, group_email, filter_value):
@@ -114,11 +114,11 @@ class RLSAssignValuestoGroup:
                 }
             )
             
-            ui.notify(f"Policy deleted: {group_email} → {filter_value}", type="positive")
+            ui.notify(get_text('msg_group_policy_deleted', group=group_email, filter_value=filter_value), type="positive")  # <- TRADUZIDO
             self.refresh_existing_policies_grid()
             
         except Exception as e:
-            ui.notify(f"Error deleting policy: {e}", type="negative")
+            ui.notify(get_text('msg_error_deleting_policy', error=str(e)), type="negative")  # <- TRADUZIDO
 
     def refresh_existing_policies_grid(self):
         """Atualiza o grid de políticas existentes"""
@@ -133,7 +133,7 @@ class RLSAssignValuestoGroup:
             self.filter_container.clear()
             with self.filter_container:
                 if not self.filter_values:
-                    ui.label("No filters added yet").classes('text-grey-5 italic')
+                    ui.label(get_text('msg_no_filters_added')).classes('text-grey-5 italic')  # <- TRADUZIDO
                 else:
                     for filter_value in self.filter_values:
                         with ui.row().classes('w-full items-center justify-between p-2 border rounded hover:bg-grey-1'):
@@ -145,7 +145,7 @@ class RLSAssignValuestoGroup:
                             ui.button(
                                 icon='delete',
                                 on_click=lambda f=filter_value: self.remove_filter_from_list(f)
-                            ).props('flat dense color=negative').tooltip('Remove from list')
+                            ).props('flat dense color=negative').tooltip(get_text('tooltip_remove_from_list'))  # <- TRADUZIDO
 
     def toggle_filter_selection(self, filter_value, is_selected):
         """Toggle seleção de filtro"""
@@ -159,17 +159,17 @@ class RLSAssignValuestoGroup:
         if filter_value in self.filter_values:
             self.filter_values.remove(filter_value)
             self.selected_filters.discard(filter_value)
-            ui.notify(f"Filter '{filter_value}' removed from list", type="info")
+            ui.notify(get_text('msg_filter_removed', filter_value=filter_value), type="info")  # <- TRADUZIDO
             self.refresh_filter_list()
 
     def headers(self):
         ui.page_title(self.page_title)
-        ui.label('Assign Values to Row Level Policy (Groups)').classes('text-primary text-center text-bold')
+        ui.label(get_text('rls_assign_groups_subtitle')).classes('text-primary text-center text-bold')  # <- TRADUZIDO
 
     def stepper_setup(self):
         self.stepper = ui.stepper().props("vertical").classes("w-full")
-        self.step1_title = "Select Policy"
-        self.step2_title = "Manage Group Assignments"
+        self.step1_title = get_text('rls_assign_groups_step1_title')  # <- TRADUZIDO
+        self.step2_title = get_text('rls_assign_groups_step2_title')  # <- TRADUZIDO
 
         with self.stepper:
             self.step1()
@@ -194,16 +194,16 @@ class RLSAssignValuestoGroup:
             results = [dict(row) for row in query_job]
             return results
         except GoogleAPIError as e:
-            ui.notify(f"Error fetching policies: {e}", type="negative")
+            ui.notify(get_text('msg_error_fetch_policies', error=str(e)), type="negative")  # <- TRADUZIDO
             return []
         except Exception as e:
-            ui.notify(f"Unexpected error fetching policies: {e}", type="negative")
+            ui.notify(get_text('msg_error_unexpected_fetch_policies', error=str(e)), type="negative")  # <- TRADUZIDO
             return []
 
     def run_insert_values_to_group(self):
         """Insere apenas os filtros SELECIONADOS"""
         if not self.selected_filters:
-            ui.notify("Please select at least one filter value to insert.", type="warning")
+            ui.notify(get_text('msg_select_at_least_one_filter'), type="warning")  # <- TRADUZIDO
             return
 
         try:
@@ -216,12 +216,10 @@ class RLSAssignValuestoGroup:
                     ('group', '{self.selected_policy_name}', '{self.project_id}', '{self.selected_policy_dataset}', '{self.selected_policy_table}', '{self.selected_policy_field}', '{filter_value}', '{self.selected_policy_group_email}')
                 """)
 
-            # Execute all inserts
             for insert_statement in insert_statements:
                 query_job = client.query(insert_statement)
                 query_job.result()
 
-            # Log success
             self.audit_service.log_action(
                 action='ASSIGN_VALUE_TO_GROUP',
                 resource_type='GROUP_ASSIGNMENT',
@@ -238,12 +236,10 @@ class RLSAssignValuestoGroup:
                 }
             )
 
-            ui.notify(f"Successfully inserted {len(self.selected_filters)} filter values for group {self.selected_policy_group_email}", type="positive")
+            ui.notify(get_text('msg_inserted_filters_for_group', count=len(self.selected_filters), group=self.selected_policy_group_email), type="positive")  # <- TRADUZIDO
             
-            # Limpar seleções
             self.selected_filters.clear()
             
-            # Recarregar grid
             self.refresh_existing_policies_grid()
             self.refresh_filter_list()
 
@@ -262,7 +258,7 @@ class RLSAssignValuestoGroup:
                     'filter_count': len(self.selected_filters)
                 }
             )
-            ui.notify(f"Error inserting data: {error}", type="negative")
+            ui.notify(get_text('msg_error_inserting_data', error=str(error)), type="negative")  # <- TRADUZIDO
             
         except Exception as error:
             self.audit_service.log_action(
@@ -276,12 +272,12 @@ class RLSAssignValuestoGroup:
                     'policy_name': self.selected_policy_name
                 }
             )
-            ui.notify(f"An unexpected error occurred: {error}", type="negative")
+            ui.notify(get_text('msg_error_unexpected', error=str(error)), type="negative")  # <- TRADUZIDO
 
     async def get_selected_row(self):
         rows = await self.grid_step1.get_selected_rows()
         if not rows:
-            ui.notify('No rows selected.', type="warning")
+            ui.notify(get_text('msg_no_rows_selected'), type="warning")  # <- TRADUZIDO
             self.step1_next_button.set_visibility(False)
             return
 
@@ -290,7 +286,7 @@ class RLSAssignValuestoGroup:
 
     def update_policy_values(self):
         if not self.selected_policy:
-            ui.notify("No policy selected.", type="warning")
+            ui.notify(get_text('msg_no_policy_selected'), type="warning")  # <- TRADUZIDO
             return
 
         selected_policy = self.selected_policy[0]
@@ -321,7 +317,7 @@ class RLSAssignValuestoGroup:
             }).classes('max-h-160 ag-theme-quartz').on('rowSelected', self.get_selected_row)
 
             with ui.stepper_navigation():
-                self.step1_next_button = ui.button("NEXT", icon="arrow_forward_ios",
+                self.step1_next_button = ui.button(get_text('btn_next'), icon="arrow_forward_ios",  # <- TRADUZIDO
                                                     on_click=self.update_policy_values)
                 self.step1_next_button.set_visibility(False)
 
@@ -330,20 +326,20 @@ class RLSAssignValuestoGroup:
         if filter_value:
             if filter_value not in self.filter_values:
                 self.filter_values.append(filter_value)
-                self.selected_filters.add(filter_value)  # Adicionar como selecionado por padrão
+                self.selected_filters.add(filter_value)
                 self.filter_input.value = ''
                 self.refresh_filter_list()
-                ui.notify(f"Filter '{filter_value}' added", type="positive")
+                ui.notify(get_text('msg_filter_added', filter_value=filter_value), type="positive")  # <- TRADUZIDO
             else:
-                ui.notify("Filter already added.", type="warning")
+                ui.notify(get_text('msg_filter_already_added'), type="warning")  # <- TRADUZIDO
         else:
-            ui.notify("Invalid filter value.", type="warning")
+            ui.notify(get_text('msg_invalid_filter'), type="warning")  # <- TRADUZIDO
 
     async def delete_selected_existing_policy(self):
         """Deleta política selecionada no grid"""
         rows = await self.existing_policies_grid.get_selected_rows()
         if not rows:
-            ui.notify('No rows selected to delete.', type="warning")
+            ui.notify(get_text('msg_no_rows_selected_delete'), type="warning")  # <- TRADUZIDO
             return
         
         for row in rows:
@@ -352,60 +348,58 @@ class RLSAssignValuestoGroup:
     def step2_with_tabs(self):
         """Step 2 com duas abas: Existing Policies e Add New"""
         with ui.step(self.step2_title):
-            ui.label(f"Managing filters for Group: {self.selected_policy_group_email}").classes('text-h6 font-bold mb-2')
+            ui.label(get_text('rls_assign_groups_managing_for', group=self.selected_policy_group_email)).classes('text-h6 font-bold mb-2')  # <- TRADUZIDO
             
             with ui.tabs().classes('w-full') as tabs:
-                tab_existing = ui.tab('Existing Policies', icon='list')
-                tab_new = ui.tab('Add New Values', icon='add_circle')
+                tab_existing = ui.tab(get_text('tab_existing_policies'), icon='list')  # <- TRADUZIDO
+                tab_new = ui.tab(get_text('tab_add_new_values'), icon='add_circle')  # <- TRADUZIDO
             
             with ui.tab_panels(tabs, value=tab_existing).classes('w-full'):
-                # TAB 1: Existing Policies
                 with ui.tab_panel(tab_existing):
-                    ui.label("Current Group Policy Assignments").classes('text-h6 font-bold mb-4')
-                    ui.label("Select rows and click DELETE to remove from database").classes('text-caption text-grey-7 mb-2')
+                    ui.label(get_text('rls_assign_groups_current_assignments')).classes('text-h6 font-bold mb-4')  # <- TRADUZIDO
+                    ui.label(get_text('rls_assign_users_select_delete_desc')).classes('text-caption text-grey-7 mb-2')  # <- TRADUZIDO (reutiliza)
                     
                     existing_data = self.load_existing_policies_from_db()
                     
                     self.existing_policies_grid = ui.aggrid({
                         'columnDefs': [
-                            {'field': 'group_email', 'headerName': 'Group Email', 'checkboxSelection': True, 'filter': 'agTextColumnFilter'},
-                            {'field': 'filter_value', 'headerName': 'Filter Value', 'filter': 'agTextColumnFilter'},
-                            {'field': 'policy_name', 'headerName': 'Policy Name', 'filter': 'agTextColumnFilter'},
-                            {'field': 'field_id', 'headerName': 'Field', 'filter': 'agTextColumnFilter'},
-                            {'field': 'created_at', 'headerName': 'Created At', 'filter': 'agTextColumnFilter'},
+                            {'field': 'group_email', 'headerName': get_text('col_group_email'), 'checkboxSelection': True, 'filter': 'agTextColumnFilter'},  # <- TRADUZIDO
+                            {'field': 'filter_value', 'headerName': get_text('col_filter_value'), 'filter': 'agTextColumnFilter'},  # <- TRADUZIDO
+                            {'field': 'policy_name', 'headerName': get_text('col_policy_name'), 'filter': 'agTextColumnFilter'},  # <- TRADUZIDO
+                            {'field': 'field_id', 'headerName': get_text('col_field'), 'filter': 'agTextColumnFilter'},  # <- TRADUZIDO
+                            {'field': 'created_at', 'headerName': get_text('col_created_at'), 'filter': 'agTextColumnFilter'},  # <- TRADUZIDO
                         ],
                         'rowData': existing_data,
                         'rowSelection': 'multiple',
                     }).classes('w-full max-h-96 ag-theme-quartz')
                     
                     with ui.row().classes('mt-4'):
-                        ui.button("DELETE SELECTED", icon="delete", on_click=self.delete_selected_existing_policy).props('color=negative')
-                        ui.button("REFRESH", icon="refresh", on_click=self.refresh_existing_policies_grid).props('flat')
+                        ui.button(get_text('btn_delete_selected'), icon="delete", on_click=self.delete_selected_existing_policy).props('color=negative')  # <- TRADUZIDO
+                        ui.button(get_text('btn_refresh'), icon="refresh", on_click=self.refresh_existing_policies_grid).props('flat')  # <- TRADUZIDO
                 
-                # TAB 2: Add New Values
                 with ui.tab_panel(tab_new):
-                    ui.label("Add New Filter Values").classes('text-h6 font-bold mb-4')
-                    ui.label("Add filters, select checkboxes, then click INSERT").classes('text-caption text-grey-7 mb-2')
+                    ui.label(get_text('rls_assign_groups_add_new_title')).classes('text-h6 font-bold mb-4')  # <- TRADUZIDO
+                    ui.label(get_text('rls_assign_groups_add_new_desc')).classes('text-caption text-grey-7 mb-2')  # <- TRADUZIDO
                     
                     with ui.column().classes('w-full items-center'):
                         with ui.card().classes('w-3/4'):
-                            ui.label("Add Filter Values:").classes('font-bold')
+                            ui.label(get_text('rls_assign_users_add_filters')).classes('font-bold')  # <- TRADUZIDO (reutiliza)
                             
                             with ui.row().classes('w-full gap-2'):
-                                self.filter_input = ui.input(placeholder="Tecnologia da Informação").classes('flex-1')
-                                ui.button("ADD FILTER", on_click=self.add_filter).props('color=primary')
+                                self.filter_input = ui.input(placeholder=get_text('placeholder_filter_value')).classes('flex-1')  # <- TRADUZIDO
+                                ui.button(get_text('btn_add_filter'), on_click=self.add_filter).props('color=primary')  # <- TRADUZIDO
                             
                             ui.separator()
-                            ui.label("Filter Values (check to insert)").classes('font-bold text-sm text-grey-7')
+                            ui.label(get_text('rls_assign_users_filter_list_label')).classes('font-bold text-sm text-grey-7')  # <- TRADUZIDO (reutiliza)
                             
                             with ui.card().classes('w-full min-h-48 max-h-96 overflow-auto'):
                                 self.filter_container = ui.column().classes('w-full gap-1')
                                 self.refresh_filter_list()
 
             with ui.stepper_navigation():
-                ui.button("BACK", icon="arrow_back_ios", on_click=self.stepper.previous)
-                ui.button("INSERT SELECTED", icon="enhanced_encryption", on_click=self.run_insert_values_to_group).props('color=primary')
+                ui.button(get_text('btn_back'), icon="arrow_back_ios", on_click=self.stepper.previous)  # <- TRADUZIDO
+                ui.button(get_text('btn_insert_selected'), icon="enhanced_encryption", on_click=self.run_insert_values_to_group).props('color=primary')  # <- TRADUZIDO
 
     def run(self):
-        with theme.frame('Assign Values to Group Policy'):
+        with theme.frame(get_text('rls_assign_groups_frame_title')):  # <- TRADUZIDO
             pass
