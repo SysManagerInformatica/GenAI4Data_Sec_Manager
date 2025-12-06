@@ -1,6 +1,10 @@
 """
 CLS Taxonomies Page
 Manage Data Catalog taxonomies
+
+VERSÃO: 2.0 - Multi-Idioma
+Data: 06/12/2024
+Traduzido por: Lucas Carvalhal
 """
 
 from nicegui import ui
@@ -8,21 +12,27 @@ import theme
 from config import Config
 from services.datacatalog_service import DataCatalogService
 from services.audit_service import AuditService
+from translations import get_text
 
 
 class CLSTaxonomies:
-    def __init__(self):
+    def __init__(self, lang='pt'):
+        self.lang = lang
         self.datacatalog_service = DataCatalogService(Config.PROJECT_ID, Config.LOCATION)
         self.audit_service = AuditService(Config.PROJECT_ID)
         self.taxonomies_container = None
     
+    def t(self, key, **kwargs):
+        """Shortcut para get_text"""
+        return get_text(self.lang, key, **kwargs)
+    
     def run(self):
-        with theme.frame('CLS - Manage Taxonomies'):
-            ui.label('📁 Manage Taxonomies').classes('text-3xl font-bold mb-4')
-            ui.label('Create and manage Data Catalog taxonomies for column-level security').classes('text-gray-600 mb-6')
+        with theme.frame(f'CLS - {self.t("cls_tax_title")}'):
+            ui.label(f'📁 {self.t("cls_tax_title")}').classes('text-3xl font-bold mb-4')
+            ui.label(self.t('cls_tax_desc')).classes('text-gray-600 mb-6')
             
             # Create button
-            ui.button('➕ Create New Taxonomy', 
+            ui.button(f'➕ {self.t("cls_tax_create")}', 
                      on_click=self.show_create_dialog,
                      icon='add').classes('mb-4')
             
@@ -43,8 +53,8 @@ class CLSTaxonomies:
                         with ui.row().classes('items-center justify-between w-full'):
                             with ui.column():
                                 ui.label(tax['display_name']).classes('text-xl font-bold')
-                                ui.label(tax['description'] or 'No description').classes('text-sm text-gray-600')
-                                ui.label(f"🏷️ {tax['tag_count']} policy tags").classes('text-sm')
+                                ui.label(tax['description'] or self.t('cls_tax_no_description')).classes('text-sm text-gray-600')
+                                ui.label(f"🏷️ {tax['tag_count']} {self.t('cls_tax_tags_count').lower()}").classes('text-sm')
                             
                             with ui.row().classes('gap-2'):
                                 ui.button('✏️', 
@@ -52,23 +62,29 @@ class CLSTaxonomies:
                                 ui.button('🗑️', 
                                          on_click=lambda t=tax: self.show_delete_dialog(t)).props('flat dense').classes('text-red-500')
             else:
-                ui.label('⚠️ No taxonomies found. Create your first taxonomy!').classes('text-gray-500')
+                ui.label(self.t('cls_tax_no_taxonomies')).classes('text-gray-500')
     
     def show_create_dialog(self):
         """Show dialog to create new taxonomy"""
         with ui.dialog() as dialog, ui.card():
-            ui.label('➕ Create New Taxonomy').classes('text-2xl font-bold mb-4')
+            ui.label(self.t('cls_tax_dialog_create')).classes('text-2xl font-bold mb-4')
             
-            name_input = ui.input('Taxonomy Name', placeholder='e.g., PII').classes('w-full')
-            desc_input = ui.textarea('Description', 
-                                    placeholder='e.g., Personally Identifiable Information').classes('w-full')
+            name_input = ui.input(
+                self.t('cls_tax_name'), 
+                placeholder=self.t('cls_tax_name_placeholder')
+            ).classes('w-full')
+            
+            desc_input = ui.textarea(
+                self.t('cls_tax_description'), 
+                placeholder=self.t('cls_tax_desc_placeholder')
+            ).classes('w-full')
             
             with ui.row().classes('gap-2 mt-4'):
-                ui.button('Cancel', on_click=dialog.close).props('flat')
+                ui.button(self.t('btn_cancel'), on_click=dialog.close).props('flat')
                 
                 def create():
                     if not name_input.value:
-                        ui.notify('Please enter a taxonomy name', type='warning')
+                        ui.notify(self.t('cls_tax_error_name_required'), type='warning')
                         return
                     
                     try:
@@ -90,7 +106,13 @@ class CLSTaxonomies:
                                 }
                             )
                             
-                            ui.notify(f'✅ Taxonomy "{name_input.value}" created successfully!', type='positive')
+                            ui.notify(
+                                self.t('cls_tax_success_create').replace(
+                                    'Taxonomia', 
+                                    f'Taxonomia "{name_input.value}"'
+                                ), 
+                                type='positive'
+                            )
                             dialog.close()
                             self.refresh_taxonomies()
                         else:
@@ -102,7 +124,7 @@ class CLSTaxonomies:
                                 status='FAILED',
                                 error_message='Unknown error creating taxonomy'
                             )
-                            ui.notify('❌ Error creating taxonomy', type='negative')
+                            ui.notify(self.t('cls_tax_error_create'), type='negative')
                     
                     except Exception as e:
                         # Log exception
@@ -113,22 +135,29 @@ class CLSTaxonomies:
                             status='FAILED',
                             error_message=str(e)
                         )
-                        ui.notify(f'❌ Error: {str(e)}', type='negative')
+                        ui.notify(self.t('msg_error', error=str(e)), type='negative')
                 
-                ui.button('Create', on_click=create).props('color=primary')
+                ui.button(self.t('btn_create'), on_click=create).props('color=primary')
         
         dialog.open()
     
     def show_edit_dialog(self, taxonomy):
         """Show dialog to edit taxonomy"""
         with ui.dialog() as dialog, ui.card():
-            ui.label('✏️ Edit Taxonomy').classes('text-2xl font-bold mb-4')
+            ui.label(self.t('cls_tax_dialog_edit')).classes('text-2xl font-bold mb-4')
             
-            name_input = ui.input('Taxonomy Name', value=taxonomy['display_name']).classes('w-full')
-            desc_input = ui.textarea('Description', value=taxonomy['description']).classes('w-full')
+            name_input = ui.input(
+                self.t('cls_tax_name'), 
+                value=taxonomy['display_name']
+            ).classes('w-full')
+            
+            desc_input = ui.textarea(
+                self.t('cls_tax_description'), 
+                value=taxonomy['description']
+            ).classes('w-full')
             
             with ui.row().classes('gap-2 mt-4'):
-                ui.button('Cancel', on_click=dialog.close).props('flat')
+                ui.button(self.t('btn_cancel'), on_click=dialog.close).props('flat')
                 
                 def update():
                     try:
@@ -153,7 +182,7 @@ class CLSTaxonomies:
                                 }
                             )
                             
-                            ui.notify('✅ Taxonomy updated successfully!', type='positive')
+                            ui.notify(self.t('cls_tax_success_update'), type='positive')
                             dialog.close()
                             self.refresh_taxonomies()
                         else:
@@ -165,7 +194,7 @@ class CLSTaxonomies:
                                 status='FAILED',
                                 error_message='Unknown error updating taxonomy'
                             )
-                            ui.notify('❌ Error updating taxonomy', type='negative')
+                            ui.notify(self.t('cls_tax_error_update'), type='negative')
                     
                     except Exception as e:
                         # Log exception
@@ -176,21 +205,21 @@ class CLSTaxonomies:
                             status='FAILED',
                             error_message=str(e)
                         )
-                        ui.notify(f'❌ Error: {str(e)}', type='negative')
+                        ui.notify(self.t('msg_error', error=str(e)), type='negative')
                 
-                ui.button('Save', on_click=update).props('color=primary')
+                ui.button(self.t('btn_save'), on_click=update).props('color=primary')
         
         dialog.open()
     
     def show_delete_dialog(self, taxonomy):
         """Show dialog to confirm deletion"""
         with ui.dialog() as dialog, ui.card():
-            ui.label('⚠️ Confirm Deletion').classes('text-2xl font-bold mb-4')
-            ui.label(f'Are you sure you want to delete taxonomy "{taxonomy["display_name"]}"?')
-            ui.label('This action cannot be undone!').classes('text-red-600 font-bold')
+            ui.label(self.t('cls_tax_dialog_delete')).classes('text-2xl font-bold mb-4')
+            ui.label(self.t('cls_tax_delete_question', name=taxonomy["display_name"]))
+            ui.label(self.t('cls_tax_delete_warning')).classes('text-red-600 font-bold')
             
             with ui.row().classes('gap-2 mt-4'):
-                ui.button('Cancel', on_click=dialog.close).props('flat')
+                ui.button(self.t('btn_cancel'), on_click=dialog.close).props('flat')
                 
                 def confirm_delete():
                     try:
@@ -208,7 +237,7 @@ class CLSTaxonomies:
                                 }
                             )
                             
-                            ui.notify('✅ Taxonomy deleted successfully!', type='positive')
+                            ui.notify(self.t('cls_tax_success_delete'), type='positive')
                             dialog.close()
                             self.refresh_taxonomies()
                         else:
@@ -220,7 +249,7 @@ class CLSTaxonomies:
                                 status='FAILED',
                                 error_message='Unknown error deleting taxonomy'
                             )
-                            ui.notify('❌ Error deleting taxonomy', type='negative')
+                            ui.notify(self.t('cls_tax_error_delete'), type='negative')
                     
                     except Exception as e:
                         # Log exception
@@ -231,8 +260,8 @@ class CLSTaxonomies:
                             status='FAILED',
                             error_message=str(e)
                         )
-                        ui.notify(f'❌ Error: {str(e)}', type='negative')
+                        ui.notify(self.t('msg_error', error=str(e)), type='negative')
                 
-                ui.button('Delete', on_click=confirm_delete).props('color=negative')
+                ui.button(self.t('btn_delete'), on_click=confirm_delete).props('color=negative')
         
         dialog.open()
