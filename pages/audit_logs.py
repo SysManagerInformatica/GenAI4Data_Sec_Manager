@@ -38,20 +38,21 @@ class AuditLogs:
                 
                 with ui.row().classes('gap-4 items-end'):
                     # Date range filter
+                    # ✅ CORREÇÃO: Usar dict com chave -> valor para mostrar texto traduzido mas enviar chave
                     date_options = {
-                        'last_hour': get_text('audit_filter_last_hour'),  # <- TRADUZIDO
-                        'today': get_text('audit_filter_today'),  # <- TRADUZIDO
-                        'last_7_days': get_text('audit_filter_last_7_days'),  # <- TRADUZIDO
-                        'last_30_days': get_text('audit_filter_last_30_days')  # <- TRADUZIDO
+                        'last_hour': get_text('audit_filter_last_hour'),
+                        'today': get_text('audit_filter_today'),
+                        'last_7_days': get_text('audit_filter_last_7_days'),
+                        'last_30_days': get_text('audit_filter_last_30_days')
                     }
+                    
                     ui.select(
-                        label=get_text('audit_filter_date_range'),  # <- TRADUZIDO
-                        options=list(date_options.keys()),
+                        label=get_text('audit_filter_date_range'),
+                        options=date_options,  # ✅ Agora mostra texto traduzido mas mantém a chave
                         value='last_7_days',
                         on_change=lambda e: self.update_filter('date_range', e.value)
-                    ).classes('w-48').bind_value_to(
-                        self, 'filters', lambda v: date_options.get(v, v)
-                    )
+                    ).classes('w-48')
+                    # ✅ REMOVIDO: bind_value_to que estava quebrando
                     
                     # Action filter
                     action_options = [
