@@ -22,7 +22,7 @@
 # Use of this tool is at your own discretion and risk."
 
 import theme
-from theme import get_text  # <- NOVO: importar função de tradução
+from theme import get_text
 from wonderwords import RandomWord
 from config import Config
 from nicegui import ui
@@ -30,11 +30,11 @@ from google.cloud import bigquery
 from google.cloud.exceptions import NotFound
 from google.api_core.exceptions import GoogleAPIError
 from services.audit_service import AuditService
+import json  # ✨ NEW: For RLS metadata
 
 
 config = Config()
 r = RandomWord()
-
 
 client = bigquery.Client(project=config.PROJECT_ID)
 
@@ -47,17 +47,16 @@ class RLSCreateforGroups:
         self.table_list = None
         self.field_list = None
 
-        self.page_title = get_text('rls_groups_page_title')  # <- TRADUZIDO
+        self.page_title = get_text('rls_groups_page_title')
         self.headers()
 
         self.stepper = ui.stepper().props("vertical").classes("w-full")
 
-        self.step1_title = get_text('rls_users_step1_title')  # <- TRADUZIDO (reutiliza)
-        self.step2_title = get_text('rls_users_step2_title')  # <- TRADUZIDO (reutiliza)
-        self.step3_title = get_text('rls_users_step3_title')  # <- TRADUZIDO (reutiliza)
-        self.step4_title = get_text('rls_groups_step4_title')  # <- TRADUZIDO
-        self.step5_title = get_text('rls_users_step4_title')  # <- TRADUZIDO (reutiliza "Review and Run")
-
+        self.step1_title = get_text('rls_users_step1_title')
+        self.step2_title = get_text('rls_users_step2_title')
+        self.step3_title = get_text('rls_users_step3_title')
+        self.step4_title = get_text('rls_groups_step4_title')
+        self.step5_title = get_text('rls_users_step4_title')
 
         self.selected_dataset = None
         self.selected_table = None
@@ -65,6 +64,10 @@ class RLSCreateforGroups:
         self.group_assignment = None
         self.randon_word = r.word(include_parts_of_speech=["nouns", "adjectives"], word_min_length=3, word_max_length=8)
         self.policy_name = None
+        
+        # ✨ NEW: View-related attributes
+        self.view_name = None
+        self.views_dataset = None
 
     def _update_selected_dataset(self, e):
         if not e.value:
@@ -87,27 +90,25 @@ class RLSCreateforGroups:
     def _step1_next_button_visibility(self):
          self.step1_next_button.set_visibility(bool(self.selected_dataset)) 
 
-
     def headers(self):
         ui.page_title(self.page_title)
-        ui.label(get_text('rls_groups_subtitle')).classes('text-primary text-center text-bold')  # <- TRADUZIDO
-
+        ui.label(get_text('rls_groups_subtitle')).classes('text-primary text-center text-bold')
 
     def get_datasets(self):
         try:
             datasets = list(client.list_datasets())
-            return [dataset.dataset_id for dataset in datasets]
+            # ✨ NEW: Filter out _views datasets
+            return [dataset.dataset_id for dataset in datasets if not dataset.dataset_id.endswith('_views')]
         except GoogleAPIError as e:
-            ui.notify(get_text('msg_error_fetch_datasets', error=str(e)), type="negative")  # <- TRADUZIDO
+            ui.notify(get_text('msg_error_fetch_datasets', error=str(e)), type="negative")
             return []
         except Exception as e:
-            ui.notify(get_text('msg_error_unexpected', error=str(e)), type="negative")  # <- TRADUZIDO
+            ui.notify(get_text('msg_error_unexpected', error=str(e)), type="negative")
             return []
-
 
     def get_tables_in_dataset(self):
         if not self.selected_dataset:
-            ui.notify(get_text('msg_select_dataset_first'), type="warning")  # <- TRADUZIDO
+            ui.notify(get_text('msg_select_dataset_first'), type="warning")
             return
 
         try:
@@ -119,17 +120,15 @@ class RLSCreateforGroups:
             self.stepper.next()
             self.step2_next_button.set_visibility(False)
         except NotFound:
-            ui.notify(get_text('msg_dataset_not_found', dataset=self.selected_dataset), type="negative")  # <- TRADUZIDO
+            ui.notify(get_text('msg_dataset_not_found', dataset=self.selected_dataset), type="negative")
         except GoogleAPIError as e:
-            ui.notify(get_text('msg_error_fetch_tables', error=str(e)), type="negative")  # <- TRADUZIDO
+            ui.notify(get_text('msg_error_fetch_tables', error=str(e)), type="negative")
         except Exception as e:
-            ui.notify(get_text('msg_error_unexpected', error=str(e)), type="negative")  # <- TRADUZIDO
-
-
+            ui.notify(get_text('msg_error_unexpected', error=str(e)), type="negative")
 
     def get_fields_in_table(self):
         if not self.selected_table:
-            ui.notify(get_text('msg_select_table_first'), type="warning")  # <- TRADUZIDO
+            ui.notify(get_text('msg_select_table_first'), type="warning")
             return
 
         try:
@@ -142,103 +141,212 @@ class RLSCreateforGroups:
             self.stepper.next()
             self.step3_next_button.set_visibility(False) 
         except NotFound:
-            ui.notify(get_text('msg_table_not_found', table=self.selected_table), type="negative")  # <- TRADUZIDO
+            ui.notify(get_text('msg_table_not_found', table=self.selected_table), type="negative")
         except GoogleAPIError as e:
-            ui.notify(get_text('msg_error_fetch_fields', error=str(e)), type="negative")  # <- TRADUZIDO
+            ui.notify(get_text('msg_error_fetch_fields', error=str(e)), type="negative")
         except Exception as e:
-            ui.notify(get_text('msg_error_unexpected', error=str(e)), type="negative")  # <- TRADUZIDO
+            ui.notify(get_text('msg_error_unexpected', error=str(e)), type="negative")
+
+    # ✨ NEW: Helper method to create views dataset
+    def ensure_views_dataset(self):
+        """Create views dataset if it doesn't exist"""
+        self.views_dataset = f"{self.selected_dataset}_views"
+        
+        try:
+            client.get_dataset(self.views_dataset)
+        except NotFound:
+            # Create dataset
+            dataset = bigquery.Dataset(f"{self.project_id}.{self.views_dataset}")
+            dataset.location = "US"  # Adjust if needed
+            dataset.description = f"RLS/CLS views for {self.selected_dataset}"
+            client.create_dataset(dataset, timeout=30)
+            ui.notify(f"✅ Created views dataset: {self.views_dataset}", type="positive", timeout=3000)
 
     def get_resume(self):
         if not self.selected_field:
-            ui.notify(get_text('msg_select_field_first'), type="warning")  # <- TRADUZIDO
+            ui.notify(get_text('msg_select_field_first'), type="warning")
             return
 
-
-        self.policy_name = f'{self.selected_dataset}_{self.selected_table}_{self.selected_field[0]}_{self.randon_word}'
+        # ✨ NEW: Generate view name and policy name
+        self.view_name = f'vw_{self.selected_table}_{self.selected_field[0]}_{self.randon_word}'
+        self.policy_name = f'rls_{self.view_name}'
+        self.views_dataset = f"{self.selected_dataset}_views"
         
-        # Resumo traduzido  # <- TRADUZIDO
+        # ✨ UPDATED: Resume shows VIEW creation instead of direct RLS
         self.resume.content = f""" 
             ###**{get_text('rls_users_review_title')}**<br>
 
-            **{get_text('rls_users_review_policy_name')}**: {self.policy_name}<br>
+            **🔐 New Architecture: RLS View (Group-based)**<br>
+            **View Name**: {self.view_name}<br>
+            **Views Dataset**: {self.views_dataset}<br>
+            **Policy Name**: {self.policy_name}<br>
+            <br>
             **{get_text('rls_users_review_project_id')}**: {self.project_id}<br>
             **{get_text('rls_users_review_dataset_id')}**: {self.selected_dataset}<br>
             **{get_text('rls_users_review_table_id')}**: {self.selected_table}<br>
             **{get_text('rls_users_review_field_id')}**: {self.selected_field[0]}<br>
             **{get_text('rls_groups_review_group_email')}**: {self.group_assignment}<br>
             <br>
+            **ℹ️ How it works:**<br>
+            • Original table ({self.selected_table}) remains locked 🔒<br>
+            • View created in {self.views_dataset} with dynamic filter<br>
+            • Only group members ({self.group_assignment}) can access<br>
+            • RLS policy applied on VIEW (not on table)<br>
+            <br>
             **{get_text('rls_users_review_code')}**:
-
         """
 
+        # ✨ UPDATED: SQL creates VIEW + RLS on view
         self.code.content = (
-            f"CREATE OR REPLACE ROW ACCESS POLICY\n"
-            f"  `{self.policy_name}`\n"
-            f"ON\n"
-            f"  `{self.project_id}.{self.selected_dataset}.{self.selected_table}`\n"
-            f"GRANT TO (\"group:{self.group_assignment}\")\n"  
-            f"FILTER USING ({self.selected_field[0]} IN\n"
-            f"  (SELECT CAST(filter_value AS {self.selected_field[1]})\n"
-            f"   FROM `{config.FILTER_TABLE}`\n" 
-            f"   WHERE rls_type = 'group'\n"
-            f"   AND policy_name = '{self.policy_name}'\n"
-            f"   AND project_id = '{self.project_id}'\n"
-            f"   AND dataset_id = '{self.selected_dataset}'\n"
-            f"   AND table_id = '{self.selected_table}'\n"
-            f"   AND field_id = '{self.selected_field[0]}'\n"
-            f"   AND rls_group = '{self.group_assignment}'));"
+            f"-- Step 1: Create RLS View with dynamic filter\n"
+            f"CREATE OR REPLACE VIEW `{self.project_id}.{self.views_dataset}.{self.view_name}` AS\n"
+            f"SELECT *\n"
+            f"FROM `{self.project_id}.{self.selected_dataset}.{self.selected_table}`\n"
+            f"WHERE {self.selected_field[0]} IN (\n"
+            f"  SELECT CAST(filter_value AS {self.selected_field[1]})\n"
+            f"  FROM `{config.FILTER_TABLE}`\n"
+            f"  WHERE rls_type = 'group'\n"
+            f"    AND policy_name = '{self.policy_name}'\n"
+            f"    AND project_id = '{self.project_id}'\n"
+            f"    AND dataset_id = '{self.selected_dataset}'\n"
+            f"    AND table_id = '{self.selected_table}'\n"
+            f"    AND field_id = '{self.selected_field[0]}'\n"
+            f"    AND rls_group = '{self.group_assignment}'\n"
+            f");\n\n"
+            f"-- Step 2: Apply RLS policy on VIEW (group-based access)\n"
+            f"CREATE OR REPLACE ROW ACCESS POLICY `{self.policy_name}`\n"
+            f"ON `{self.project_id}.{self.views_dataset}.{self.view_name}`\n"
+            f"GRANT TO (\"group:{self.group_assignment}\")\n"
+            f"FILTER USING (TRUE);"
         )
         self.stepper.next()
 
     def run_creation_policy(self):
         try:
-            # Create RLS policy
+            # ✨ NEW: Ensure views dataset exists
+            self.ensure_views_dataset()
+            
+            # ✨ NEW: Create view + RLS policy
             query_job = client.query(self.code.content)
             query_job.result()
             
-            # Insert into policy table
+            # ✨ NEW: Update view description with metadata
+            view_ref = client.dataset(self.views_dataset).table(self.view_name)
+            view = client.get_table(view_ref)
+            
+            rls_metadata = {
+                "type": "RLS_VIEW",
+                "rls_type": "group",
+                "base_dataset": self.selected_dataset,
+                "base_table": self.selected_table,
+                "filter_field": self.selected_field[0],
+                "filter_field_type": self.selected_field[1],
+                "filter_table": config.FILTER_TABLE,
+                "group_email": self.group_assignment,
+                "created_by": "CREATE_RLS_GROUPS",
+                "policy_name": self.policy_name
+            }
+            
+            view.description = (
+                f"RLS view for group: {self.group_assignment}\n"
+                f"Filters by {self.selected_field[0]}\n"
+                f"Base table: {self.selected_dataset}.{self.selected_table}\n\n"
+                f"RLS_METADATA:{json.dumps(rls_metadata)}"
+            )
+            client.update_table(view, ['description'])
+            
+            # ✨ NEW: Configure as Authorized View
+            from google.cloud.bigquery import AccessEntry
+            
+            source_dataset_ref = client.dataset(self.selected_dataset)
+            source_dataset = client.get_dataset(source_dataset_ref)
+            
+            access_entries = list(source_dataset.access_entries)
+            
+            authorized_view_entry = AccessEntry(
+                role=None,
+                entity_type='view',
+                entity_id={
+                    'projectId': self.project_id,
+                    'datasetId': self.views_dataset,
+                    'tableId': self.view_name
+                }
+            )
+            
+            # Check if already exists
+            view_exists = False
+            for entry in access_entries:
+                if entry.entity_type == 'view' and isinstance(entry.entity_id, dict):
+                    if (entry.entity_id.get('projectId') == self.project_id and
+                        entry.entity_id.get('datasetId') == self.views_dataset and
+                        entry.entity_id.get('tableId') == self.view_name):
+                        view_exists = True
+                        break
+            
+            if not view_exists:
+                access_entries.append(authorized_view_entry)
+            
+            source_dataset.access_entries = access_entries
+            client.update_dataset(source_dataset, ['access_entries'])
+            
+            # Insert into policy table (keep for backward compatibility)
             query_insert_into_policy_table = f"""
                 INSERT INTO `{config.POLICY_TABLE}` (policy_type, policy_name, project_id, dataset_id, table_name, field_id, group_email)
                 VALUES
-                ('group', '{self.policy_name}', '{self.project_id}', '{self.selected_dataset}', '{self.selected_table}', '{self.selected_field[0]}', '{self.group_assignment}')  
+                ('group', '{self.policy_name}', '{self.project_id}', '{self.views_dataset}', '{self.view_name}', '{self.selected_field[0]}', '{self.group_assignment}')  
             """
             query_job = client.query(query_insert_into_policy_table)
             query_job.result()
             
-            # Log success
+            # ✨ UPDATED: Log success with new architecture details
             self.audit_service.log_action(
-                action='CREATE_RLS_POLICY_GROUP',
-                resource_type='RLS_POLICY',
-                resource_name=self.policy_name,
+                action='CREATE_RLS_VIEW_GROUP',
+                resource_type='RLS_VIEW',
+                resource_name=f"{self.views_dataset}.{self.view_name}",
                 status='SUCCESS',
                 details={
                     'policy_type': 'group',
-                    'dataset': self.selected_dataset,
-                    'table': self.selected_table,
-                    'field': self.selected_field[0],
-                    'field_type': self.selected_field[1],
+                    'view_name': self.view_name,
+                    'views_dataset': self.views_dataset,
+                    'base_dataset': self.selected_dataset,
+                    'base_table': self.selected_table,
+                    'filter_field': self.selected_field[0],
+                    'filter_field_type': self.selected_field[1],
                     'group_email': self.group_assignment,
-                    'filter_condition': f"{self.selected_field[0]} IN (SELECT filter_value WHERE rls_group = '{self.group_assignment}')"
+                    'policy_name': self.policy_name,
+                    'architecture': 'RLS_VIEW_NEW'
                 }
             )
             
-            # Mensagem de sucesso traduzida  # <- TRADUZIDO
-            with ui.dialog() as dialog, ui.card():
-                ui.label(
-                    get_text('rls_groups_success_message',
-                            table=self.selected_table,
-                            field=self.selected_field[0])
-                ).classes(replace='text-positive').classes('font-bold')
+            # ✨ UPDATED: Success message
+            with ui.dialog() as dialog, ui.card().classes('w-full max-w-2xl'):
+                ui.label('✅ RLS View Created Successfully!').classes('text-h5 font-bold text-positive mb-4')
+                
+                with ui.card().classes('w-full bg-green-50 p-4 mb-4'):
+                    ui.label('🔐 New Architecture Applied:').classes('font-bold mb-2')
+                    ui.label(f'• View: {self.views_dataset}.{self.view_name}').classes('text-sm')
+                    ui.label(f'• Filter field: {self.selected_field[0]}').classes('text-sm')
+                    ui.label(f'• Authorized group: {self.group_assignment}').classes('text-sm')
+                    ui.label(f'• Base table: {self.selected_dataset}.{self.selected_table} (locked 🔒)').classes('text-sm')
+                    ui.label(f'• Policy: {self.policy_name}').classes('text-sm')
+                
+                with ui.card().classes('w-full bg-blue-50 p-4 mb-4'):
+                    ui.label('ℹ️ How to use:').classes('font-bold mb-2')
+                    ui.label('1. Group members query the VIEW (not the table)').classes('text-sm')
+                    ui.label('2. Only members of the group see the data').classes('text-sm')
+                    ui.label('3. Use "Assign Values to Group" to define filter values').classes('text-sm')
+                    ui.label('4. Original table remains protected').classes('text-sm')
+                
                 with ui.row().classes('w-full justify-center'):  
-                    ui.button(get_text('btn_close'), on_click=ui.navigate.reload)  # <- TRADUZIDO
+                    ui.button(get_text('btn_close'), on_click=ui.navigate.reload)
             dialog.open()
             
         except GoogleAPIError as error:
             # Log failure
             self.audit_service.log_action(
-                action='CREATE_RLS_POLICY_GROUP',
-                resource_type='RLS_POLICY',
-                resource_name=self.policy_name if self.policy_name else 'unknown',
+                action='CREATE_RLS_VIEW_GROUP',
+                resource_type='RLS_VIEW',
+                resource_name=f"{self.views_dataset}.{self.view_name}" if self.view_name else 'unknown',
                 status='FAILED',
                 error_message=str(error),
                 details={
@@ -248,14 +356,14 @@ class RLSCreateforGroups:
                     'group_email': self.group_assignment
                 }
             )
-            ui.notify(get_text('msg_error_create_policy', error=str(error)), type="negative")  # <- TRADUZIDO
+            ui.notify(get_text('msg_error_create_policy', error=str(error)), type="negative", timeout=10000)
             
         except Exception as error:
             # Log exception
             self.audit_service.log_action(
-                action='CREATE_RLS_POLICY_GROUP',
-                resource_type='RLS_POLICY',
-                resource_name=self.policy_name if self.policy_name else 'unknown',
+                action='CREATE_RLS_VIEW_GROUP',
+                resource_type='RLS_VIEW',
+                resource_name=f"{self.views_dataset}.{self.view_name}" if self.view_name else 'unknown',
                 status='FAILED',
                 error_message=str(error),
                 details={
@@ -265,33 +373,32 @@ class RLSCreateforGroups:
                     'group_email': self.group_assignment
                 }
             )
-            ui.notify(get_text('msg_error_unexpected', error=str(error)), type="negative")  # <- TRADUZIDO
-            
+            ui.notify(get_text('msg_error_unexpected', error=str(error)), type="negative", timeout=10000)
 
     def step1(self):
         with ui.step(self.step1_title):
             dataset_list = self.get_datasets()
-            ui.select(dataset_list, label=get_text('rls_users_select_dataset'), on_change=self._update_selected_dataset)  # <- TRADUZIDO
+            ui.select(dataset_list, label=get_text('rls_users_select_dataset'), on_change=self._update_selected_dataset)
             with ui.stepper_navigation():
-                self.step1_next_button = ui.button(get_text('btn_next'), icon="arrow_forward_ios", on_click=self.get_tables_in_dataset)  # <- TRADUZIDO
+                self.step1_next_button = ui.button(get_text('btn_next'), icon="arrow_forward_ios", on_click=self.get_tables_in_dataset)
                 self.step1_next_button.set_visibility(False)
 
     def step2(self):
         with ui.step(self.step2_title):
-            self.table_list = ui.select([], label=get_text('rls_users_select_table'), on_change=self._update_selected_table)  # <- TRADUZIDO
+            self.table_list = ui.select([], label=get_text('rls_users_select_table'), on_change=self._update_selected_table)
             with ui.stepper_navigation():
-                ui.button(get_text('btn_back'), icon="arrow_back_ios", on_click=self.stepper.previous)  # <- TRADUZIDO
-                self.step2_next_button = ui.button(get_text('btn_next'), icon="arrow_forward_ios", on_click=self.get_fields_in_table)  # <- TRADUZIDO
+                ui.button(get_text('btn_back'), icon="arrow_back_ios", on_click=self.stepper.previous)
+                self.step2_next_button = ui.button(get_text('btn_next'), icon="arrow_forward_ios", on_click=self.get_fields_in_table)
 
                 self.step2_next_button.set_visibility(False)
             return
         
     def step3(self):
         with ui.step(self.step3_title):
-            self.field_list = ui.select([], label=get_text('rls_users_select_field'), on_change=self._update_selected_field)  # <- TRADUZIDO
+            self.field_list = ui.select([], label=get_text('rls_users_select_field'), on_change=self._update_selected_field)
             with ui.stepper_navigation():
-                ui.button(get_text('btn_back'), icon="arrow_back_ios", on_click=self.stepper.previous)  # <- TRADUZIDO
-                self.step3_next_button = ui.button(get_text('btn_next'), icon="arrow_forward_ios", on_click=self.stepper.next)  # <- TRADUZIDO
+                ui.button(get_text('btn_back'), icon="arrow_back_ios", on_click=self.stepper.previous)
+                self.step3_next_button = ui.button(get_text('btn_next'), icon="arrow_forward_ios", on_click=self.stepper.next)
 
                 self.step3_next_button.set_visibility(False)
             return
@@ -299,12 +406,12 @@ class RLSCreateforGroups:
     def step4(self):
         with ui.step(self.step4_title):
             self.group_assignment = ui.input(
-                placeholder=get_text('rls_groups_enter_group_email'),  # <- TRADUZIDO
+                placeholder=get_text('rls_groups_enter_group_email'),
                 on_change=self._update_group_assignment
             ).props("size=50")
             with ui.stepper_navigation():
-                ui.button(get_text('btn_back'), icon="arrow_back_ios", on_click=self.stepper.previous)  # <- TRADUZIDO
-                self.step4_next_button = ui.button(get_text('btn_next'), icon="arrow_forward_ios", on_click=self.get_resume)  # <- TRADUZIDO
+                ui.button(get_text('btn_back'), icon="arrow_back_ios", on_click=self.stepper.previous)
+                self.step4_next_button = ui.button(get_text('btn_next'), icon="arrow_forward_ios", on_click=self.get_resume)
 
                 self.step4_next_button.set_visibility(False)
             return
@@ -314,12 +421,12 @@ class RLSCreateforGroups:
             self.resume = ui.markdown().classes(replace='text-primary')
             self.code = ui.code(content='', language="SQL")  
             with ui.stepper_navigation():
-                ui.button(get_text('btn_back'), icon="arrow_back_ios", on_click=self.stepper.previous)  # <- TRADUZIDO
-                ui.button(get_text('btn_create'), icon="policy", on_click=self.run_creation_policy)  # <- TRADUZIDO
+                ui.button(get_text('btn_back'), icon="arrow_back_ios", on_click=self.stepper.previous)
+                ui.button(get_text('btn_create'), icon="policy", on_click=self.run_creation_policy)
             return
 
     def run(self):
-        with theme.frame(get_text('rls_groups_frame_title')):  # <- TRADUZIDO
+        with theme.frame(get_text('rls_groups_frame_title')):
             with self.stepper:
                 self.step1()
                 self.step2()
