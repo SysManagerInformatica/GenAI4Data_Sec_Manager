@@ -1,11 +1,11 @@
 """
 Navigation Menu with Multi-Language Support
-VERSION: 2.1
-Date: 05/12/2024
+VERSION: 2.2 - RLS Views Integration
+Date: 14/12/2024
 """
 from nicegui import ui
 from services.auth_service import get_current_user
-from theme import get_text  # <- NOVO: importar função de tradução
+from theme import get_text
 
 
 def menu() -> None:
@@ -27,7 +27,7 @@ def menu() -> None:
             with ui.item_section().props('avatar'):
                 ui.icon('home').style('color: #00f3ff;')
             with ui.item_section():
-                ui.item_label(get_text('nav_home')).classes(  # <- TRADUZIDO
+                ui.item_label(get_text('nav_home')).classes(
                     replace='text-bold'
                 ).style('font-size: 16px; color: #ffffff;')
         
@@ -35,19 +35,46 @@ def menu() -> None:
         # ROW LEVEL SECURITY - VERDE
         # ========================================
         with ui.expansion(
-            get_text('nav_rls'),  # <- TRADUZIDO
+            get_text('nav_rls'),
             caption='Click to Expand',
             icon='policy'
         ).classes('w-full text-bold').style('font-size: 16px; color: #ffffff;'):
             # Adicionar estilo ao ícone do expansion
             ui.query('.q-expansion-item__toggle-icon').style('color: #10b981 !important;')
             
+            # ========== NEW ARCHITECTURE (Views-based RLS) ==========
+            
+            # ✨ NEW: Create Custom RLS View
+            with ui.item(on_click=lambda: ui.navigate.to('/rls/create-view')):
+                with ui.item_section().props('avatar'):
+                    ui.icon('add_box').style('color: #10b981;')
+                with ui.item_section():
+                    ui.item_label('Create Custom RLS View').classes(
+                        replace='text-bold'
+                    ).style('font-size: 14px; color: #94a3b8;')
+                    ui.item_label('New: View-based architecture').props('caption').style('font-size: 11px; color: #10b981;')
+            
+            # ✨ NEW: Manage RLS Views
+            with ui.item(on_click=lambda: ui.navigate.to('/rls/manage-views')):
+                with ui.item_section().props('avatar'):
+                    ui.icon('view_list').style('color: #10b981;')
+                with ui.item_section():
+                    ui.item_label('Manage RLS Views').classes(
+                        replace='text-bold'
+                    ).style('font-size: 14px; color: #94a3b8;')
+                    ui.item_label('Edit users, filters & CLS').props('caption').style('font-size: 11px; color: #10b981;')
+            
+            # Separador visual
+            ui.separator().classes('my-2').style('background-color: #334155;')
+            
+            # ========== LEGACY SYSTEM (Table-based RLS) ==========
+            
             # 1. Create RLS for Users
             with ui.item(on_click=lambda: ui.navigate.to('/createrlsusers/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('person').style('color: #10b981;')
                 with ui.item_section():
-                    ui.item_label(get_text('menu_rls_users')).classes(  # <- TRADUZIDO
+                    ui.item_label(get_text('menu_rls_users')).classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
             
@@ -56,7 +83,7 @@ def menu() -> None:
                 with ui.item_section().props('avatar'):
                     ui.icon('groups').style('color: #10b981;')
                 with ui.item_section():
-                    ui.item_label(get_text('menu_rls_groups')).classes(  # <- TRADUZIDO
+                    ui.item_label(get_text('menu_rls_groups')).classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
             
@@ -65,7 +92,7 @@ def menu() -> None:
                 with ui.item_section().props('avatar'):
                     ui.icon('assignment_ind').style('color: #10b981;')
                 with ui.item_section():
-                    ui.item_label(get_text('menu_rls_assign_users')).classes(  # <- TRADUZIDO
+                    ui.item_label(get_text('menu_rls_assign_users')).classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
             
@@ -74,7 +101,7 @@ def menu() -> None:
                 with ui.item_section().props('avatar'):
                     ui.icon('assignment').style('color: #10b981;')
                 with ui.item_section():
-                    ui.item_label(get_text('menu_rls_assign_values')).classes(  # <- TRADUZIDO
+                    ui.item_label(get_text('menu_rls_assign_values')).classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
         
@@ -82,7 +109,7 @@ def menu() -> None:
         # COLUMN LEVEL SECURITY - AMARELO
         # ========================================
         with ui.expansion(
-            get_text('nav_cls'),  # <- TRADUZIDO
+            get_text('nav_cls'),
             caption='Click to Expand',
             icon='security'
         ).classes('w-full text-bold').style('font-size: 16px; color: #ffffff;'):
@@ -92,7 +119,7 @@ def menu() -> None:
                 with ui.item_section().props('avatar'):
                     ui.icon('folder').style('color: #f59e0b;')
                 with ui.item_section():
-                    ui.item_label(get_text('menu_cls_taxonomies')).classes(  # <- TRADUZIDO
+                    ui.item_label(get_text('menu_cls_taxonomies')).classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
             
@@ -101,7 +128,7 @@ def menu() -> None:
                 with ui.item_section().props('avatar'):
                     ui.icon('label').style('color: #f59e0b;')
                 with ui.item_section():
-                    ui.item_label(get_text('menu_cls_tags')).classes(  # <- TRADUZIDO
+                    ui.item_label(get_text('menu_cls_tags')).classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
             
@@ -110,7 +137,7 @@ def menu() -> None:
                 with ui.item_section().props('avatar'):
                     ui.icon('build').style('color: #f59e0b;')
                 with ui.item_section():
-                    ui.item_label(get_text('menu_cls_apply')).classes(  # <- TRADUZIDO
+                    ui.item_label(get_text('menu_cls_apply')).classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
             
@@ -119,7 +146,7 @@ def menu() -> None:
                 with ui.item_section().props('avatar'):
                     ui.icon('admin_panel_settings').style('color: #f59e0b;')
                 with ui.item_section():
-                    ui.item_label(get_text('menu_cls_iam')).classes(  # <- TRADUZIDO
+                    ui.item_label(get_text('menu_cls_iam')).classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
             
@@ -128,25 +155,26 @@ def menu() -> None:
                 with ui.item_section().props('avatar'):
                     ui.icon('add_circle').style('color: #f59e0b;')
                 with ui.item_section():
-                    ui.item_label(get_text('menu_cls_create_view')).classes(  # <- TRADUZIDO
+                    ui.item_label(get_text('menu_cls_create_view')).classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
             
-            # 6. Manage Protected Views
+            # 6. Manage Protected Views (✨ UPDATED: Now shows RLS + CLS)
             with ui.item(on_click=lambda: ui.navigate.to('/clsdynamicmanage/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('settings').style('color: #f59e0b;')
                 with ui.item_section():
-                    ui.item_label(get_text('menu_cls_manage_views')).classes(  # <- TRADUZIDO
+                    ui.item_label(get_text('menu_cls_manage_views')).classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
+                    ui.item_label('RLS + CLS integrated').props('caption').style('font-size: 11px; color: #10b981;')
             
             # 7. Schema Browser
             with ui.item(on_click=lambda: ui.navigate.to('/clsschemabrowser/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('search').style('color: #f59e0b;')
                 with ui.item_section():
-                    ui.item_label(get_text('menu_cls_schema')).classes(  # <- TRADUZIDO
+                    ui.item_label(get_text('menu_cls_schema')).classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
         
@@ -154,7 +182,7 @@ def menu() -> None:
         # IAM & SECURITY - VERMELHO
         # ========================================
         with ui.expansion(
-            get_text('nav_iam'),  # <- TRADUZIDO
+            get_text('nav_iam'),
             caption='Click to Expand',
             icon='admin_panel_settings'
         ).classes('w-full text-bold').style('font-size: 16px; color: #ffffff;'):
@@ -164,7 +192,7 @@ def menu() -> None:
                 with ui.item_section().props('avatar'):
                     ui.icon('storage').style('color: #ef4444;')
                 with ui.item_section():
-                    ui.item_label(get_text('menu_iam_dataset')).classes(  # <- TRADUZIDO
+                    ui.item_label(get_text('menu_iam_dataset')).classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
             
@@ -173,7 +201,7 @@ def menu() -> None:
                 with ui.item_section().props('avatar'):
                     ui.icon('shield').style('color: #ef4444;')
                 with ui.item_section():
-                    ui.item_label(get_text('menu_iam_project')).classes(  # <- TRADUZIDO
+                    ui.item_label(get_text('menu_iam_project')).classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
             
@@ -183,7 +211,7 @@ def menu() -> None:
                     with ui.item_section().props('avatar'):
                         ui.icon('lock').style('color: #ef4444;')
                     with ui.item_section():
-                        ui.item_label(get_text('menu_iam_control')).classes(  # <- TRADUZIDO
+                        ui.item_label(get_text('menu_iam_control')).classes(
                             replace='text-bold'
                         ).style('font-size: 14px; color: #94a3b8;')
         
@@ -194,6 +222,6 @@ def menu() -> None:
             with ui.item_section().props('avatar'):
                 ui.icon('history').style('color: #a855f7;')
             with ui.item_section():
-                ui.item_label(get_text('menu_audit_logs')).classes(  # <- TRADUZIDO
+                ui.item_label(get_text('menu_audit_logs')).classes(
                     replace='text-bold'
                 ).style('font-size: 16px; color: #ffffff;')
