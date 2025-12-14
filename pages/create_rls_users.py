@@ -287,10 +287,11 @@ class RLSCreateforUsers:
             client.update_dataset(source_dataset, ['access_entries'])
             
             # Insert into policy table (for backward compatibility)
+            # ✅ FIXED: Use ORIGINAL dataset/table (not view dataset/name)
             query_insert_into_policy_table = f"""
                 INSERT INTO `{config.POLICY_TABLE}` (policy_type, policy_name, project_id, dataset_id, table_name, field_id)
                 VALUES
-                ('users', '{self.policy_name}', '{self.project_id}', '{self.views_dataset}', '{self.view_name}', '{self.selected_field[0]}')  
+                ('users', '{self.policy_name}', '{self.project_id}', '{self.selected_dataset}', '{self.selected_table}', '{self.selected_field[0]}')  
             """
             query_job = client.query(query_insert_into_policy_table)
             query_job.result()
