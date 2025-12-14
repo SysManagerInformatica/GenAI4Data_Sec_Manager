@@ -66,7 +66,7 @@ class DynamicColumnManage:
         self.source_table_columns = []
         self.column_protection = {}
         self.authorized_users = []
-        self.rls_users = []  # ✅ NEW: Store RLS users separately
+        self.rls_users = []
         
         self.create_edit_dialog()
         
@@ -104,7 +104,7 @@ class DynamicColumnManage:
         with ui.dialog() as self.edit_dialog, ui.card().classes('w-full max-w-7xl'):
             self.edit_title = ui.label('').classes('text-h5 font-bold mb-4')
             
-            # ✅ Info about CLS editing
+            # Info about CLS editing
             with ui.card().classes('w-full bg-blue-50 p-3 mb-4'):
                 ui.label('🏷️ Column-Level Security (CLS) Editor').classes('font-bold text-sm mb-2')
                 ui.label('• Configure how each column is displayed or hidden').classes('text-xs')
@@ -114,9 +114,14 @@ class DynamicColumnManage:
                 ui.label('• HASH: Replace with SHA256 hash').classes('text-xs')
                 ui.label('• NULLIFY: Replace with NULL').classes('text-xs')
                 ui.label('• REDACT: Replace with [REDACTED]').classes('text-xs')
-                ui.label('• This view will keep its RLS policies (if applicable)').classes('text-xs font-bold text-purple-600')
             
             self.source_label = ui.label('').classes('text-sm font-bold mb-2')
+            
+            # ✅ RLS info card (will be shown/hidden dynamically)
+            self.rls_info_card = ui.card().classes('w-full bg-purple-50 p-3 mb-4')
+            with self.rls_info_card:
+                self.rls_info_label = ui.label('').classes('text-sm font-bold text-purple-600')
+            self.rls_info_card.set_visibility(False)
             
             with ui.scroll_area().classes('w-full h-96 border rounded p-2'):
                 self.columns_container = ui.column().classes('w-full')
@@ -124,7 +129,7 @@ class DynamicColumnManage:
             with ui.card().classes('w-full bg-purple-50 p-3 mt-4'):
                 self.summary_label = ui.label('').classes('text-sm font-bold')
             
-            # ✅ Show CLS authorized users if present
+            # CLS authorized users section
             self.cls_users_section = ui.card().classes('w-full bg-green-50 p-3 mt-4')
             with self.cls_users_section:
                 self.cls_users_label = ui.label('').classes('text-sm')
@@ -174,7 +179,7 @@ class DynamicColumnManage:
                     if table_obj.table_type != 'VIEW':
                         continue
                     
-                    # ✅ Detect view type
+                    # Detect view type
                     view_type = self.detect_view_type(table_obj)
                     
                     if view_type == 'NONE':
@@ -197,7 +202,7 @@ class DynamicColumnManage:
                     # CLS users (from description)
                     cls_users = self.parse_cls_users_from_description(table_obj.description)
                     
-                    # ✅ RLS users (from policies_filters table in BigQuery)
+                    # RLS users (from policies_filters table in BigQuery)
                     rls_users_count = 0
                     if view_type in ['RLS', 'HYBRID']:
                         rls_users_count = self.count_rls_users_for_view(table.table_id)
@@ -362,90 +367,13 @@ class DynamicColumnManage:
             self.cls_views_label.update()
     
     async def view_details(self):
-        """Show detailed info dialog with RLS/CLS breakdown"""
+        """✅ FIXED: Open CLS editor directly (like old behavior)"""
         rows = await self.views_grid.get_selected_rows()
         if not rows:
             ui.notify('No view selected', type="warning")
             return
         
         view_info = rows[0]
-        view_type = view_info.get('view_type', 'CLS')
-        
-        # ✅ FIXED: Load RLS users for this view
-        rls_users_list = []
-        if view_type in ['RLS', 'HYBRID']:
-            rls_users_list = await run.io_bound(self.get_rls_users_for_view, view_info['view_name'])
-        
-        # ✅ FIXED: Load CLS users from description
-        view_ref = client.dataset(view_info['view_dataset']).table(view_info['view_name'])
-        view_obj = await run.io_bound(client.get_table, view_ref)
-        cls_users_list = self.parse_cls_users_from_description(view_obj.description)
-        
-        with ui.dialog() as info_dialog, ui.card().classes('w-full max-w-3xl'):
-            icon = self.get_view_type_icon(view_type)
-            ui.label(f"{icon} View: {view_info['view_name']}").classes('text-h5 font-bold mb-4')
-            
-            # Type badge
-            type_colors = {
-                'RLS': 'bg-purple-100 text-purple-700',
-                'CLS': 'bg-blue-100 text-blue-700',
-                'HYBRID': 'bg-green-100 text-green-700'
-            }
-            
-            with ui.card().classes(f"w-full p-4 mb-4 {type_colors.get(view_type, 'bg-gray-100')}"):
-                ui.label(f"View Type: {view_type}").classes('font-bold mb-2')
-                
-                # ✅ FIXED: Show RLS users with actual list
-                if view_type in ['RLS', 'HYBRID']:
-                    ui.label(f"🔐 RLS: {len(rls_users_list)} authorized users").classes('text-sm font-bold')
-                    if rls_users_list:
-                        for user_email in rls_users_list[:5]:  # Show first 5
-                            ui.label(f"  • {user_email}").classes('text-xs')
-                        if len(rls_users_list) > 5:
-                            ui.label(f"  ... and {len(rls_users_list) - 5} more").classes('text-xs')
-                
-                # ✅ FIXED: Show CLS users with actual list
-                if view_type in ['CLS', 'HYBRID']:
-                    ui.label(f"🏷️ CLS: {view_info.get('hidden_count', 0)} hidden, {view_info.get('masked_count', 0)} masked columns").classes('text-sm font-bold mt-2')
-                    if cls_users_list:
-                        ui.label(f"CLS Authorized Users: {len(cls_users_list)}").classes('text-sm font-bold mt-2')
-                        for user_email in cls_users_list[:5]:
-                            ui.label(f"  • {user_email}").classes('text-xs')
-                        if len(cls_users_list) > 5:
-                            ui.label(f"  ... and {len(cls_users_list) - 5} more").classes('text-xs')
-            
-            # Source info
-            with ui.card().classes('w-full bg-gray-50 p-4 mb-4'):
-                ui.label('Source Information').classes('font-bold mb-2')
-                ui.label(f"Dataset: {view_info['view_dataset']}").classes('text-sm')
-                ui.label(f"Source: {view_info['source_dataset']}.{view_info['source_table']}").classes('text-sm')
-                ui.label(f"Visible Columns: {view_info['visible_columns']}").classes('text-sm')
-                ui.label(f"Created: {view_info.get('created', 'Unknown')}").classes('text-sm')
-            
-            # Actions
-            with ui.row().classes('w-full justify-end gap-2 mt-4'):
-                # ✅ ALWAYS show button to apply CLS protection (masking, hiding columns)
-                ui.button(
-                    'APPLY CLS',
-                    icon='edit',
-                    on_click=lambda: self.open_cls_editor(view_info, info_dialog)
-                ).props('color=blue').tooltip('Apply column masking and hiding')
-                
-                # ✅ Link to RLS Manager (if view has RLS policies)
-                if view_type in ['RLS', 'HYBRID']:
-                    ui.button(
-                        'GO TO RLS MANAGER',
-                        icon='security',
-                        on_click=lambda: ui.navigate.to('/rls/manage-views')
-                    ).props('color=purple outline').tooltip('Go to RLS Manager to edit users/filters')
-                
-                ui.button('CLOSE', on_click=info_dialog.close).props('flat')
-        
-        info_dialog.open()
-    
-    async def open_cls_editor(self, view_info, parent_dialog):
-        """Open CLS editor"""
-        parent_dialog.close()
         
         n = ui.notification('Loading schema...', type='info', spinner=True, timeout=None)
         try:
@@ -495,10 +423,10 @@ class DynamicColumnManage:
                 self.source_table_columns
             )
             
-            # ✅ FIXED: Parse CLS users from description
+            # Parse CLS users from description
             self.authorized_users = self.parse_cls_users_from_description(view_obj.description)
             
-            # ✅ FIXED: Parse RLS users from policies_filters
+            # Parse RLS users from policies_filters
             view_type = view_info.get('view_type', 'CLS')
             if view_type in ['RLS', 'HYBRID']:
                 self.rls_users = await run.io_bound(self.get_rls_users_for_view, view_info['view_name'])
@@ -570,7 +498,15 @@ class DynamicColumnManage:
         self.edit_title.set_text(f'Edit CLS: {view_name}')
         self.source_label.set_text(f'Source: {self.source_dataset}.{source_table} ({len(self.source_table_columns)} columns)')
         
-        # ✅ FIXED: Show CLS users if present
+        # ✅ Show RLS info if present
+        if self.rls_users:
+            rls_info = f'🔐 This view has RLS policies ({len(self.rls_users)} authorized users: {", ".join(self.rls_users[:3])}{"..." if len(self.rls_users) > 3 else ""}). To manage RLS users, go to RLS Manager.'
+            self.rls_info_label.set_text(rls_info)
+            self.rls_info_card.set_visibility(True)
+        else:
+            self.rls_info_card.set_visibility(False)
+        
+        # Show CLS users if present
         if self.authorized_users:
             self.cls_users_section.set_visibility(True)
             users_text = f'👥 CLS Authorized Users ({len(self.authorized_users)}): ' + ', '.join(self.authorized_users[:3])
@@ -579,21 +515,6 @@ class DynamicColumnManage:
             self.cls_users_label.set_text(users_text)
         else:
             self.cls_users_section.set_visibility(False)
-        
-        # ✅ Show RLS info if present
-        if self.rls_users:
-            rls_info = f'🔐 This view also has RLS policies ({len(self.rls_users)} users). Go to RLS Manager to edit.'
-            if not hasattr(self, 'rls_info_label'):
-                with self.columns_container.parent:
-                    self.rls_info_card = ui.card().classes('w-full bg-purple-50 p-3 mb-4')
-                    with self.rls_info_card:
-                        self.rls_info_label = ui.label('').classes('text-sm font-bold text-purple-600')
-            self.rls_info_label.set_text(rls_info)
-            if hasattr(self, 'rls_info_card'):
-                self.rls_info_card.set_visibility(True)
-        else:
-            if hasattr(self, 'rls_info_card'):
-                self.rls_info_card.set_visibility(False)
         
         # Populate columns
         self.columns_container.clear()
@@ -657,8 +578,6 @@ class DynamicColumnManage:
             f'Masked: {masked}'
         )
     
-    # ==================== ✅ FIXED: SEPARATE CLS AND RLS USER PARSING ====================
-    
     def parse_cls_users_from_description(self, description):
         """Parse CLS authorized users from view description"""
         if not description:
@@ -666,7 +585,6 @@ class DynamicColumnManage:
         try:
             if 'AUTHORIZED_USERS:' in description:
                 users_text = description.split('AUTHORIZED_USERS:')[1]
-                # Stop at RLS_METADATA if present
                 if 'RLS_METADATA:' in users_text:
                     users_text = users_text.split('RLS_METADATA:')[0]
                 users_text = users_text.split('\n')[0]
@@ -677,14 +595,8 @@ class DynamicColumnManage:
         return []
     
     def get_rls_users_for_view(self, view_name):
-        """
-        ✅ CRITICAL FIX: Get RLS users from policies_filters table in BigQuery
-        
-        RLS users are NOT stored in the view description!
-        They are stored in: rls_manager.policies_filters table
-        """
+        """Get RLS users from policies_filters table in BigQuery"""
         try:
-            # Query the policies_filters table to get users for this view
             query = f"""
             SELECT DISTINCT username
             FROM `{self.project_id}.rls_manager.policies_filters`
@@ -692,7 +604,6 @@ class DynamicColumnManage:
             """
             
             print(f"[DEBUG] Querying RLS users for view: {view_name}")
-            print(f"[DEBUG] Query: {query}")
             
             query_job = client.query(query)
             results = query_job.result()
@@ -707,7 +618,7 @@ class DynamicColumnManage:
             return []
     
     def count_rls_users_for_view(self, view_name):
-        """Count RLS users for a view (faster than fetching full list)"""
+        """Count RLS users for a view"""
         try:
             query = f"""
             SELECT COUNT(DISTINCT username) as count
@@ -726,8 +637,6 @@ class DynamicColumnManage:
             print(f"[ERROR] count_rls_users_for_view: {e}")
             return 0
     
-    # ==================== RLS INTEGRATION METHODS ====================
-    
     def detect_view_type(self, table_obj):
         """Detect if view is RLS, CLS, HYBRID, or NONE"""
         has_rls = False
@@ -736,17 +645,16 @@ class DynamicColumnManage:
         description = table_obj.description or ''
         view_query = table_obj.view_query or ''
         
-        # Check for RLS: view name pattern + WHERE with policies_filters
+        # Check for RLS
         if (table_obj.table_id.startswith('vw_') and 
             'policies_filters' in view_query.lower() and 
             'session_user()' in view_query.lower()):
             has_rls = True
         
-        # Check for CLS metadata
+        # Check for CLS
         if 'COLUMN_PROTECTION:' in description:
             has_cls = True
         
-        # Check suffix patterns (CLS)
         if any(table_obj.table_id.endswith(s) for s in ['_restricted', '_masked', '_protected']):
             has_cls = True
         
@@ -768,8 +676,6 @@ class DynamicColumnManage:
             'NONE': '📄'
         }
         return icons.get(view_type, '❓')
-    
-    # ==================== END RLS INTEGRATION ====================
     
     def generate_column_sql(self, col_name, col_type, protection):
         if protection == 'VISIBLE':
@@ -805,14 +711,12 @@ class DynamicColumnManage:
                 
                 ui.label(f'✅ Visible: {visible} | 🚫 Hidden: {hidden} | 🎭 Masked: {masked}').classes('text-sm font-bold')
             
-            # ✅ Show CLS users
             if self.authorized_users:
                 with ui.card().classes('w-full bg-green-50 p-3 mb-4'):
                     ui.label('👥 CLS Authorized Users:').classes('font-bold text-sm mb-2')
                     for email in self.authorized_users:
                         ui.label(f'  ✅ {email}').classes('text-xs')
             
-            # ✅ Show RLS users
             if self.rls_users:
                 with ui.card().classes('w-full bg-purple-50 p-3 mb-4'):
                     ui.label('🔐 RLS Authorized Users:').classes('font-bold text-sm mb-2')
@@ -944,12 +848,10 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
             view_name = self.current_view['view_name']
             source_table = self.current_view['source_table']
             
-            # Generate and execute SQL
             sql = self.generate_view_sql()
             query_job = await run.io_bound(client.query, sql)
             await run.io_bound(query_job.result)
             
-            # Update description with column protection metadata
             description_lines = [
                 f"Restricted view from {self.source_dataset}.{source_table}",
                 "",
@@ -1193,9 +1095,8 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
                 }).classes('w-full h-96 ag-theme-quartz')
                 
                 with ui.row().classes('mt-2 gap-2'):
-                    ui.button("VIEW DETAILS", icon="info", on_click=self.view_details).props('color=primary')
+                    ui.button("EDIT VIEW", icon="edit", on_click=self.view_details).props('color=primary')
                     ui.button("DELETE SELECTED", icon="delete", on_click=self.delete_selected_views).props('color=negative')
-                    ui.button("GO TO RLS MANAGER", icon="security", on_click=lambda: ui.navigate.to('/rls/manage-views')).props('color=purple outline')
     
     def run(self):
         pass
