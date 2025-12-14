@@ -53,7 +53,7 @@ class DynamicColumnManage:
         
         self.project_id = config.PROJECT_ID
         self.audit_service = AuditService(config.PROJECT_ID)
-        self.page_title = "Manage Protected Views (RLS + CLS)"  # ✨ UPDATED
+        self.page_title = "Manage Protected Views (RLS + CLS)"
         
         self.selected_dataset = None
         self.protected_views = []
@@ -66,20 +66,19 @@ class DynamicColumnManage:
         self.source_table_columns = []
         self.column_protection = {}
         self.authorized_users = []
+        self.rls_users = []  # ✅ NEW: Store RLS users separately
         
         self.create_edit_dialog()
         
         self.headers()
         self.render_ui()
         
-        # Use timer correctly - pass the async function directly, don't create a task
         ui.timer(0.1, self.lazy_load_datasets, once=True)
     
     async def lazy_load_datasets(self):
         try:
             datasets = await run.io_bound(self.get_datasets_sync)
             if self.dataset_select and datasets:
-                # FIX: Use direct property assignment + update()
                 self.dataset_select.options = datasets
                 self.dataset_select.value = None
                 self.dataset_select.update()
@@ -91,30 +90,31 @@ class DynamicColumnManage:
     def get_datasets_sync(self):
         try:
             datasets = list(client.list_datasets())
-            return [dataset.dataset_id for dataset in datasets if not dataset.dataset_id.endswith('_views')]  # ✨ UPDATED: Filter out _views datasets
+            return [dataset.dataset_id for dataset in datasets if not dataset.dataset_id.endswith('_views')]
         except Exception as e:
             print(f"[ERROR] get_datasets_sync: {e}")
             return []
     
     def headers(self):
         ui.page_title(self.page_title)
-        ui.label('Manage Protected Views (RLS + CLS Integration)').classes('text-primary text-center text-bold')  # ✨ UPDATED
+        ui.label('Manage Protected Views (RLS + CLS Integration)').classes('text-primary text-center text-bold')
     
     def create_edit_dialog(self):
+        """Dialog for editing CLS (Column-Level Security)"""
         with ui.dialog() as self.edit_dialog, ui.card().classes('w-full max-w-7xl'):
             self.edit_title = ui.label('').classes('text-h5 font-bold mb-4')
             
-            ui.label('Column Protection (CLS)').classes('text-h6 font-bold mb-4')  # ✨ UPDATED
-            
+            # ✅ Info about CLS editing
             with ui.card().classes('w-full bg-blue-50 p-3 mb-4'):
-                ui.label('ℹ️ Configure protection type for each column').classes('font-bold text-sm mb-2')
+                ui.label('🏷️ Column-Level Security (CLS) Editor').classes('font-bold text-sm mb-2')
+                ui.label('• Configure how each column is displayed or hidden').classes('text-xs')
                 ui.label('• VISIBLE: Real data shown without changes').classes('text-xs')
-                ui.label('• HIDDEN: Column excluded from view (CLS)').classes('text-xs')
+                ui.label('• HIDDEN: Column excluded from view').classes('text-xs')
                 ui.label('• PARTIAL_MASK: Show first 3 digits (123.XXX.XXX-XX)').classes('text-xs')
                 ui.label('• HASH: Replace with SHA256 hash').classes('text-xs')
                 ui.label('• NULLIFY: Replace with NULL').classes('text-xs')
                 ui.label('• REDACT: Replace with [REDACTED]').classes('text-xs')
-                ui.label('• This view will keep its RLS policies (if applicable)').classes('text-xs font-bold text-purple-600')  # ✨ NEW
+                ui.label('• This view will keep its RLS policies (if applicable)').classes('text-xs font-bold text-purple-600')
             
             self.source_label = ui.label('').classes('text-sm font-bold mb-2')
             
@@ -123,6 +123,12 @@ class DynamicColumnManage:
             
             with ui.card().classes('w-full bg-purple-50 p-3 mt-4'):
                 self.summary_label = ui.label('').classes('text-sm font-bold')
+            
+            # ✅ Show CLS authorized users if present
+            self.cls_users_section = ui.card().classes('w-full bg-green-50 p-3 mt-4')
+            with self.cls_users_section:
+                self.cls_users_label = ui.label('').classes('text-sm')
+            self.cls_users_section.set_visibility(False)
             
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
                 ui.button('PREVIEW SQL', icon='code', on_click=self.preview_sql).props('flat color=blue')
@@ -168,7 +174,7 @@ class DynamicColumnManage:
                     if table_obj.table_type != 'VIEW':
                         continue
                     
-                    # ✨ PATCH 2: Detect view type (RLS, CLS, HYBRID)
+                    # ✅ Detect view type
                     view_type = self.detect_view_type(table_obj)
                     
                     if view_type == 'NONE':
@@ -188,25 +194,25 @@ class DynamicColumnManage:
                         len(table_obj.schema)
                     )
                     
-                    # CLS users
-                    cls_users = self.parse_users_from_description(table_obj.description)
+                    # CLS users (from description)
+                    cls_users = self.parse_cls_users_from_description(table_obj.description)
                     
-                    # ✨ PATCH 2: RLS users
-                    rls_users = []
+                    # ✅ RLS users (from policies_filters table in BigQuery)
+                    rls_users_count = 0
                     if view_type in ['RLS', 'HYBRID']:
-                        rls_users = self.parse_rls_users(table_obj.description)
+                        rls_users_count = self.count_rls_users_for_view(table.table_id)
                     
                     views.append({
                         'view_name': table.table_id,
                         'view_dataset': ds,
                         'source_dataset': source_dataset,
                         'source_table': source_table,
-                        'view_type': view_type,  # ✨ NEW
+                        'view_type': view_type,
                         'visible_columns': len(table_obj.schema),
                         'hidden_count': protection_summary['hidden'],
                         'masked_count': protection_summary['masked'],
-                        'authorized_users': len(cls_users),  # CLS users count
-                        'rls_users': len(rls_users),  # ✨ NEW: RLS users count
+                        'authorized_users': len(cls_users),
+                        'rls_users': rls_users_count,
                         'created': table_obj.created.strftime('%Y-%m-%d %H:%M') if table_obj.created else 'Unknown',
                         'modified': table_obj.modified.strftime('%Y-%m-%d %H:%M') if table_obj.modified else 'Unknown',
                         'description': table_obj.description or ''
@@ -246,7 +252,6 @@ class DynamicColumnManage:
                     continue
                 
                 if in_section:
-                    # ✨ PATCH 3: Stop at RLS_METADATA or AUTHORIZED_USERS
                     if 'RLS_METADATA:' in line or line.startswith('AUTHORIZED_USERS:') or (not line.strip() and summary['hidden'] + summary['masked'] > 0):
                         break
                     
@@ -300,23 +305,19 @@ class DynamicColumnManage:
         
         n = ui.notification('Loading views...', spinner=True, timeout=None)
         try:
-            # Buscar dados (fora do contexto de UI está OK)
             self.protected_views = await run.io_bound(self.get_protected_views, dataset_id)
             print(f"[DEBUG] Protected views loaded: {len(self.protected_views)}")
             
-            # FIX: Atualizar UI diretamente
             if self.views_grid:
                 print(f"[DEBUG] Updating grid with {len(self.protected_views)} views")
                 self.views_grid.options['rowData'] = self.protected_views
                 self.views_grid.update()
                 print(f"[DEBUG] Grid updated successfully")
             
-            # Atualizar estatísticas
             if hasattr(self, 'total_views_label'):
                 self.total_views_label.text = str(len(self.protected_views))
                 self.total_views_label.update()
             
-            # ✨ PATCH 7: Update RLS/CLS statistics
             if hasattr(self, 'rls_views_label'):
                 rls_count = len([v for v in self.protected_views if v.get('view_type') in ['RLS', 'HYBRID']])
                 self.rls_views_label.text = str(rls_count)
@@ -350,7 +351,6 @@ class DynamicColumnManage:
             self.total_views_label.text = str(total)
             self.total_views_label.update()
         
-        # ✨ PATCH 7: Update RLS/CLS stats
         if hasattr(self, 'rls_views_label'):
             rls_count = len([v for v in self.protected_views if v.get('view_type') in ['RLS', 'HYBRID']])
             self.rls_views_label.text = str(rls_count)
@@ -362,7 +362,7 @@ class DynamicColumnManage:
             self.cls_views_label.update()
     
     async def view_details(self):
-        """Enhanced view details showing RLS/CLS info"""
+        """Show detailed info dialog with RLS/CLS breakdown"""
         rows = await self.views_grid.get_selected_rows()
         if not rows:
             ui.notify('No view selected', type="warning")
@@ -371,7 +371,16 @@ class DynamicColumnManage:
         view_info = rows[0]
         view_type = view_info.get('view_type', 'CLS')
         
-        # ✨ PATCH 8: Show quick info dialog with RLS/CLS info
+        # ✅ FIXED: Load RLS users for this view
+        rls_users_list = []
+        if view_type in ['RLS', 'HYBRID']:
+            rls_users_list = await run.io_bound(self.get_rls_users_for_view, view_info['view_name'])
+        
+        # ✅ FIXED: Load CLS users from description
+        view_ref = client.dataset(view_info['view_dataset']).table(view_info['view_name'])
+        view_obj = await run.io_bound(client.get_table, view_ref)
+        cls_users_list = self.parse_cls_users_from_description(view_obj.description)
+        
         with ui.dialog() as info_dialog, ui.card().classes('w-full max-w-3xl'):
             icon = self.get_view_type_icon(view_type)
             ui.label(f"{icon} View: {view_info['view_name']}").classes('text-h5 font-bold mb-4')
@@ -386,11 +395,24 @@ class DynamicColumnManage:
             with ui.card().classes(f"w-full p-4 mb-4 {type_colors.get(view_type, 'bg-gray-100')}"):
                 ui.label(f"View Type: {view_type}").classes('font-bold mb-2')
                 
+                # ✅ FIXED: Show RLS users with actual list
                 if view_type in ['RLS', 'HYBRID']:
-                    ui.label(f"🔐 RLS: {view_info.get('rls_users', 0)} authorized users").classes('text-sm')
+                    ui.label(f"🔐 RLS: {len(rls_users_list)} authorized users").classes('text-sm font-bold')
+                    if rls_users_list:
+                        for user_email in rls_users_list[:5]:  # Show first 5
+                            ui.label(f"  • {user_email}").classes('text-xs')
+                        if len(rls_users_list) > 5:
+                            ui.label(f"  ... and {len(rls_users_list) - 5} more").classes('text-xs')
                 
+                # ✅ FIXED: Show CLS users with actual list
                 if view_type in ['CLS', 'HYBRID']:
-                    ui.label(f"🏷️ CLS: {view_info.get('hidden_count', 0)} hidden, {view_info.get('masked_count', 0)} masked columns").classes('text-sm')
+                    ui.label(f"🏷️ CLS: {view_info.get('hidden_count', 0)} hidden, {view_info.get('masked_count', 0)} masked columns").classes('text-sm font-bold mt-2')
+                    if cls_users_list:
+                        ui.label(f"CLS Authorized Users: {len(cls_users_list)}").classes('text-sm font-bold mt-2')
+                        for user_email in cls_users_list[:5]:
+                            ui.label(f"  • {user_email}").classes('text-xs')
+                        if len(cls_users_list) > 5:
+                            ui.label(f"  ... and {len(cls_users_list) - 5} more").classes('text-xs')
             
             # Source info
             with ui.card().classes('w-full bg-gray-50 p-4 mb-4'):
@@ -421,7 +443,7 @@ class DynamicColumnManage:
         info_dialog.open()
     
     async def open_cls_editor(self, view_info, parent_dialog):
-        """Open CLS editor (closes info dialog first)"""
+        """Open CLS editor"""
         parent_dialog.close()
         
         n = ui.notification('Loading schema...', type='info', spinner=True, timeout=None)
@@ -434,6 +456,7 @@ class DynamicColumnManage:
             n.dismiss()
     
     async def edit_view(self, view_info, parent_dialog=None):
+        """Load view schema and open CLS editor"""
         self.current_view = view_info
         self.current_view_dataset = view_info['view_dataset']
         self.source_dataset = view_info['source_dataset']
@@ -448,6 +471,7 @@ class DynamicColumnManage:
                 self.ask_source_table(view_info)
                 return
             
+            # Load source table schema
             table_ref = client.dataset(self.source_dataset).table(source_table)
             table_obj = await run.io_bound(client.get_table, table_ref)
             
@@ -459,16 +483,26 @@ class DynamicColumnManage:
                     'mode': field.mode
                 })
             
+            # Load view metadata
             view_ref = client.dataset(self.current_view_dataset).table(view_info['view_name'])
             view_obj = await run.io_bound(client.get_table, view_ref)
             
+            # Parse column protection
             self.column_protection = self.parse_protection_from_description(
                 view_obj.description,
                 view_obj.view_query,
                 self.source_table_columns
             )
             
-            self.authorized_users = self.parse_users_from_description(view_obj.description)
+            # ✅ FIXED: Parse CLS users from description
+            self.authorized_users = self.parse_cls_users_from_description(view_obj.description)
+            
+            # ✅ FIXED: Parse RLS users from policies_filters
+            view_type = view_info.get('view_type', 'CLS')
+            if view_type in ['RLS', 'HYBRID']:
+                self.rls_users = await run.io_bound(self.get_rls_users_for_view, view_info['view_name'])
+            else:
+                self.rls_users = []
             
             ui.notify("Schema loaded!", type="positive", timeout=1000)
             
@@ -484,6 +518,7 @@ class DynamicColumnManage:
         self.edit_dialog.open()
     
     def parse_protection_from_description(self, description, view_query, all_columns):
+        """Parse column protection from view description"""
         protection = {}
         
         if description and 'COLUMN_PROTECTION:' in description:
@@ -494,7 +529,7 @@ class DynamicColumnManage:
                     in_section = True
                     continue
                 if in_section:
-                    if line.startswith('AUTHORIZED_USERS:') or line.startswith('RLS_METADATA:') or not line.strip():  # ✨ UPDATED
+                    if line.startswith('AUTHORIZED_USERS:') or line.startswith('RLS_METADATA:') or not line.strip():
                         break
                     if ':' in line:
                         parts = line.strip().split(':')
@@ -503,6 +538,7 @@ class DynamicColumnManage:
                             prot_type = parts[1]
                             protection[col_name] = prot_type
         
+        # If no metadata, infer from SQL
         if not protection:
             view_ref = client.dataset(self.current_view_dataset).table(self.current_view['view_name'])
             view_obj = client.get_table(view_ref)
@@ -521,6 +557,7 @@ class DynamicColumnManage:
                 else:
                     protection[col['name']] = 'HIDDEN'
         
+        # Ensure all columns have a protection type
         for col in all_columns:
             if col['name'] not in protection:
                 protection[col['name']] = 'VISIBLE'
@@ -528,9 +565,36 @@ class DynamicColumnManage:
         return protection
     
     def populate_edit_dialog(self, view_name, source_table):
-        self.edit_title.set_text(f'Edit View: {view_name}')
+        """Populate CLS editor dialog with columns"""
+        self.edit_title.set_text(f'Edit CLS: {view_name}')
         self.source_label.set_text(f'Source: {self.source_dataset}.{source_table} ({len(self.source_table_columns)} columns)')
         
+        # ✅ FIXED: Show CLS users if present
+        if self.authorized_users:
+            self.cls_users_section.set_visibility(True)
+            users_text = f'👥 CLS Authorized Users ({len(self.authorized_users)}): ' + ', '.join(self.authorized_users[:3])
+            if len(self.authorized_users) > 3:
+                users_text += f' ... and {len(self.authorized_users) - 3} more'
+            self.cls_users_label.set_text(users_text)
+        else:
+            self.cls_users_section.set_visibility(False)
+        
+        # ✅ Show RLS info if present
+        if self.rls_users:
+            rls_info = f'🔐 This view also has RLS policies ({len(self.rls_users)} users). Go to RLS Manager to edit.'
+            if not hasattr(self, 'rls_info_label'):
+                with self.columns_container.parent:
+                    self.rls_info_card = ui.card().classes('w-full bg-purple-50 p-3 mb-4')
+                    with self.rls_info_card:
+                        self.rls_info_label = ui.label('').classes('text-sm font-bold text-purple-600')
+            self.rls_info_label.set_text(rls_info)
+            if hasattr(self, 'rls_info_card'):
+                self.rls_info_card.set_visibility(True)
+        else:
+            if hasattr(self, 'rls_info_card'):
+                self.rls_info_card.set_visibility(False)
+        
+        # Populate columns
         self.columns_container.clear()
         
         with self.columns_container:
@@ -592,8 +656,10 @@ class DynamicColumnManage:
             f'Masked: {masked}'
         )
     
-    # ✨ PATCH 4: Updated to stop at RLS_METADATA
-    def parse_users_from_description(self, description):
+    # ==================== ✅ FIXED: SEPARATE CLS AND RLS USER PARSING ====================
+    
+    def parse_cls_users_from_description(self, description):
+        """Parse CLS authorized users from view description"""
         if not description:
             return []
         try:
@@ -609,7 +675,57 @@ class DynamicColumnManage:
             pass
         return []
     
-    # ==================== ✨ PATCH 1: RLS INTEGRATION - NEW METHODS ====================
+    def get_rls_users_for_view(self, view_name):
+        """
+        ✅ CRITICAL FIX: Get RLS users from policies_filters table in BigQuery
+        
+        RLS users are NOT stored in the view description!
+        They are stored in: rls_manager.policies_filters table
+        """
+        try:
+            # Query the policies_filters table to get users for this view
+            query = f"""
+            SELECT DISTINCT username
+            FROM `{self.project_id}.rls_manager.policies_filters`
+            WHERE policy_name LIKE '%{view_name.replace('vw_', '')}%'
+            """
+            
+            print(f"[DEBUG] Querying RLS users for view: {view_name}")
+            print(f"[DEBUG] Query: {query}")
+            
+            query_job = client.query(query)
+            results = query_job.result()
+            
+            users = [row.username for row in results if row.username]
+            print(f"[DEBUG] Found {len(users)} RLS users: {users}")
+            
+            return users
+        except Exception as e:
+            print(f"[ERROR] get_rls_users_for_view: {e}")
+            traceback.print_exc()
+            return []
+    
+    def count_rls_users_for_view(self, view_name):
+        """Count RLS users for a view (faster than fetching full list)"""
+        try:
+            query = f"""
+            SELECT COUNT(DISTINCT username) as count
+            FROM `{self.project_id}.rls_manager.policies_filters`
+            WHERE policy_name LIKE '%{view_name.replace('vw_', '')}%'
+            """
+            
+            query_job = client.query(query)
+            results = query_job.result()
+            
+            for row in results:
+                return row.count
+            
+            return 0
+        except Exception as e:
+            print(f"[ERROR] count_rls_users_for_view: {e}")
+            return 0
+    
+    # ==================== RLS INTEGRATION METHODS ====================
     
     def detect_view_type(self, table_obj):
         """Detect if view is RLS, CLS, HYBRID, or NONE"""
@@ -617,9 +733,12 @@ class DynamicColumnManage:
         has_cls = False
         
         description = table_obj.description or ''
+        view_query = table_obj.view_query or ''
         
-        # Check for RLS metadata
-        if 'RLS_METADATA:' in description:
+        # Check for RLS: view name pattern + WHERE with policies_filters
+        if (table_obj.table_id.startswith('vw_') and 
+            'policies_filters' in view_query.lower() and 
+            'session_user()' in view_query.lower()):
             has_rls = True
         
         # Check for CLS metadata
@@ -648,26 +767,6 @@ class DynamicColumnManage:
             'NONE': '📄'
         }
         return icons.get(view_type, '❓')
-    
-    def parse_rls_users(self, description):
-        """Parse RLS users from metadata"""
-        if not description or 'RLS_METADATA:' not in description:
-            return []
-        
-        try:
-            import json
-            metadata_str = description.split('RLS_METADATA:')[1]
-            # Find the JSON part
-            json_start = metadata_str.find('{')
-            json_end = metadata_str.find('}', json_start) + 1
-            if json_start >= 0 and json_end > json_start:
-                json_str = metadata_str[json_start:json_end]
-                metadata = json.loads(json_str)
-                return metadata.get('users', [])
-        except:
-            pass
-        
-        return []
     
     # ==================== END RLS INTEGRATION ====================
     
@@ -705,11 +804,21 @@ class DynamicColumnManage:
                 
                 ui.label(f'✅ Visible: {visible} | 🚫 Hidden: {hidden} | 🎭 Masked: {masked}').classes('text-sm font-bold')
             
+            # ✅ Show CLS users
             if self.authorized_users:
                 with ui.card().classes('w-full bg-green-50 p-3 mb-4'):
-                    ui.label('👥 Authorized Users (currently have access):').classes('font-bold text-sm mb-2')
+                    ui.label('👥 CLS Authorized Users:').classes('font-bold text-sm mb-2')
                     for email in self.authorized_users:
                         ui.label(f'  ✅ {email}').classes('text-xs')
+            
+            # ✅ Show RLS users
+            if self.rls_users:
+                with ui.card().classes('w-full bg-purple-50 p-3 mb-4'):
+                    ui.label('🔐 RLS Authorized Users:').classes('font-bold text-sm mb-2')
+                    for email in self.rls_users[:10]:
+                        ui.label(f'  ✅ {email}').classes('text-xs')
+                    if len(self.rls_users) > 10:
+                        ui.label(f'  ... and {len(self.rls_users) - 10} more').classes('text-xs')
             
             with ui.scroll_area().classes('w-full h-96 bg-grey-9 p-4 rounded'):
                 ui.code(sql, language='sql').classes('text-white')
@@ -819,6 +928,7 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
             ui.notify(f"⚠️ IAM update error: {str(e)[:300]}", type="warning", timeout=10000)
     
     async def save_view_changes(self):
+        """Save CLS changes (column protection)"""
         if not self.current_view:
             return
         
@@ -827,16 +937,18 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
             ui.notify("❌ Cannot hide ALL columns!", type="negative")
             return
         
-        n = ui.notification('Saving changes...', spinner=True, timeout=None)
+        n = ui.notification('Saving CLS changes...', spinner=True, timeout=None)
         
         try:
             view_name = self.current_view['view_name']
             source_table = self.current_view['source_table']
             
+            # Generate and execute SQL
             sql = self.generate_view_sql()
             query_job = await run.io_bound(client.query, sql)
             await run.io_bound(query_job.result)
             
+            # Update description with column protection metadata
             description_lines = [
                 f"Restricted view from {self.source_dataset}.{source_table}",
                 "",
@@ -880,7 +992,7 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
             )
             
             n.dismiss()
-            ui.notify("✅ View updated successfully!", type="positive")
+            ui.notify("✅ CLS updated successfully!", type="positive")
             self.edit_dialog.close()
             
             self.protected_views = await run.io_bound(self.get_protected_views, self.selected_dataset)
@@ -1012,11 +1124,10 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
             ui.notify("Select dataset first", type="warning")
     
     def render_ui(self):
-        with theme.frame('Manage Protected Views (RLS + CLS)'):  # ✨ UPDATED
+        with theme.frame('Manage Protected Views (RLS + CLS)'):
             with ui.card().classes('w-full'):
-                ui.label("Protected Views Manager (RLS + CLS)").classes('text-h5 font-bold mb-4')  # ✨ UPDATED
+                ui.label("Protected Views Manager (RLS + CLS)").classes('text-h5 font-bold mb-4')
                 
-                # ✨ UPDATED: Info card with RLS mention
                 with ui.card().classes('w-full bg-purple-50 p-4 mb-4'):
                     ui.label('🔐🏷️ Unified Security Management').classes('font-bold text-sm mb-2')
                     ui.label('• 🔐 RLS Views: Control WHO can access data (Row-Level Security)').classes('text-xs')
@@ -1034,7 +1145,6 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
                     
                     ui.button('REFRESH', icon='refresh', on_click=self.refresh_all).props('flat')
                 
-                # ✨ PATCH 5: Statistics with RLS/CLS breakdown
                 with ui.row().classes('w-full gap-4 mb-4'):
                     with ui.card().classes('flex-1 bg-blue-50'):
                         ui.label('Total Views').classes('text-sm text-grey-7')
@@ -1049,13 +1159,11 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
                         self.cls_views_label = ui.label('0').classes('text-3xl font-bold text-green-600')
                 
                 ui.separator()
-                ui.label("Protected Views (RLS + CLS)").classes('text-h6 font-bold mt-4 mb-2')  # ✨ UPDATED
+                ui.label("Protected Views (RLS + CLS)").classes('text-h6 font-bold mt-4 mb-2')
                 
-                # ✨ PATCH 6: Grid with View Type column
                 self.views_grid = ui.aggrid({
                     'columnDefs': [
                         {'field': 'view_name', 'headerName': 'View Name', 'checkboxSelection': True, 'filter': True, 'minWidth': 250},
-                        # ✨ NEW: View Type column with icons
                         {'field': 'view_type', 'headerName': 'Type', 'filter': True, 'minWidth': 120,
                          'cellRenderer': '''
                              function(params) {
@@ -1073,8 +1181,8 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
                         {'field': 'visible_columns', 'headerName': 'Visible', 'filter': True, 'minWidth': 90},
                         {'field': 'hidden_count', 'headerName': 'Hidden', 'filter': True, 'minWidth': 90},
                         {'field': 'masked_count', 'headerName': 'Masked', 'filter': True, 'minWidth': 90},
-                        {'field': 'authorized_users', 'headerName': 'CLS Users', 'filter': True, 'minWidth': 90},  # ✨ RENAMED
-                        {'field': 'rls_users', 'headerName': 'RLS Users', 'filter': True, 'minWidth': 90},  # ✨ NEW
+                        {'field': 'authorized_users', 'headerName': 'CLS Users', 'filter': True, 'minWidth': 90},
+                        {'field': 'rls_users', 'headerName': 'RLS Users', 'filter': True, 'minWidth': 90},
                         {'field': 'created', 'headerName': 'Created', 'filter': True, 'minWidth': 140},
                         {'field': 'modified', 'headerName': 'Modified', 'filter': True, 'minWidth': 140},
                     ],
@@ -1084,9 +1192,9 @@ FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
                 }).classes('w-full h-96 ag-theme-quartz')
                 
                 with ui.row().classes('mt-2 gap-2'):
-                    ui.button("VIEW DETAILS", icon="info", on_click=self.view_details).props('color=primary')  # ✨ UPDATED
+                    ui.button("VIEW DETAILS", icon="info", on_click=self.view_details).props('color=primary')
                     ui.button("DELETE SELECTED", icon="delete", on_click=self.delete_selected_views).props('color=negative')
-                    ui.button("GO TO RLS MANAGER", icon="security", on_click=lambda: ui.navigate.to('/rls/manage-views')).props('color=purple outline')  # ✨ NEW
+                    ui.button("GO TO RLS MANAGER", icon="security", on_click=lambda: ui.navigate.to('/rls/manage-views')).props('color=purple outline')
     
     def run(self):
         pass
