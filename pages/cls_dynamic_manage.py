@@ -424,16 +424,17 @@ class DynamicColumnManage:
             
             # Actions
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
-                if view_type in ['CLS', 'HYBRID']:
-                    ui.button(
-                        'EDIT CLS',
-                        icon='edit',
-                        on_click=lambda: self.open_cls_editor(view_info, info_dialog)
-                    ).props('color=blue')
+                # ✅ ALWAYS show button to apply CLS protection (masking, hiding columns)
+                ui.button(
+                    'APPLY CLS',
+                    icon='edit',
+                    on_click=lambda: self.open_cls_editor(view_info, info_dialog)
+                ).props('color=blue').tooltip('Apply column masking and hiding')
                 
+                # ✅ Link to RLS Manager (if view has RLS policies)
                 if view_type in ['RLS', 'HYBRID']:
                     ui.button(
-                        'MANAGE RLS',
+                        'GO TO RLS MANAGER',
                         icon='security',
                         on_click=lambda: ui.navigate.to('/rls/manage-views')
                     ).props('color=purple outline').tooltip('Go to RLS Manager to edit users/filters')
