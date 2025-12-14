@@ -30,7 +30,7 @@ from google.cloud import bigquery
 from google.cloud.exceptions import NotFound
 from google.api_core.exceptions import GoogleAPIError
 from services.audit_service import AuditService
-import json  # ✨ NEW: For RLS metadata
+import json
 
 
 config = Config()
@@ -65,7 +65,7 @@ class RLSCreateforGroups:
         self.randon_word = r.word(include_parts_of_speech=["nouns", "adjectives"], word_min_length=3, word_max_length=8)
         self.policy_name = None
         
-        # ✨ NEW: View-related attributes
+        # View-related attributes
         self.view_name = None
         self.views_dataset = None
 
@@ -97,7 +97,7 @@ class RLSCreateforGroups:
     def get_datasets(self):
         try:
             datasets = list(client.list_datasets())
-            # ✨ NEW: Filter out _views datasets
+            # Filter out _views datasets
             return [dataset.dataset_id for dataset in datasets if not dataset.dataset_id.endswith('_views')]
         except GoogleAPIError as e:
             ui.notify(get_text('msg_error_fetch_datasets', error=str(e)), type="negative")
@@ -147,7 +147,6 @@ class RLSCreateforGroups:
         except Exception as e:
             ui.notify(get_text('msg_error_unexpected', error=str(e)), type="negative")
 
-    # ✨ NEW: Helper method to create views dataset
     def ensure_views_dataset(self):
         """Create views dataset if it doesn't exist"""
         self.views_dataset = f"{self.selected_dataset}_views"
@@ -167,16 +166,16 @@ class RLSCreateforGroups:
             ui.notify(get_text('msg_select_field_first'), type="warning")
             return
 
-        # ✨ NEW: Generate view name and policy name
+        # Generate view name and policy name
         self.view_name = f'vw_{self.selected_table}_{self.selected_field[0]}_{self.randon_word}'
         self.policy_name = f'rls_{self.view_name}'
         self.views_dataset = f"{self.selected_dataset}_views"
         
-        # ✨ UPDATED: Resume shows VIEW creation instead of direct RLS
+        # UPDATED: Resume shows VIEW creation
         self.resume.content = f""" 
             ###**{get_text('rls_users_review_title')}**<br>
 
-            **🔐 New Architecture: RLS View (Group-based)**<br>
+            **🔐 RLS View Architecture (Group-based)**<br>
             **View Name**: {self.view_name}<br>
             **Views Dataset**: {self.views_dataset}<br>
             **Policy Name**: {self.policy_name}<br>
@@ -190,15 +189,20 @@ class RLSCreateforGroups:
             **ℹ️ How it works:**<br>
             • Original table ({self.selected_table}) remains locked 🔒<br>
             • View created in {self.views_dataset} with dynamic filter<br>
-            • Only group members ({self.group_assignment}) can access<br>
-            • RLS policy applied on VIEW (not on table)<br>
+            • Only members of group {self.group_assignment} can access<br>
+            • Filter values managed in policies_filters table<br>
+            • Original table accessible ONLY to admins<br>
+            <br>
+            **Next steps:**<br>
+            1. Create view → Assign values via "Assign Values to Group"<br>
+            2. Optionally apply CLS (masking) via "Manage Protected Views"<br>
             <br>
             **{get_text('rls_users_review_code')}**:
         """
 
-        # ✨ UPDATED: SQL creates VIEW + RLS on view
+        # ✅ CORRECTED: SQL creates ONLY the VIEW (no ROW ACCESS POLICY)
         self.code.content = (
-            f"-- Step 1: Create RLS View with dynamic filter\n"
+            f"-- Create RLS View with dynamic filter (group-based)\n"
             f"CREATE OR REPLACE VIEW `{self.project_id}.{self.views_dataset}.{self.view_name}` AS\n"
             f"SELECT *\n"
             f"FROM `{self.project_id}.{self.selected_dataset}.{self.selected_table}`\n"
@@ -213,24 +217,22 @@ class RLSCreateforGroups:
             f"    AND field_id = '{self.selected_field[0]}'\n"
             f"    AND rls_group = '{self.group_assignment}'\n"
             f");\n\n"
-            f"-- Step 2: Apply RLS policy on VIEW (group-based access)\n"
-            f"CREATE OR REPLACE ROW ACCESS POLICY `{self.policy_name}`\n"
-            f"ON `{self.project_id}.{self.views_dataset}.{self.view_name}`\n"
-            f"GRANT TO (\"group:{self.group_assignment}\")\n"
-            f"FILTER USING (TRUE);"
+            f"-- Note: View uses dynamic filtering for group members\n"
+            f"-- Assign filter values via 'Assign Values to Group'\n"
+            f"-- Access control: Only members of {self.group_assignment} can query this view"
         )
         self.stepper.next()
 
     def run_creation_policy(self):
         try:
-            # ✨ NEW: Ensure views dataset exists
+            # Ensure views dataset exists
             self.ensure_views_dataset()
             
-            # ✨ NEW: Create view + RLS policy
+            # ✅ CORRECTED: Create ONLY the view (no ROW ACCESS POLICY)
             query_job = client.query(self.code.content)
             query_job.result()
             
-            # ✨ NEW: Update view description with metadata
+            # Update view description with metadata
             view_ref = client.dataset(self.views_dataset).table(self.view_name)
             view = client.get_table(view_ref)
             
@@ -255,7 +257,7 @@ class RLSCreateforGroups:
             )
             client.update_table(view, ['description'])
             
-            # ✨ NEW: Configure as Authorized View
+            # Configure as Authorized View
             from google.cloud.bigquery import AccessEntry
             
             source_dataset_ref = client.dataset(self.selected_dataset)
@@ -289,7 +291,7 @@ class RLSCreateforGroups:
             source_dataset.access_entries = access_entries
             client.update_dataset(source_dataset, ['access_entries'])
             
-            # Insert into policy table (keep for backward compatibility)
+            # Insert into policy table (for backward compatibility)
             query_insert_into_policy_table = f"""
                 INSERT INTO `{config.POLICY_TABLE}` (policy_type, policy_name, project_id, dataset_id, table_name, field_id, group_email)
                 VALUES
@@ -298,7 +300,7 @@ class RLSCreateforGroups:
             query_job = client.query(query_insert_into_policy_table)
             query_job.result()
             
-            # ✨ UPDATED: Log success with new architecture details
+            # Log success
             self.audit_service.log_action(
                 action='CREATE_RLS_VIEW_GROUP',
                 resource_type='RLS_VIEW',
@@ -314,16 +316,16 @@ class RLSCreateforGroups:
                     'filter_field_type': self.selected_field[1],
                     'group_email': self.group_assignment,
                     'policy_name': self.policy_name,
-                    'architecture': 'RLS_VIEW_NEW'
+                    'architecture': 'RLS_VIEW_FILTER_ONLY'
                 }
             )
             
-            # ✨ UPDATED: Success message
+            # Success message
             with ui.dialog() as dialog, ui.card().classes('w-full max-w-2xl'):
                 ui.label('✅ RLS View Created Successfully!').classes('text-h5 font-bold text-positive mb-4')
                 
                 with ui.card().classes('w-full bg-green-50 p-4 mb-4'):
-                    ui.label('🔐 New Architecture Applied:').classes('font-bold mb-2')
+                    ui.label('🔐 RLS View Configuration:').classes('font-bold mb-2')
                     ui.label(f'• View: {self.views_dataset}.{self.view_name}').classes('text-sm')
                     ui.label(f'• Filter field: {self.selected_field[0]}').classes('text-sm')
                     ui.label(f'• Authorized group: {self.group_assignment}').classes('text-sm')
@@ -331,11 +333,18 @@ class RLSCreateforGroups:
                     ui.label(f'• Policy: {self.policy_name}').classes('text-sm')
                 
                 with ui.card().classes('w-full bg-blue-50 p-4 mb-4'):
-                    ui.label('ℹ️ How to use:').classes('font-bold mb-2')
-                    ui.label('1. Group members query the VIEW (not the table)').classes('text-sm')
-                    ui.label('2. Only members of the group see the data').classes('text-sm')
-                    ui.label('3. Use "Assign Values to Group" to define filter values').classes('text-sm')
-                    ui.label('4. Original table remains protected').classes('text-sm')
+                    ui.label('📋 Next Steps:').classes('font-bold mb-2')
+                    ui.label('1. Go to "Assign Values to Group" to define filter values').classes('text-sm')
+                    ui.label('2. Add the filter values for this group').classes('text-sm')
+                    ui.label('3. Only group members will see the filtered data').classes('text-sm')
+                    ui.label('4. Optionally apply CLS (masking) via "Manage Protected Views"').classes('text-sm')
+                
+                with ui.card().classes('w-full bg-purple-50 p-4 mb-4'):
+                    ui.label('💡 Example Usage:').classes('font-bold mb-2')
+                    ui.label(f'• Group: {self.group_assignment}').classes('text-sm')
+                    ui.label(f'• Assign value: "Tecnologia da Informação"').classes('text-sm')
+                    ui.label(f'• Group members query: SELECT * FROM {self.views_dataset}.{self.view_name}').classes('text-sm')
+                    ui.label(f'• They see: ONLY rows where {self.selected_field[0]} = "Tecnologia da Informação"').classes('text-sm font-bold text-purple-700')
                 
                 with ui.row().classes('w-full justify-center'):  
                     ui.button(get_text('btn_close'), on_click=ui.navigate.reload)
