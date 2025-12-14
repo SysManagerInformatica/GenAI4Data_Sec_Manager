@@ -30,7 +30,7 @@ from google.cloud import bigquery
 from google.cloud.exceptions import NotFound
 from google.api_core.exceptions import GoogleAPIError
 from services.audit_service import AuditService
-import json  # ✨ NEW: For RLS metadata
+import json
 
 
 config = Config()
@@ -65,7 +65,7 @@ class RLSCreateforUsers:
         self.randon_word = r.word(include_parts_of_speech=["nouns", "adjectives"], word_min_length=3, word_max_length=8)
         self.policy_name = None
         
-        # ✨ NEW: View-related attributes
+        # View-related attributes
         self.view_name = None
         self.views_dataset = None
 
@@ -97,7 +97,7 @@ class RLSCreateforUsers:
     def get_datasets(self):
         try:
             datasets = list(client.list_datasets())
-            # ✨ NEW: Filter out _views datasets
+            # Filter out _views datasets
             return [dataset.dataset_id for dataset in datasets if not dataset.dataset_id.endswith('_views')]
         except GoogleAPIError as e:
             ui.notify(get_text('msg_error_fetch_datasets', error=str(e)), type="negative")
@@ -147,7 +147,6 @@ class RLSCreateforUsers:
         except Exception as e:
             ui.notify(get_text('msg_error_unexpected', error=str(e)), type="negative")
 
-    # ✨ NEW: Helper method to create views dataset
     def ensure_views_dataset(self):
         """Create views dataset if it doesn't exist"""
         self.views_dataset = f"{self.selected_dataset}_views"
@@ -167,16 +166,16 @@ class RLSCreateforUsers:
             ui.notify(get_text('msg_select_field_first'), type="warning")
             return
 
-        # ✨ NEW: Generate view name and policy name
+        # Generate view name and policy name
         self.view_name = f'vw_{self.selected_table}_{self.selected_field[0]}_{self.randon_word}'
         self.policy_name = f'rls_{self.view_name}'
         self.views_dataset = f"{self.selected_dataset}_views"
         
-        # ✨ UPDATED: Resume shows VIEW creation instead of direct RLS
+        # UPDATED: Resume shows VIEW creation
         self.resume.content = f""" 
             ###**{get_text('rls_users_review_title')}**<br>
 
-            **🔐 New Architecture: RLS View**<br>
+            **🔐 RLS View Architecture**<br>
             **View Name**: {self.view_name}<br>
             **Views Dataset**: {self.views_dataset}<br>
             **Policy Name**: {self.policy_name}<br>
@@ -189,15 +188,20 @@ class RLSCreateforUsers:
             **ℹ️ How it works:**<br>
             • Original table ({self.selected_table}) remains locked 🔒<br>
             • View created in {self.views_dataset} with dynamic filter<br>
-            • Each user sees only their authorized data<br>
-            • RLS policy applied on VIEW (not on table)<br>
+            • Each user sees only their authorized data via SESSION_USER()<br>
+            • Filter values managed in policies_filters table<br>
+            • Original table accessible ONLY to admins<br>
+            <br>
+            **Next steps:**<br>
+            1. Create view → Assign users via "Assign Users to Policy"<br>
+            2. Optionally apply CLS (masking) via "Manage Protected Views"<br>
             <br>
             **{get_text('rls_users_review_code')}**:
         """
 
-        # ✨ UPDATED: SQL creates VIEW + RLS on view
+        # ✅ CORRECTED: SQL creates ONLY the VIEW (no ROW ACCESS POLICY)
         self.code.content = (
-            f"-- Step 1: Create RLS View with dynamic filter\n"
+            f"-- Create RLS View with dynamic filter\n"
             f"CREATE OR REPLACE VIEW `{self.project_id}.{self.views_dataset}.{self.view_name}` AS\n"
             f"SELECT *\n"
             f"FROM `{self.project_id}.{self.selected_dataset}.{self.selected_table}`\n"
@@ -211,24 +215,21 @@ class RLSCreateforUsers:
             f"    AND field_id = '{self.selected_field[0]}'\n"
             f"    AND username = SESSION_USER()\n"
             f");\n\n"
-            f"-- Step 2: Apply RLS policy on VIEW\n"
-            f"CREATE OR REPLACE ROW ACCESS POLICY `{self.policy_name}`\n"
-            f"ON `{self.project_id}.{self.views_dataset}.{self.view_name}`\n"
-            f"GRANT TO (\"allAuthenticatedUsers\")\n"
-            f"FILTER USING (TRUE);"
+            f"-- Note: View uses dynamic filtering via SESSION_USER()\n"
+            f"-- Assign users and values via 'Assign Users to Policy'"
         )
         self.stepper.next()
 
     def run_creation_policy(self):
         try:
-            # ✨ NEW: Ensure views dataset exists
+            # Ensure views dataset exists
             self.ensure_views_dataset()
             
-            # ✨ NEW: Create view + RLS policy
+            # ✅ CORRECTED: Create ONLY the view (no ROW ACCESS POLICY)
             query_job = client.query(self.code.content)
             query_job.result()
             
-            # ✨ NEW: Update view description with metadata
+            # Update view description with metadata
             view_ref = client.dataset(self.views_dataset).table(self.view_name)
             view = client.get_table(view_ref)
             
@@ -251,7 +252,7 @@ class RLSCreateforUsers:
             )
             client.update_table(view, ['description'])
             
-            # ✨ NEW: Configure as Authorized View
+            # Configure as Authorized View
             from google.cloud.bigquery import AccessEntry
             
             source_dataset_ref = client.dataset(self.selected_dataset)
@@ -285,7 +286,7 @@ class RLSCreateforUsers:
             source_dataset.access_entries = access_entries
             client.update_dataset(source_dataset, ['access_entries'])
             
-            # Insert into policy table (keep for backward compatibility)
+            # Insert into policy table (for backward compatibility)
             query_insert_into_policy_table = f"""
                 INSERT INTO `{config.POLICY_TABLE}` (policy_type, policy_name, project_id, dataset_id, table_name, field_id)
                 VALUES
@@ -294,7 +295,7 @@ class RLSCreateforUsers:
             query_job = client.query(query_insert_into_policy_table)
             query_job.result()
             
-            # ✨ UPDATED: Log success with new architecture details
+            # Log success
             self.audit_service.log_action(
                 action='CREATE_RLS_VIEW_USER',
                 resource_type='RLS_VIEW',
@@ -309,27 +310,34 @@ class RLSCreateforUsers:
                     'filter_field': self.selected_field[0],
                     'filter_field_type': self.selected_field[1],
                     'policy_name': self.policy_name,
-                    'architecture': 'RLS_VIEW_NEW'
+                    'architecture': 'RLS_VIEW_FILTER_ONLY'
                 }
             )
             
-            # ✨ UPDATED: Success message
+            # Success message
             with ui.dialog() as dialog, ui.card().classes('w-full max-w-2xl'):
                 ui.label('✅ RLS View Created Successfully!').classes('text-h5 font-bold text-positive mb-4')
                 
                 with ui.card().classes('w-full bg-green-50 p-4 mb-4'):
-                    ui.label('🔐 New Architecture Applied:').classes('font-bold mb-2')
+                    ui.label('🔐 RLS View Configuration:').classes('font-bold mb-2')
                     ui.label(f'• View: {self.views_dataset}.{self.view_name}').classes('text-sm')
                     ui.label(f'• Filter field: {self.selected_field[0]}').classes('text-sm')
                     ui.label(f'• Base table: {self.selected_dataset}.{self.selected_table} (locked 🔒)').classes('text-sm')
                     ui.label(f'• Policy: {self.policy_name}').classes('text-sm')
                 
                 with ui.card().classes('w-full bg-blue-50 p-4 mb-4'):
-                    ui.label('ℹ️ How to use:').classes('font-bold mb-2')
-                    ui.label('1. Users query the VIEW (not the table)').classes('text-sm')
-                    ui.label('2. Each user sees only THEIR data automatically').classes('text-sm')
-                    ui.label('3. Use "Assign Users to Policy" to grant access').classes('text-sm')
-                    ui.label('4. Original table remains protected').classes('text-sm')
+                    ui.label('📋 Next Steps:').classes('font-bold mb-2')
+                    ui.label('1. Go to "Assign Users to Policy" to grant access').classes('text-sm')
+                    ui.label('2. Add users and their authorized filter values').classes('text-sm')
+                    ui.label('3. Users will see ONLY their authorized data').classes('text-sm')
+                    ui.label('4. Optionally apply CLS (masking) via "Manage Protected Views"').classes('text-sm')
+                
+                with ui.card().classes('w-full bg-purple-50 p-4 mb-4'):
+                    ui.label('💡 Example Usage:').classes('font-bold mb-2')
+                    ui.label(f'• User: bruno@example.com').classes('text-sm')
+                    ui.label(f'• Assign value: "Tecnologia da Informação"').classes('text-sm')
+                    ui.label(f'• Bruno queries: SELECT * FROM {self.views_dataset}.{self.view_name}').classes('text-sm')
+                    ui.label(f'• Bruno sees: ONLY rows where {self.selected_field[0]} = "Tecnologia da Informação"').classes('text-sm font-bold text-purple-700')
                 
                 with ui.row().classes('w-full justify-center'): 
                     ui.button(get_text('btn_close'), on_click=ui.navigate.reload)
