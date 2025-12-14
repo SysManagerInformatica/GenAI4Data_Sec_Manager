@@ -55,7 +55,8 @@ class RLSCreateforUsers:
         self.step1_title = get_text('rls_users_step1_title')
         self.step2_title = get_text('rls_users_step2_title')
         self.step3_title = get_text('rls_users_step3_title')
-        self.step4_title = get_text('rls_users_step4_title')
+        self.step4_title = "Step 4: Customize View Name (Optional)"
+        self.step5_title = get_text('rls_users_step4_title')
 
         # Initialize selected values properly
         self.selected_dataset = None
@@ -166,8 +167,7 @@ class RLSCreateforUsers:
             ui.notify(get_text('msg_select_field_first'), type="warning")
             return
 
-        # Generate view name and policy name
-        self.view_name = f'vw_{self.selected_table}_{self.selected_field[0]}_{self.randon_word}'
+        # view_name já foi definido em go_to_review()
         self.policy_name = f'rls_{self.view_name}'
         self.views_dataset = f"{self.selected_dataset}_views"
         
@@ -221,13 +221,21 @@ class RLSCreateforUsers:
         self.stepper.next()
 
     def run_creation_policy(self):
+        # ✅ Notificação inicial
+        ui.notify("Creating RLS view...", type="info", spinner=True, timeout=2000)
+        
         try:
             # Ensure views dataset exists
             self.ensure_views_dataset()
             
+            # ✅ Notificação de progresso
+            ui.notify("Executing SQL...", type="ongoing", timeout=2000)
+            
             # ✅ CORRECTED: Create ONLY the view (no ROW ACCESS POLICY)
             query_job = client.query(self.code.content)
             query_job.result()
+            
+            ui.notify("Configuring view metadata...", type="ongoing", timeout=2000)
             
             # Update view description with metadata
             view_ref = client.dataset(self.views_dataset).table(self.view_name)
@@ -316,7 +324,14 @@ class RLSCreateforUsers:
             )
             
             # Success message
-            with ui.dialog() as dialog, ui.card().classes('w-full max-w-2xl'):
+            ui.notify("✅ RLS View created successfully!", type="positive", timeout=3000)
+            
+            # ✅ Sleep curto para garantir que UI processe
+            import time
+            time.sleep(0.5)
+            
+            # ✅ Dialog de sucesso - GARANTIDO
+            with ui.dialog(value=True) as dialog, ui.card().classes('w-full max-w-2xl'):
                 ui.label('✅ RLS View Created Successfully!').classes('text-h5 font-bold text-positive mb-4')
                 
                 with ui.card().classes('w-full bg-green-50 p-4 mb-4'):
@@ -342,7 +357,8 @@ class RLSCreateforUsers:
                 
                 with ui.row().classes('w-full justify-center'): 
                     ui.button(get_text('btn_close'), on_click=ui.navigate.reload)
-            dialog.open()
+            
+            # Dialog já está aberto com value=True
             
         except GoogleAPIError as error:
             # Log failure
@@ -399,13 +415,71 @@ class RLSCreateforUsers:
             self.field_list = ui.select([], label=get_text('rls_users_select_field'), on_change=self._update_selected_field)
             with ui.stepper_navigation():
                 ui.button(get_text('btn_back'), icon="arrow_back_ios", on_click=self.stepper.previous)
-                self.step3_next_button = ui.button(get_text('btn_next'), icon="arrow_forward_ios", on_click=self.get_resume)
+                self.step3_next_button = ui.button(get_text('btn_next'), icon="arrow_forward_ios", on_click=self.stepper.next)
                 
                 self.step3_next_button.set_visibility(False)
 
             return
-
+    
     def step4(self):
+        """Step para customizar nome da view"""
+        with ui.step(self.step4_title):
+            ui.label("Customize the view name (optional)").classes('text-caption text-grey-7 mb-4')
+            
+            with ui.card().classes('w-full bg-blue-50 p-4 mb-4'):
+                ui.label("💡 Naming Tips").classes('font-bold mb-2')
+                ui.label("• Leave empty for auto-generated name").classes('text-xs')
+                ui.label("• Or enter custom name (e.g., vw_rls_ti_team)").classes('text-xs')
+                ui.label("• Only letters, numbers, and underscores").classes('text-xs')
+                ui.label("• Must start with a letter").classes('text-xs')
+            
+            self.custom_view_name_input = ui.input(
+                label="Custom View Name (leave empty for auto)",
+                placeholder="vw_rls_my_custom_name"
+            ).classes('w-full').on('input', self.validate_custom_name)
+            
+            self.view_name_validation_label = ui.label('').classes('text-xs mt-2')
+            
+            with ui.stepper_navigation():
+                ui.button(get_text('btn_back'), icon="arrow_back_ios", on_click=self.stepper.previous)
+                ui.button(get_text('btn_next'), icon="arrow_forward_ios", on_click=self.go_to_review)
+
+            return
+    
+    def validate_custom_name(self, e):
+        """Valida nome customizado"""
+        import re
+        name = e.value.strip()
+        
+        if not name:
+            self.view_name_validation_label.text = '✅ Will use auto-generated name'
+            self.view_name_validation_label.classes(replace='text-xs mt-2 text-green-600')
+            return
+        
+        if not re.match(r'^[a-zA-Z][a-zA-Z0-9_]*$', name):
+            self.view_name_validation_label.text = '❌ Invalid: Must start with letter, only letters/numbers/underscores'
+            self.view_name_validation_label.classes(replace='text-xs mt-2 text-red-600')
+        else:
+            self.view_name_validation_label.text = f'✅ Valid: Will create {self.selected_dataset}_views.{name}'
+            self.view_name_validation_label.classes(replace='text-xs mt-2 text-green-600')
+    
+    def go_to_review(self):
+        """Ir para review com nome customizado ou auto"""
+        custom_name = self.custom_view_name_input.value.strip() if hasattr(self, 'custom_view_name_input') else ''
+        
+        if custom_name:
+            import re
+            if not re.match(r'^[a-zA-Z][a-zA-Z0-9_]*$', custom_name):
+                ui.notify("Invalid view name. Please fix it before proceeding.", type="warning")
+                return
+            self.view_name = custom_name
+        else:
+            # Auto-generate
+            self.view_name = f'vw_{self.selected_table}_{self.selected_field[0]}_{self.randon_word}'
+        
+        self.get_resume()
+
+    def step5(self):
         with ui.step(self.step4_title):
             self.resume = ui.markdown().classes(replace='text-primary')
             self.code = ui.code(content='', language="SQL")  
@@ -421,3 +495,4 @@ class RLSCreateforUsers:
                 self.step2()
                 self.step3()
                 self.step4()
+                self.step5()
