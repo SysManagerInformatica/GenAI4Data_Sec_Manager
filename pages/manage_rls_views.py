@@ -1,15 +1,15 @@
 """
-RLS Manager - COMPLETE AND UNIFIED - FIXED
+RLS Manager - COMPLETE AND UNIFIED - FINAL FIXED
 Manage RLS-protected views, users, and filters in one place
 
-VERSION: 3.1 - FIXED UI ISSUES
+VERSION: 3.2 - FINAL FIXES
 Date: 15/12/2024
 Author: Lucas Carvalhal - Sys Manager
 
 FIXES:
-- Dialog scroll fixed (add user form visible)
-- Filter operators added (=, >, <, >=, <=, !=, LIKE)
-- Duplicate dataset selector removed
+- Filter value now optional when adding users
+- Detects existing RLS filters from VIEW SQL
+- Improved filter extraction from WHERE clause
 """
 
 import theme
@@ -20,6 +20,7 @@ from services.audit_service import AuditService
 from services.rls_views_service import RLSViewsService
 import asyncio
 import traceback
+import re
 
 
 config = Config()
@@ -39,6 +40,7 @@ class ManageRLSViews:
         
         self.current_view = None
         self.current_policy_name = None
+        self.current_view_sql = None
         
         # User management
         self.user_list = []
@@ -93,6 +95,111 @@ class ManageRLSViews:
         """
         return view_name.replace('vw_', '')
     
+    def get_view_sql(self, dataset: str, view_name: str) -> str:
+        """Get the SQL definition of a view"""
+        try:
+            table_ref = client.dataset(dataset).table(view_name)
+            table = client.get_table(table_ref)
+            return table.view_query
+        except Exception as e:
+            print(f"[ERROR] get_view_sql: {e}")
+            return ""
+    
+    def extract_rls_filters_from_sql(self, view_sql: str) -> list:
+        """
+        Extract RLS filter conditions from VIEW SQL
+        
+        Example SQL:
+        CREATE VIEW ... AS
+        SELECT * FROM table
+        WHERE campo IN (
+          SELECT username FROM policies_filters
+          WHERE policy_name = 'xxx' AND campo = 'valor'
+        )
+        
+        Returns: [
+            {'field': 'campo', 'operator': '=', 'value': 'valor'},
+            ...
+        ]
+        """
+        filters = []
+        
+        try:
+            # Extract WHERE clause
+            where_match = re.search(r'\bWHERE\b(.*?)(?:$|;)', view_sql, re.IGNORECASE | re.DOTALL)
+            if not where_match:
+                print("[DEBUG] No WHERE clause found")
+                return filters
+            
+            where_clause = where_match.group(1).strip()
+            print(f"[DEBUG] WHERE clause: {where_clause[:200]}")
+            
+            # Pattern 1: Direct conditions (campo = 'valor')
+            # Look for conditions like: campo = 'valor' or campo IN ('val1', 'val2')
+            direct_patterns = [
+                r"(\w+)\s*=\s*'([^']+)'",  # campo = 'valor'
+                r"(\w+)\s*!=\s*'([^']+)'",  # campo != 'valor'
+                r"(\w+)\s*>\s*'?(\d+)'?",  # campo > 5000
+                r"(\w+)\s*<\s*'?(\d+)'?",  # campo < 5000
+                r"(\w+)\s*>=\s*'?(\d+)'?",  # campo >= 5000
+                r"(\w+)\s*<=\s*'?(\d+)'?",  # campo <= 5000
+                r"(\w+)\s+LIKE\s+'([^']+)'",  # campo LIKE '%valor%'
+            ]
+            
+            for pattern in direct_patterns:
+                matches = re.finditer(pattern, where_clause, re.IGNORECASE)
+                for match in matches:
+                    field = match.group(1)
+                    value = match.group(2)
+                    
+                    # Determine operator from pattern
+                    if '!=' in pattern:
+                        operator = '!='
+                    elif '>=' in pattern:
+                        operator = '>='
+                    elif '<=' in pattern:
+                        operator = '<='
+                    elif '>' in pattern:
+                        operator = '>'
+                    elif '<' in pattern:
+                        operator = '<'
+                    elif 'LIKE' in pattern:
+                        operator = 'LIKE'
+                    else:
+                        operator = '='
+                    
+                    filters.append({
+                        'field': field,
+                        'operator': operator,
+                        'value': value
+                    })
+            
+            # Pattern 2: RLS pattern with policies_filters
+            # campo IN (SELECT username FROM policies_filters WHERE campo = 'valor')
+            rls_pattern = r"(\w+)\s+IN\s*\(\s*SELECT.*?WHERE.*?(\w+)\s*=\s*'([^']+)'"
+            rls_matches = re.finditer(rls_pattern, where_clause, re.IGNORECASE | re.DOTALL)
+            
+            for match in rls_matches:
+                field = match.group(1)
+                filter_field = match.group(2)
+                filter_value = match.group(3)
+                
+                filters.append({
+                    'field': field,
+                    'operator': 'IN',
+                    'value': f'(RLS: {filter_field}={filter_value})',
+                    'rls_field': filter_field,
+                    'rls_value': filter_value
+                })
+            
+            print(f"[DEBUG] Extracted {len(filters)} filters: {filters}")
+            return filters
+            
+        except Exception as e:
+            print(f"[ERROR] extract_rls_filters_from_sql: {e}")
+            traceback.print_exc()
+            return []
+    
     def load_users_from_policies_filters(self, policy_name: str, dataset: str, table: str) -> list:
         """
         Load users from policies_filters table
@@ -120,8 +227,8 @@ class ManageRLSViews:
             for row in query_job:
                 results.append({
                     'username': row.username,
-                    'filter_value': row.filter_value,
-                    'field_id': row.field_id,
+                    'filter_value': row.filter_value if row.filter_value else '(All data)',
+                    'field_id': row.field_id if row.field_id else '-',
                     'created_at': row.created_at
                 })
             
@@ -160,8 +267,8 @@ class ManageRLSViews:
             for row in query_job:
                 results.append({
                     'group_email': row.group_email,
-                    'filter_value': row.filter_value,
-                    'field_id': row.field_id,
+                    'filter_value': row.filter_value if row.filter_value else '(All data)',
+                    'field_id': row.field_id if row.field_id else '-',
                     'created_at': row.created_at
                 })
             
@@ -174,7 +281,7 @@ class ManageRLSViews:
             return []
     
     def get_unique_filter_values(self, policy_name: str, dataset: str, table: str) -> list:
-        """Get unique filter values for this policy"""
+        """Get unique filter values for this policy from policies_filters table"""
         try:
             query = f"""
             SELECT DISTINCT filter_value
@@ -183,6 +290,7 @@ class ManageRLSViews:
               AND project_id = '{self.project_id}'
               AND dataset_id = '{dataset}'
               AND table_id = '{table}'
+              AND filter_value IS NOT NULL
               AND filter_value != ''
             ORDER BY filter_value
             """
@@ -190,7 +298,7 @@ class ManageRLSViews:
             query_job = client.query(query)
             results = [row.filter_value for row in query_job]
             
-            print(f"[DEBUG] Found {len(results)} unique filter values: {results}")
+            print(f"[DEBUG] Found {len(results)} unique filter values from policies_filters: {results}")
             return results
             
         except Exception as e:
@@ -226,12 +334,26 @@ class ManageRLSViews:
         
         print(f"[DEBUG] Editing view: {view_info['view_name']}")
         print(f"[DEBUG] Policy name: {self.current_policy_name}")
-        print(f"[DEBUG] Dataset: {view_info['base_dataset']}")
-        print(f"[DEBUG] Table: {view_info['base_table']}")
+        print(f"[DEBUG] Dataset: {view_info['view_dataset']}")
+        print(f"[DEBUG] Base dataset: {view_info['base_dataset']}")
+        print(f"[DEBUG] Base table: {view_info['base_table']}")
         
         # Load data
         n = ui.notification("Loading policy data...", spinner=True, timeout=None)
         try:
+            # Get VIEW SQL
+            self.current_view_sql = await run.io_bound(
+                self.get_view_sql,
+                view_info['view_dataset'],
+                view_info['view_name']
+            )
+            
+            # Extract filters from SQL
+            sql_filters = await run.io_bound(
+                self.extract_rls_filters_from_sql,
+                self.current_view_sql
+            )
+            
             # Load users
             user_assignments = await run.io_bound(
                 self.load_users_from_policies_filters,
@@ -248,7 +370,7 @@ class ManageRLSViews:
                 view_info['base_table']
             )
             
-            # Load unique filter values
+            # Load unique filter values from policies_filters
             filter_values = await run.io_bound(
                 self.get_unique_filter_values,
                 self.current_policy_name,
@@ -266,14 +388,21 @@ class ManageRLSViews:
             n.dismiss()
             
             # Open edit dialog
-            self.open_edit_dialog(view_info, user_assignments, group_assignments, filter_values, table_fields)
+            self.open_edit_dialog(
+                view_info, 
+                user_assignments, 
+                group_assignments, 
+                filter_values, 
+                table_fields,
+                sql_filters
+            )
             
         except Exception as e:
             n.dismiss()
             ui.notify(f"Error loading data: {e}", type="negative")
             traceback.print_exc()
     
-    def open_edit_dialog(self, view_info, user_assignments, group_assignments, filter_values, table_fields):
+    def open_edit_dialog(self, view_info, user_assignments, group_assignments, filter_values, table_fields, sql_filters):
         """Open dialog to edit RLS view"""
         
         with ui.dialog() as edit_dialog, ui.card().classes('w-full max-w-7xl max-h-[90vh] overflow-hidden'):
@@ -292,7 +421,7 @@ class ManageRLSViews:
                 tab_users = ui.tab("👥 Users & Groups", icon='people')
                 tab_filters = ui.tab("🔍 Filters", icon='filter_list')
             
-            # ✅ FIXED: Add scroll area for tab panels
+            # ✅ Add scroll area for tab panels
             with ui.scroll_area().classes('w-full h-[60vh]'):
                 with ui.tab_panels(tabs, value=tab_users).classes('w-full'):
                     # ========== USERS TAB ==========
@@ -330,7 +459,7 @@ class ManageRLSViews:
                                             await run.io_bound(
                                                 self.delete_user_assignment,
                                                 row['username'],
-                                                row['filter_value']
+                                                row['filter_value'] if row['filter_value'] != '(All data)' else ''
                                             )
                                         
                                         ui.notify(f"✅ Deleted {len(rows)} user assignments", type="positive")
@@ -366,7 +495,7 @@ class ManageRLSViews:
                                             await run.io_bound(
                                                 self.delete_group_assignment,
                                                 row['group_email'],
-                                                row['filter_value']
+                                                row['filter_value'] if row['filter_value'] != '(All data)' else ''
                                             )
                                         
                                         ui.notify(f"✅ Deleted {len(rows)} group assignments", type="positive")
@@ -379,7 +508,7 @@ class ManageRLSViews:
                         
                         ui.separator()
                         
-                        # ✅ FIXED: Add new users/groups section (now visible with scroll)
+                        # ✅ FIXED: Add new users/groups section with optional filter
                         ui.label("➕ Add New Assignments").classes('font-bold text-lg mb-2 mt-4')
                         
                         with ui.card().classes('w-full bg-blue-50 p-4'):
@@ -397,11 +526,15 @@ class ManageRLSViews:
                                     placeholder="user@example.com"
                                 ).classes('flex-1')
                             
+                            # ✅ FIXED: Filter value is now optional
                             with ui.row().classes('w-full gap-2 mt-2'):
+                                # Add "(No filter - All data)" option
+                                filter_options = ['(No filter - All data)'] + (filter_values if filter_values else [])
+                                
                                 filter_value_select = ui.select(
-                                    options=filter_values if filter_values else [''],
-                                    label="Filter Value",
-                                    value=filter_values[0] if filter_values else ''
+                                    options=filter_options,
+                                    label="Filter Value (optional)",
+                                    value=filter_options[0]
                                 ).classes('flex-1')
                                 
                                 async def add_user_assignment():
@@ -413,9 +546,9 @@ class ManageRLSViews:
                                         ui.notify("Invalid email", type="warning")
                                         return
                                     
-                                    if not filter_val:
-                                        ui.notify("Select filter value", type="warning")
-                                        return
+                                    # If "No filter" selected, use empty string
+                                    if filter_val == '(No filter - All data)':
+                                        filter_val = ''
                                     
                                     success = await run.io_bound(
                                         self.add_user_to_policy,
@@ -433,23 +566,37 @@ class ManageRLSViews:
                                         ui.notify("Failed to add user", type="negative")
                                 
                                 ui.button("ADD", icon="add", on_click=add_user_assignment).props('color=primary')
+                            
+                            # Info note
+                            with ui.card().classes('w-full bg-yellow-50 p-2 mt-2'):
+                                ui.label("ℹ️ Select 'No filter' to give user access to all data without restrictions.").classes('text-xs')
                     
                     # ========== FILTERS TAB ==========
                     with ui.tab_panel(tab_filters):
                         ui.label("Manage Filter Values").classes('font-bold mb-4')
                         
-                        # Current filter values
+                        # ✅ FIXED: Show filters from VIEW SQL
+                        with ui.card().classes('w-full bg-purple-50 p-4 mb-4'):
+                            ui.label(f"🔍 Active RLS Filters (from VIEW SQL): {len(sql_filters)}").classes('font-bold mb-2')
+                            if sql_filters:
+                                for f in sql_filters:
+                                    filter_text = f"{f['field']} {f['operator']} {f['value']}"
+                                    ui.label(f"  • {filter_text}").classes('text-sm font-mono')
+                            else:
+                                ui.label("No active filters in VIEW SQL").classes('text-gray-500 italic')
+                        
+                        # Current filter values from policies_filters
                         with ui.card().classes('w-full bg-blue-50 p-4 mb-4'):
-                            ui.label(f"📊 Current Filter Values: {len(filter_values)}").classes('font-bold mb-2')
+                            ui.label(f"📊 Filter Values (from policies_filters): {len(filter_values)}").classes('font-bold mb-2')
                             if filter_values:
                                 for fv in filter_values[:10]:
                                     ui.label(f"  • {fv}").classes('text-sm')
                                 if len(filter_values) > 10:
                                     ui.label(f"  ... and {len(filter_values) - 10} more").classes('text-sm italic')
                             else:
-                                ui.label("No filter values defined").classes('text-gray-500 italic')
+                                ui.label("No filter values in policies_filters table").classes('text-gray-500 italic')
                         
-                        # ✅ FIXED: Add filter with operator
+                        # ✅ Add filter with operator
                         ui.label("➕ Add New Filter Rule").classes('font-bold text-lg mb-2')
                         
                         with ui.card().classes('w-full bg-green-50 p-4'):
@@ -497,7 +644,9 @@ class ManageRLSViews:
                                     # Add to filter_values for user assignment
                                     if value not in filter_values:
                                         filter_values.append(value)
-                                        filter_value_select.options = filter_values
+                                        # Update the select options
+                                        new_options = ['(No filter - All data)'] + filter_values
+                                        filter_value_select.options = new_options
                                         filter_value_select.update()
                                     
                                     value_input.value = ''
@@ -521,6 +670,9 @@ class ManageRLSViews:
     def add_user_to_policy(self, email: str, filter_value: str, user_type: str) -> bool:
         """Add user/group to policy in policies_filters table"""
         try:
+            # Use empty string if filter_value is empty
+            filter_val = filter_value if filter_value else ''
+            
             if user_type == 'user':
                 query = f"""
                 INSERT INTO `{config.FILTER_TABLE}` 
@@ -528,7 +680,7 @@ class ManageRLSViews:
                 VALUES
                 ('users', '{self.current_policy_name}', '{self.project_id}', 
                  '{self.current_view["base_dataset"]}', '{self.current_view["base_table"]}', 
-                 'diretoria', '{filter_value}', '{email}', CURRENT_TIMESTAMP())
+                 'diretoria', '{filter_val}', '{email}', CURRENT_TIMESTAMP())
                 """
             else:  # group
                 query = f"""
@@ -537,7 +689,7 @@ class ManageRLSViews:
                 VALUES
                 ('group', '{self.current_policy_name}', '{self.project_id}', 
                  '{self.current_view["base_dataset"]}', '{self.current_view["base_table"]}', 
-                 'diretoria', '{filter_value}', '{email}', CURRENT_TIMESTAMP())
+                 'diretoria', '{filter_val}', '{email}', CURRENT_TIMESTAMP())
                 """
             
             query_job = client.query(query)
@@ -551,7 +703,7 @@ class ManageRLSViews:
                 details={
                     'email': email,
                     'type': user_type,
-                    'filter_value': filter_value,
+                    'filter_value': filter_val if filter_val else '(All data)',
                     'policy_name': self.current_policy_name
                 }
             )
@@ -575,6 +727,12 @@ class ManageRLSViews:
     def delete_user_assignment(self, username: str, filter_value: str) -> bool:
         """Delete user assignment from policies_filters table"""
         try:
+            # Handle empty filter_value
+            if filter_value == '':
+                filter_condition = "AND filter_value = ''"
+            else:
+                filter_condition = f"AND filter_value = '{filter_value}'"
+            
             query = f"""
             DELETE FROM `{config.FILTER_TABLE}`
             WHERE rls_type = 'users'
@@ -583,7 +741,7 @@ class ManageRLSViews:
               AND dataset_id = '{self.current_view["base_dataset"]}'
               AND table_id = '{self.current_view["base_table"]}'
               AND username = '{username}'
-              AND filter_value = '{filter_value}'
+              {filter_condition}
             """
             
             query_job = client.query(query)
@@ -606,6 +764,12 @@ class ManageRLSViews:
     def delete_group_assignment(self, group_email: str, filter_value: str) -> bool:
         """Delete group assignment from policies_filters table"""
         try:
+            # Handle empty filter_value
+            if filter_value == '':
+                filter_condition = "AND filter_value = ''"
+            else:
+                filter_condition = f"AND filter_value = '{filter_value}'"
+            
             query = f"""
             DELETE FROM `{config.FILTER_TABLE}`
             WHERE rls_type = 'group'
@@ -614,7 +778,7 @@ class ManageRLSViews:
               AND dataset_id = '{self.current_view["base_dataset"]}'
               AND table_id = '{self.current_view["base_table"]}'
               AND rls_group = '{group_email}'
-              AND filter_value = '{filter_value}'
+              {filter_condition}
             """
             
             query_job = client.query(query)
@@ -702,9 +866,6 @@ class ManageRLSViews:
         with theme.frame('RLS Manager - Complete'):
             with ui.card().classes('w-full'):
                 ui.label("🔐 RLS Manager - Complete").classes('text-h5 font-bold mb-4')
-                
-                # ✅ FIXED: Removed duplicate informational card
-                # Only one dataset selector now
                 
                 # Dataset selector
                 with ui.row().classes('w-full gap-4 mb-4 items-center'):
