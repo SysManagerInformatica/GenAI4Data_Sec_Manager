@@ -67,6 +67,7 @@ class DynamicColumnManage:
         self.column_protection = {}
         self.authorized_users = []
         self.rls_users = []
+        self.original_view_query = None  # ✅ Store original SQL to preserve RLS WHERE clause
         
         self.create_edit_dialog()
         
@@ -416,6 +417,9 @@ class DynamicColumnManage:
             view_ref = client.dataset(self.current_view_dataset).table(view_info['view_name'])
             view_obj = await run.io_bound(client.get_table, view_ref)
             
+            # ✅ CRITICAL: Store original view query to preserve RLS WHERE clause
+            self.original_view_query = view_obj.view_query
+            
             # Parse column protection
             self.column_protection = self.parse_protection_from_description(
                 view_obj.description,
@@ -692,6 +696,40 @@ class DynamicColumnManage:
             return f"'[REDACTED]' AS {col_name}"
         return col_name
     
+    def extract_where_clause(self, view_query):
+        """
+        ✅ CRITICAL: Extract WHERE clause from RLS view to preserve it when applying CLS
+        
+        Example RLS view query:
+        SELECT * FROM table WHERE user IN (
+          SELECT username FROM policies_filters 
+          WHERE policy_name = 'xxx' AND SESSION_USER() = username
+        )
+        
+        Returns: The entire WHERE clause including subqueries
+        """
+        if not view_query:
+            return None
+        
+        try:
+            # Find WHERE keyword (case insensitive)
+            where_match = re.search(r'\bWHERE\b', view_query, re.IGNORECASE)
+            if not where_match:
+                return None
+            
+            # Extract everything after WHERE
+            where_start = where_match.end()
+            where_clause = view_query[where_start:].strip()
+            
+            # Remove trailing semicolon if present
+            if where_clause.endswith(';'):
+                where_clause = where_clause[:-1].strip()
+            
+            return where_clause
+        except Exception as e:
+            print(f"[ERROR] extract_where_clause: {e}")
+            return None
+    
     def preview_sql(self):
         if not self.current_view:
             return
@@ -750,10 +788,23 @@ class DynamicColumnManage:
         if not select_columns:
             return None
         
+        # ✅ CRITICAL: Preserve RLS WHERE clause if view has RLS
+        where_clause = None
+        if self.rls_users and self.original_view_query:
+            where_clause = self.extract_where_clause(self.original_view_query)
+            print(f"[DEBUG] ✅ Preserving RLS WHERE clause: {where_clause[:100] if where_clause else 'None'}...")
+        
+        # Build SQL
         sql = f"""CREATE OR REPLACE VIEW `{self.project_id}.{self.current_view_dataset}.{view_name}` AS
 SELECT
   {(','+chr(10)+'  ').join(select_columns)}
-FROM `{self.project_id}.{self.source_dataset}.{source_table}`;"""
+FROM `{self.project_id}.{self.source_dataset}.{source_table}`"""
+        
+        # ✅ Add WHERE clause if RLS is present
+        if where_clause:
+            sql += f"\nWHERE {where_clause}"
+        
+        sql += ";"
         
         return sql
     
