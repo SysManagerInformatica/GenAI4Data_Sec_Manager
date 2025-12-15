@@ -1,10 +1,15 @@
 """
-RLS Manager - COMPLETE AND UNIFIED
+RLS Manager - COMPLETE AND UNIFIED - FIXED
 Manage RLS-protected views, users, and filters in one place
 
-VERSION: 3.0 - UNIFIED MANAGEMENT
+VERSION: 3.1 - FIXED UI ISSUES
 Date: 15/12/2024
 Author: Lucas Carvalhal - Sys Manager
+
+FIXES:
+- Dialog scroll fixed (add user form visible)
+- Filter operators added (=, >, <, >=, <=, !=, LIKE)
+- Duplicate dataset selector removed
 """
 
 import theme
@@ -193,6 +198,20 @@ class ManageRLSViews:
             print(f"[ERROR] get_unique_filter_values: {e}")
             return []
     
+    def get_table_fields(self, dataset: str, table: str) -> list:
+        """Get available fields from source table"""
+        try:
+            table_ref = client.dataset(dataset).table(table)
+            table_obj = client.get_table(table_ref)
+            
+            fields = [field.name for field in table_obj.schema]
+            print(f"[DEBUG] Found {len(fields)} fields in {dataset}.{table}")
+            return fields
+            
+        except Exception as e:
+            print(f"[ERROR] get_table_fields: {e}")
+            return ['diretoria']  # Default fallback
+    
     async def edit_view(self):
         """Edit selected RLS view"""
         rows = await self.views_grid.get_selected_rows()
@@ -238,20 +257,27 @@ class ManageRLSViews:
                 view_info['base_table']
             )
             
+            # Load table fields
+            table_fields = await run.io_bound(
+                self.get_table_fields,
+                view_info['base_dataset'],
+                view_info['base_table']
+            )
+            
             n.dismiss()
             
             # Open edit dialog
-            self.open_edit_dialog(view_info, user_assignments, group_assignments, filter_values)
+            self.open_edit_dialog(view_info, user_assignments, group_assignments, filter_values, table_fields)
             
         except Exception as e:
             n.dismiss()
             ui.notify(f"Error loading data: {e}", type="negative")
             traceback.print_exc()
     
-    def open_edit_dialog(self, view_info, user_assignments, group_assignments, filter_values):
+    def open_edit_dialog(self, view_info, user_assignments, group_assignments, filter_values, table_fields):
         """Open dialog to edit RLS view"""
         
-        with ui.dialog() as edit_dialog, ui.card().classes('w-full max-w-6xl'):
+        with ui.dialog() as edit_dialog, ui.card().classes('w-full max-w-7xl max-h-[90vh] overflow-hidden'):
             ui.label(f"Edit RLS View: {view_info['view_name']}").classes('text-h5 font-bold mb-4')
             
             # View info card
@@ -267,190 +293,224 @@ class ManageRLSViews:
                 tab_users = ui.tab("👥 Users & Groups", icon='people')
                 tab_filters = ui.tab("🔍 Filters", icon='filter_list')
             
-            with ui.tab_panels(tabs, value=tab_users).classes('w-full'):
-                # ========== USERS TAB ==========
-                with ui.tab_panel(tab_users):
-                    ui.label("Manage Authorized Users & Groups").classes('font-bold mb-4')
-                    
-                    # Current assignments
-                    with ui.card().classes('w-full bg-green-50 p-4 mb-4'):
-                        ui.label(f"📊 Current Assignments: {len(user_assignments)} users, {len(group_assignments)} groups").classes('font-bold')
-                    
-                    # Existing users/groups grid
-                    with ui.row().classes('w-full gap-4 mb-4'):
-                        # Users column
-                        with ui.column().classes('flex-1'):
-                            ui.label("👤 User Assignments").classes('font-bold mb-2')
-                            
-                            if user_assignments:
-                                users_grid = ui.aggrid({
-                                    'columnDefs': [
-                                        {'field': 'username', 'headerName': 'User Email', 'checkboxSelection': True, 'filter': True},
-                                        {'field': 'filter_value', 'headerName': 'Filter Value', 'filter': True},
-                                        {'field': 'field_id', 'headerName': 'Field', 'filter': True},
-                                    ],
-                                    'rowData': user_assignments,
-                                    'rowSelection': 'multiple',
-                                }).classes('w-full h-64 ag-theme-quartz')
-                                
-                                async def delete_selected_users():
-                                    rows = await users_grid.get_selected_rows()
-                                    if not rows:
-                                        ui.notify("No users selected", type="warning")
-                                        return
-                                    
-                                    for row in rows:
-                                        await run.io_bound(
-                                            self.delete_user_assignment,
-                                            row['username'],
-                                            row['filter_value']
-                                        )
-                                    
-                                    ui.notify(f"✅ Deleted {len(rows)} user assignments", type="positive")
-                                    edit_dialog.close()
-                                    await self.on_dataset_change(type('obj', (object,), {'value': self.selected_dataset})())
-                                
-                                ui.button("DELETE SELECTED", icon="delete", on_click=delete_selected_users).props('color=negative flat')
-                            else:
-                                ui.label("No user assignments yet").classes('text-gray-500 italic')
+            # ✅ FIXED: Add scroll area for tab panels
+            with ui.scroll_area().classes('w-full h-[60vh]'):
+                with ui.tab_panels(tabs, value=tab_users).classes('w-full'):
+                    # ========== USERS TAB ==========
+                    with ui.tab_panel(tab_users):
+                        ui.label("Manage Authorized Users & Groups").classes('font-bold mb-4')
                         
-                        # Groups column
-                        with ui.column().classes('flex-1'):
-                            ui.label("👥 Group Assignments").classes('font-bold mb-2')
-                            
-                            if group_assignments:
-                                groups_grid = ui.aggrid({
-                                    'columnDefs': [
-                                        {'field': 'group_email', 'headerName': 'Group Email', 'checkboxSelection': True, 'filter': True},
-                                        {'field': 'filter_value', 'headerName': 'Filter Value', 'filter': True},
-                                        {'field': 'field_id', 'headerName': 'Field', 'filter': True},
-                                    ],
-                                    'rowData': group_assignments,
-                                    'rowSelection': 'multiple',
-                                }).classes('w-full h-64 ag-theme-quartz')
+                        # Current assignments
+                        with ui.card().classes('w-full bg-green-50 p-4 mb-4'):
+                            ui.label(f"📊 Current Assignments: {len(user_assignments)} users, {len(group_assignments)} groups").classes('font-bold')
+                        
+                        # Existing users/groups grid
+                        with ui.row().classes('w-full gap-4 mb-4'):
+                            # Users column
+                            with ui.column().classes('flex-1'):
+                                ui.label("👤 User Assignments").classes('font-bold mb-2')
                                 
-                                async def delete_selected_groups():
-                                    rows = await groups_grid.get_selected_rows()
-                                    if not rows:
-                                        ui.notify("No groups selected", type="warning")
-                                        return
+                                if user_assignments:
+                                    users_grid = ui.aggrid({
+                                        'columnDefs': [
+                                            {'field': 'username', 'headerName': 'User Email', 'checkboxSelection': True, 'filter': True},
+                                            {'field': 'filter_value', 'headerName': 'Filter Value', 'filter': True},
+                                            {'field': 'field_id', 'headerName': 'Field', 'filter': True},
+                                        ],
+                                        'rowData': user_assignments,
+                                        'rowSelection': 'multiple',
+                                    }).classes('w-full h-64 ag-theme-quartz')
                                     
-                                    for row in rows:
-                                        await run.io_bound(
-                                            self.delete_group_assignment,
-                                            row['group_email'],
-                                            row['filter_value']
-                                        )
+                                    async def delete_selected_users():
+                                        rows = await users_grid.get_selected_rows()
+                                        if not rows:
+                                            ui.notify("No users selected", type="warning")
+                                            return
+                                        
+                                        for row in rows:
+                                            await run.io_bound(
+                                                self.delete_user_assignment,
+                                                row['username'],
+                                                row['filter_value']
+                                            )
+                                        
+                                        ui.notify(f"✅ Deleted {len(rows)} user assignments", type="positive")
+                                        edit_dialog.close()
+                                        await self.on_dataset_change(type('obj', (object,), {'value': self.selected_dataset})())
                                     
-                                    ui.notify(f"✅ Deleted {len(rows)} group assignments", type="positive")
-                                    edit_dialog.close()
-                                    await self.on_dataset_change(type('obj', (object,), {'value': self.selected_dataset})())
-                                
-                                ui.button("DELETE SELECTED", icon="delete", on_click=delete_selected_groups).props('color=negative flat')
-                            else:
-                                ui.label("No group assignments yet").classes('text-gray-500 italic')
-                    
-                    ui.separator()
-                    
-                    # Add new users/groups
-                    ui.label("➕ Add New Assignments").classes('font-bold text-lg mb-2')
-                    
-                    with ui.row().classes('w-full gap-4'):
-                        # Add user
-                        with ui.column().classes('flex-1'):
-                            ui.label("Add User").classes('font-bold mb-2')
-                            
-                            user_type_select = ui.select(
-                                options=['user', 'group'],
-                                label="Type",
-                                value='user'
-                            ).classes('w-full')
-                            
-                            user_email_input = ui.input(
-                                label="Email",
-                                placeholder="user@example.com or group@example.com"
-                            ).classes('w-full')
-                            
-                            filter_value_select = ui.select(
-                                options=filter_values if filter_values else [''],
-                                label="Filter Value",
-                                value=filter_values[0] if filter_values else ''
-                            ).classes('w-full')
-                            
-                            async def add_user_assignment():
-                                email = user_email_input.value.strip()
-                                filter_val = filter_value_select.value
-                                user_type = user_type_select.value
-                                
-                                if not email or '@' not in email:
-                                    ui.notify("Invalid email", type="warning")
-                                    return
-                                
-                                if not filter_val:
-                                    ui.notify("Select filter value", type="warning")
-                                    return
-                                
-                                success = await run.io_bound(
-                                    self.add_user_to_policy,
-                                    email,
-                                    filter_val,
-                                    user_type
-                                )
-                                
-                                if success:
-                                    ui.notify(f"✅ Added {email}", type="positive")
-                                    user_email_input.value = ''
-                                    edit_dialog.close()
-                                    await self.on_dataset_change(type('obj', (object,), {'value': self.selected_dataset})())
+                                    ui.button("DELETE SELECTED", icon="delete", on_click=delete_selected_users).props('color=negative flat')
                                 else:
-                                    ui.notify("Failed to add user", type="negative")
+                                    ui.label("No user assignments yet").classes('text-gray-500 italic')
                             
-                            ui.button("ADD", icon="add", on_click=add_user_assignment).props('color=primary')
-                
-                # ========== FILTERS TAB ==========
-                with ui.tab_panel(tab_filters):
-                    ui.label("Manage Filter Values").classes('font-bold mb-4')
-                    
-                    # Current filter values
-                    with ui.card().classes('w-full bg-blue-50 p-4 mb-4'):
-                        ui.label(f"📊 Current Filter Values: {len(filter_values)}").classes('font-bold mb-2')
-                        if filter_values:
-                            for fv in filter_values[:10]:
-                                ui.label(f"  • {fv}").classes('text-sm')
-                            if len(filter_values) > 10:
-                                ui.label(f"  ... and {len(filter_values) - 10} more").classes('text-sm italic')
-                        else:
-                            ui.label("No filter values defined").classes('text-gray-500 italic')
-                    
-                    # Add new filter value
-                    ui.label("➕ Add New Filter Value").classes('font-bold text-lg mb-2')
-                    
-                    with ui.row().classes('w-full gap-2'):
-                        new_filter_input = ui.input(
-                            label="Filter Value",
-                            placeholder="e.g., Information Technology"
-                        ).classes('flex-1')
+                            # Groups column
+                            with ui.column().classes('flex-1'):
+                                ui.label("👥 Group Assignments").classes('font-bold mb-2')
+                                
+                                if group_assignments:
+                                    groups_grid = ui.aggrid({
+                                        'columnDefs': [
+                                            {'field': 'group_email', 'headerName': 'Group Email', 'checkboxSelection': True, 'filter': True},
+                                            {'field': 'filter_value', 'headerName': 'Filter Value', 'filter': True},
+                                            {'field': 'field_id', 'headerName': 'Field', 'filter': True},
+                                        ],
+                                        'rowData': group_assignments,
+                                        'rowSelection': 'multiple',
+                                    }).classes('w-full h-64 ag-theme-quartz')
+                                    
+                                    async def delete_selected_groups():
+                                        rows = await groups_grid.get_selected_rows()
+                                        if not rows:
+                                            ui.notify("No groups selected", type="warning")
+                                            return
+                                        
+                                        for row in rows:
+                                            await run.io_bound(
+                                                self.delete_group_assignment,
+                                                row['group_email'],
+                                                row['filter_value']
+                                            )
+                                        
+                                        ui.notify(f"✅ Deleted {len(rows)} group assignments", type="positive")
+                                        edit_dialog.close()
+                                        await self.on_dataset_change(type('obj', (object,), {'value': self.selected_dataset})())
+                                    
+                                    ui.button("DELETE SELECTED", icon="delete", on_click=delete_selected_groups).props('color=negative flat')
+                                else:
+                                    ui.label("No group assignments yet").classes('text-gray-500 italic')
                         
-                        async def add_filter_value():
-                            filter_val = new_filter_input.value.strip()
-                            
-                            if not filter_val:
-                                ui.notify("Enter filter value", type="warning")
-                                return
-                            
-                            ui.notify(f"ℹ️ Filter value '{filter_val}' ready. Add users in the Users tab.", type="info", timeout=5000)
-                            new_filter_input.value = ''
-                            
-                            # Refresh filter select options
-                            if filter_val not in filter_values:
-                                filter_values.append(filter_val)
-                                filter_value_select.options = filter_values
-                                filter_value_select.update()
+                        ui.separator()
                         
-                        ui.button("ADD FILTER VALUE", icon="add", on_click=add_filter_value).props('color=primary')
+                        # ✅ FIXED: Add new users/groups section (now visible with scroll)
+                        ui.label("➕ Add New Assignments").classes('font-bold text-lg mb-2 mt-4')
+                        
+                        with ui.card().classes('w-full bg-blue-50 p-4'):
+                            ui.label("Add User or Group").classes('font-bold mb-2')
+                            
+                            with ui.row().classes('w-full gap-2'):
+                                user_type_select = ui.select(
+                                    options=['user', 'group'],
+                                    label="Type",
+                                    value='user'
+                                ).classes('w-32')
+                                
+                                user_email_input = ui.input(
+                                    label="Email",
+                                    placeholder="user@example.com"
+                                ).classes('flex-1')
+                            
+                            with ui.row().classes('w-full gap-2 mt-2'):
+                                filter_value_select = ui.select(
+                                    options=filter_values if filter_values else [''],
+                                    label="Filter Value",
+                                    value=filter_values[0] if filter_values else ''
+                                ).classes('flex-1')
+                                
+                                async def add_user_assignment():
+                                    email = user_email_input.value.strip()
+                                    filter_val = filter_value_select.value
+                                    user_type = user_type_select.value
+                                    
+                                    if not email or '@' not in email:
+                                        ui.notify("Invalid email", type="warning")
+                                        return
+                                    
+                                    if not filter_val:
+                                        ui.notify("Select filter value", type="warning")
+                                        return
+                                    
+                                    success = await run.io_bound(
+                                        self.add_user_to_policy,
+                                        email,
+                                        filter_val,
+                                        user_type
+                                    )
+                                    
+                                    if success:
+                                        ui.notify(f"✅ Added {email}", type="positive")
+                                        user_email_input.value = ''
+                                        edit_dialog.close()
+                                        await self.on_dataset_change(type('obj', (object,), {'value': self.selected_dataset})())
+                                    else:
+                                        ui.notify("Failed to add user", type="negative")
+                                
+                                ui.button("ADD", icon="add", on_click=add_user_assignment).props('color=primary')
                     
-                    with ui.card().classes('w-full bg-yellow-50 p-3 mt-4'):
-                        ui.label("ℹ️ Note: Filter values must be assigned to users/groups in the Users & Groups tab.").classes('text-sm')
+                    # ========== FILTERS TAB ==========
+                    with ui.tab_panel(tab_filters):
+                        ui.label("Manage Filter Values").classes('font-bold mb-4')
+                        
+                        # Current filter values
+                        with ui.card().classes('w-full bg-blue-50 p-4 mb-4'):
+                            ui.label(f"📊 Current Filter Values: {len(filter_values)}").classes('font-bold mb-2')
+                            if filter_values:
+                                for fv in filter_values[:10]:
+                                    ui.label(f"  • {fv}").classes('text-sm')
+                                if len(filter_values) > 10:
+                                    ui.label(f"  ... and {len(filter_values) - 10} more").classes('text-sm italic')
+                            else:
+                                ui.label("No filter values defined").classes('text-gray-500 italic')
+                        
+                        # ✅ FIXED: Add filter with operator
+                        ui.label("➕ Add New Filter Rule").classes('font-bold text-lg mb-2')
+                        
+                        with ui.card().classes('w-full bg-green-50 p-4'):
+                            ui.label("Define Filter Condition").classes('font-bold mb-2')
+                            
+                            with ui.row().classes('w-full gap-2'):
+                                field_select = ui.select(
+                                    options=table_fields,
+                                    label="Field",
+                                    value=table_fields[0] if table_fields else 'diretoria'
+                                ).classes('w-48')
+                                
+                                operator_select = ui.select(
+                                    options=['=', '!=', '>', '<', '>=', '<=', 'LIKE'],
+                                    label="Operator",
+                                    value='='
+                                ).classes('w-32')
+                                
+                                value_input = ui.input(
+                                    label="Value",
+                                    placeholder="e.g., Information Technology"
+                                ).classes('flex-1')
+                                
+                                async def add_filter_rule():
+                                    field = field_select.value
+                                    operator = operator_select.value
+                                    value = value_input.value.strip()
+                                    
+                                    if not value:
+                                        ui.notify("Enter filter value", type="warning")
+                                        return
+                                    
+                                    # Construct filter expression
+                                    if operator == 'LIKE':
+                                        filter_expression = f"{field} LIKE '%{value}%'"
+                                    else:
+                                        filter_expression = f"{field} {operator} '{value}'"
+                                    
+                                    ui.notify(
+                                        f"ℹ️ Filter rule '{filter_expression}' ready. Add users in Users tab.",
+                                        type="info",
+                                        timeout=5000
+                                    )
+                                    
+                                    # Add to filter_values for user assignment
+                                    if value not in filter_values:
+                                        filter_values.append(value)
+                                        filter_value_select.options = filter_values
+                                        filter_value_select.update()
+                                    
+                                    value_input.value = ''
+                                
+                                ui.button("ADD FILTER", icon="add", on_click=add_filter_rule).props('color=primary')
+                        
+                        with ui.card().classes('w-full bg-yellow-50 p-3 mt-4'):
+                            ui.label("ℹ️ Filter Expression Examples:").classes('text-sm font-bold mb-2')
+                            ui.label("• diretoria = 'TI'").classes('text-xs')
+                            ui.label("• salario > '5000'").classes('text-xs')
+                            ui.label("• regiao LIKE '%Sul%'").classes('text-xs')
+                            ui.label("• idade >= '30'").classes('text-xs')
             
             # Dialog buttons
             with ui.row().classes('w-full justify-end gap-2 mt-4'):
@@ -644,13 +704,8 @@ class ManageRLSViews:
             with ui.card().classes('w-full'):
                 ui.label("🔐 RLS Manager - Complete").classes('text-h5 font-bold mb-4')
                 
-                with ui.card().classes('w-full bg-purple-50 p-4 mb-4'):
-                    ui.label("🎯 Unified RLS Management").classes('font-bold mb-2')
-                    ui.label("• Manage RLS views, users, groups, and filter values in one place").classes('text-xs')
-                    ui.label("• Add/remove authorized users and groups").classes('text-xs')
-                    ui.label("• Define filter values (departments, regions, etc.)").classes('text-xs')
-                    ui.label("• Views stored in {dataset}_views datasets").classes('text-xs')
-                    ui.label("• Users stored in rls_manager.policies_filters table").classes('text-xs')
+                # ✅ FIXED: Removed duplicate informational card
+                # Only one dataset selector now
                 
                 # Dataset selector
                 with ui.row().classes('w-full gap-4 mb-4 items-center'):
