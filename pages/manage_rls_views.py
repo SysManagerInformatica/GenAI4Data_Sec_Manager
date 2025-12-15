@@ -21,7 +21,7 @@ config = Config()
 client = bigquery.Client(project=config.PROJECT_ID)
 
 
-class ManageRLSViewsComplete:
+class ManageRLSViews:
     def __init__(self):
         self.project_id = config.PROJECT_ID
         self.audit_service = AuditService(config.PROJECT_ID)
@@ -686,4 +686,5 @@ class ManageRLSViewsComplete:
                     ui.button("CREATE NEW RLS VIEW", icon="add_circle", on_click=lambda: ui.navigate.to('/rls/create-view')).props('color=positive outline')
     
     def run(self):
-        pass
+        """Entry point called by allpages.py"""
+        self.render_ui()
