@@ -51,7 +51,6 @@ class ManageRLSViews:
         self.filter_container = None
         
         self.headers()
-        self.render_ui()
     
     def headers(self):
         ui.page_title("RLS Manager - Complete")
