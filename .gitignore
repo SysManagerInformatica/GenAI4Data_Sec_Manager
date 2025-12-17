@@ -1,3 +1,18 @@
+# ================================================================================
+#   GenAI4Data Security Manager
+#   Module: Git Ignore Configuration
+# ================================================================================
+#   Version:      2.0.0
+#   Release Date: 2024-12-15
+#   Author:       Lucas Carvalhal - Sys Manager
+#   Company:      Sys Manager Informática
+#   
+#   Description:
+#   Git ignore rules for GenAI4Data Security Manager including Python artifacts,
+#   Google Cloud credentials, environment files, IDE configurations, and
+#   sensitive security data.
+# ================================================================================
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
