@@ -1,8 +1,20 @@
 """
-Home page content - Enterprise Data Security Platform
-VERSION: 2.1 - Multi-Language Support
-Date: 05/12/2024
+================================================================================
+  GenAI4Data Security Manager
+  Module: Home Page - Dashboard & Welcome Screen
+================================================================================
+  Version:      2.1.0
+  Release Date: 2024-12-05
+  Author:       Lucas Carvalhal - Sys Manager
+  Company:      Sys Manager Informática
+  
+  Description:
+  Main dashboard and welcome screen with interactive feature cards for RLS,
+  CLS, Data Masking, IAM, and Audit. Includes multi-language support and
+  HUD/Sci-Fi themed UI.
+================================================================================
 """
+
 from nicegui import ui, app
 from theme import get_text  # <- NOVO: importar função de tradução
 
