@@ -1,3 +1,20 @@
+"""
+================================================================================
+  GenAI4Data Security Manager
+  Module: Main Application Entry Point
+================================================================================
+  Version:      2.1.0
+  Release Date: 2024-12-15
+  Author:       Lucas Carvalhal - Sys Manager
+  Company:      Sys Manager Informática
+  
+  Description:
+  Main application entry point and server initialization. Handles NiceGUI
+  server configuration, authentication routing, multi-language system,
+  static file serving, and page registration.
+================================================================================
+"""
+
 import os
 import sys
 from nicegui import ui, app
