@@ -1,3 +1,20 @@
+"""
+================================================================================
+  GenAI4Data Security Manager
+  Module: Python Dependencies & Requirements
+================================================================================
+  Version:      2.0.0
+  Release Date: 2024-12-15
+  Author:       Lucas Carvalhal - Sys Manager
+  Company:      Sys Manager Informática
+  
+  Description:
+  Python package dependencies for GenAI4Data Security Manager including
+  Google Cloud SDK, BigQuery client, NiceGUI framework, and authentication
+  libraries.
+================================================================================
+"""
+
 wonderwords==2.2.0
 google-cloud-core==2.4.1
 nicegui==1.4.29
