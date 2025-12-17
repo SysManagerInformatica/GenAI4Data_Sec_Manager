@@ -1,6 +1,19 @@
+# ================================================================================
+#   GenAI4Data Security Manager
+#   Module: Google Cloud Ignore Configuration
+# ================================================================================
+#   Version:      2.0.0
+#   Release Date: 2024-12-15
+#   Author:       Lucas Carvalhal - Sys Manager
+#   Company:      Sys Manager Informática
+#   
+#   Description:
+#   Google Cloud deployment ignore rules specifying files and directories
+#   excluded from Cloud Run deployments to optimize build size and security.
+# ================================================================================
+
 # This file specifies files that are *not* uploaded to Google Cloud
 # using gcloud.
-
 .gcloudignore
 .git
 .gitignore
