@@ -1,11 +1,17 @@
-# -*- coding: utf-8 -*-
 """
-Sistema de Traduções Multi-Idiomas
-Suporta: Português (pt), English (en), Español (es)
-
-VERSÃO: 2.2 - Completa com Manage Taxonomies
-Data: 06/12/2024
-Autor: Lucas Carvalhal - Sys Manager
+================================================================================
+  GenAI4Data Security Manager
+  Module: Multi-Language Translation System
+================================================================================
+  Version:      2.2.0
+  Release Date: 2024-12-15
+  Author:       Lucas Carvalhal - Sys Manager
+  Company:      Sys Manager Informática
+  
+  Description:
+  Centralized translation management system supporting multiple languages
+  (Portuguese, English, Spanish) for UI labels, messages, and documentation.
+================================================================================
 """
 
 from typing import Dict, Any, Optional
