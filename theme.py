@@ -1,9 +1,20 @@
 """
-Theme template for consistent page layout - HUD/Sci-Fi Style
-VERSION: 2.1 - Multi-Language Support
-Date: 05/12/2024
-Author: Lucas Carvalhal - Sys Manager
+================================================================================
+  GenAI4Data Security Manager
+  Module: UI Theme & Navigation Framework
+================================================================================
+  Version:      2.1.0
+  Release Date: 2024-12-05
+  Author:       Lucas Carvalhal - Sys Manager
+  Company:      Sys Manager Informática
+  
+  Description:
+  HUD/Sci-Fi themed UI framework with multi-language support, providing
+  consistent page layout, navigation menu, and language selector across
+  all application pages.
+================================================================================
 """
+
 from nicegui import ui, app
 from contextlib import contextmanager
 from typing import Optional
