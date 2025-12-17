@@ -1,8 +1,19 @@
 """
-Navigation Menu with Multi-Language Support
-VERSION: 2.2 - RLS Views Integration
-Date: 14/12/2024
+================================================================================
+  GenAI4Data Security Manager
+  Module: Navigation Menu System
+================================================================================
+  Version:      2.2.0
+  Release Date: 2024-12-14
+  Author:       Lucas Carvalhal - Sys Manager
+  Company:      Sys Manager Informática
+  
+  Description:
+  Multi-language navigation menu with color-coded security sections (RLS,
+  CLS, IAM, Audit) and role-based access control integration.
+================================================================================
 """
+
 from nicegui import ui
 from services.auth_service import get_current_user
 from theme import get_text
