@@ -1,3 +1,20 @@
+"""
+================================================================================
+  GenAI4Data Security Manager
+  Module: Page Router & Registration System
+================================================================================
+  Version:      2.2.0
+  Release Date: 2024-12-14
+  Author:       Lucas Carvalhal - Sys Manager
+  Company:      Sys Manager Informática
+  
+  Description:
+  Central page routing and registration system for all application pages
+  including RLS, CLS, IAM, and Audit modules with fallback support for
+  missing page implementations.
+================================================================================
+"""
+
 from nicegui import ui
 
 # Tentar importar as páginas originais, criar placeholders se não existirem
