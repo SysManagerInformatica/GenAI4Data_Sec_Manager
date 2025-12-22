@@ -183,6 +183,25 @@ class RLSAssignUserstoPolicy:
         except Exception as e:
             print(f"Error getting fields: {e}")
             return []
+    
+    def get_distinct_field_values(self):
+        """Get distinct values from the filter field"""
+        if not self.selected_policy_field or not self.selected_policy_dataset or not self.selected_policy_table:
+            return []
+        
+        try:
+            query = f"""
+            SELECT DISTINCT CAST({self.selected_policy_field} AS STRING) as value
+            FROM `{self.project_id}.{self.selected_policy_dataset}.{self.selected_policy_table}`
+            WHERE {self.selected_policy_field} IS NOT NULL
+            ORDER BY value
+            LIMIT 100
+            """
+            results = client.query(query).result()
+            return [row.value for row in results]
+        except Exception as e:
+            print(f"Error getting distinct values: {e}")
+            return []
 
     def delete_assignment(self, identity, filter_value, rls_type):
         """Delete a single assignment"""
@@ -552,13 +571,9 @@ class RLSAssignUserstoPolicy:
                         with ui.row().classes('w-full gap-4 items-center mb-4'):
                             ui.label("Type:").classes('font-bold')
                             identity_type_select = ui.select(
-                                options=[
-                                    {'label': '👤 User', 'value': 'user'},
-                                    {'label': '👥 Group', 'value': 'group'},
-                                    {'label': '🤖 Service Account', 'value': 'service_account'}
-                                ],
-                                value='user'
-                            ).classes('flex-1').props('emit-value map-options')
+                                options=['👤 User', '👥 Group', '🤖 Service Account'],
+                                value='👤 User'
+                            ).classes('flex-1')
                         
                         # Email input
                         with ui.row().classes('w-full gap-4 items-center mb-4'):
@@ -571,20 +586,32 @@ class RLSAssignUserstoPolicy:
                         with ui.row().classes('w-full gap-4 items-center mb-4'):
                             ui.label("Filter:").classes('font-bold w-24')
                             
-                            # Get existing filter values
+                            # Get distinct values from field + existing filter values
+                            field_values = self.get_distinct_field_values()
                             stats = self.get_filter_value_stats()
-                            filter_options = ['(No filter - All data)'] + [s['filter_value'] for s in stats]
+                            used_values = [s['filter_value'] for s in stats]
+                            
+                            # Combine and remove duplicates
+                            all_values = sorted(set(field_values + used_values))
+                            filter_options = ['(No filter - All data)'] + all_values
                             
                             filter_value_select = ui.select(
                                 options=filter_options,
-                                value=filter_options[0]
+                                value=filter_options[0] if filter_options else '(No filter - All data)'
                             ).classes('flex-1')
                         
                         # Add button
                         async def add_new_assignment():
+                            # Convert display string to type
+                            type_map = {
+                                '👤 User': 'user',
+                                '👥 Group': 'group',
+                                '🤖 Service Account': 'service_account'
+                            }
+                            
                             success = await run.io_bound(
                                 self.add_assignment,
-                                identity_type_select.value,
+                                type_map.get(identity_type_select.value, 'user'),
                                 email_input.value,
                                 filter_value_select.value
                             )
