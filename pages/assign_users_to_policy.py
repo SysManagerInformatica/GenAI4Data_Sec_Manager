@@ -12,22 +12,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# "IMPORTANT: This application is a prototype and should be used for experimental purposes only.
-# It is not intended for production use. 
-# This software is provided 'as is' without warranty of any kind, express or implied, including but not limited to the warranties 
-# of merchantability, fitness for a particular purpose and noninfringement. 
-# In no event shall Google or the developers be liable for any claim, damages or other liability, whether in an action of contract, 
-# tort or otherwise, arising from, out of or in connection with the software or the use or other dealings in the software. 
-# Google is not responsible for the functionality, reliability, or security of this prototype. 
-# Use of this tool is at your own discretion and risk."
+"""
+================================================================================
+  GenAI4Data Security Manager
+  Module: RLS Policy Assignment - Unified Interface
+================================================================================
+  Version:      3.0.0
+  Release Date: 2024-12-22
+  Author:       Lucas Carvalhal - Sys Manager
+  Company:      Sys Manager Informática
+  
+  Description:
+  Unified interface for managing RLS policies with support for users, groups,
+  and service accounts. Includes view field editing and filter management.
+  
+  New Features (v3.0):
+  - Unified interface for Users/Groups/Service Accounts
+  - Edit view filter field dynamically
+  - Manage filter values with usage statistics
+  - Improved UX with tabs and real-time updates
+================================================================================
+"""
 
 import theme
-from theme import get_text  # <- NOVO
+from theme import get_text
 from config import Config
-from nicegui import ui
+from nicegui import ui, run
 from google.cloud import bigquery
 from google.api_core.exceptions import GoogleAPIError
 from services.audit_service import AuditService
+import json
+import re
 
 config = Config()
 client = bigquery.Client(project=config.PROJECT_ID)
@@ -36,526 +51,363 @@ class RLSAssignUserstoPolicy:
     def __init__(self):
         self.project_id = config.PROJECT_ID
         self.audit_service = AuditService(config.PROJECT_ID)
-        self.page_title = get_text('rls_assign_users_page_title')  # <- TRADUZIDO
+        self.page_title = "Assign to Policy - Unified"
         self.selected_policy_name = None
         self.selected_policy_dataset = None
         self.selected_policy_table = None
         self.selected_policy_field = None
         self.selected_policy = {}
-        self.user_list = []
-        self.filter_values = []
-        self.selected_users = set()
-        self.selected_filters = set()
-        self.user_container = None
-        self.filter_container = None
+        
+        # View-related attributes (for RLS views)
+        self.selected_view_name = None
+        self.selected_views_dataset = None
+        self.selected_base_dataset = None
+        self.selected_base_table = None
+        self.is_rls_view = False
+        
         self.existing_policies_grid = None
         self.headers()
         self.stepper_setup()
 
-    def load_existing_policies_from_db(self):
-        """Carrega TODAS as políticas existentes do banco de dados"""
-        if not self.selected_policy_dataset or not self.selected_policy_table:
-            return []
-        
-        query = f"""
-        SELECT 
-            username,
-            filter_value,
-            policy_name,
-            field_id,
-            CAST(created_at AS STRING) as created_at
-        FROM `{config.FILTER_TABLE}`
-        WHERE rls_type = 'users'
-          AND project_id = '{self.project_id}'
-          AND dataset_id = '{self.selected_policy_dataset}'
-          AND table_id = '{self.selected_policy_table}'
-        ORDER BY username, filter_value
-        """
-        
-        try:
-            query_job = client.query(query)
-            results = [dict(row) for row in query_job]
-            return results
-        except Exception as e:
-            ui.notify(get_text('msg_error_loading_policies', error=str(e)), type="negative")  # <- TRADUZIDO
-            return []
-
-    def delete_policy_from_db(self, username, filter_value):
-        """Deleta política do BigQuery"""
-        query = f"""
-        DELETE FROM `{config.FILTER_TABLE}`
-        WHERE rls_type = 'users'
-          AND project_id = '{self.project_id}'
-          AND dataset_id = '{self.selected_policy_dataset}'
-          AND table_id = '{self.selected_policy_table}'
-          AND username = '{username}'
-          AND filter_value = '{filter_value}'
-        """
-        
-        try:
-            query_job = client.query(query)
-            query_job.result()
-            
-            self.audit_service.log_action(
-                action='DELETE_USER_POLICY',
-                resource_type='USER_ASSIGNMENT',
-                resource_name=f"{username} → {filter_value}",
-                status='SUCCESS',
-                details={
-                    'username': username,
-                    'filter_value': filter_value,
-                    'dataset': self.selected_policy_dataset,
-                    'table': self.selected_policy_table
-                }
-            )
-            
-            ui.notify(get_text('msg_policy_deleted', username=username, filter_value=filter_value), type="positive")  # <- TRADUZIDO
-            self.refresh_existing_policies_grid()
-            
-        except Exception as e:
-            ui.notify(get_text('msg_error_deleting_policy', error=str(e)), type="negative")  # <- TRADUZIDO
-
-    def delete_rls_policy_from_bigquery(self, policy_name, dataset, table):
-        """Deleta a política RLS completa do BigQuery"""
-        try:
-            query_drop_policy = f"""
-            DROP ROW ACCESS POLICY `{policy_name}`
-            ON `{self.project_id}.{dataset}.{table}`;
-            """
-            client.query(query_drop_policy).result()
-            
-            query_delete_from_policy_table = f"""
-            DELETE FROM `{config.POLICY_TABLE}`
-            WHERE policy_name = '{policy_name}'
-              AND project_id = '{self.project_id}'
-              AND dataset_id = '{dataset}'
-              AND table_name = '{table}';
-            """
-            client.query(query_delete_from_policy_table).result()
-            
-            query_delete_filters = f"""
-            DELETE FROM `{config.FILTER_TABLE}`
-            WHERE policy_name = '{policy_name}'
-              AND project_id = '{self.project_id}'
-              AND dataset_id = '{dataset}'
-              AND table_id = '{table}';
-            """
-            client.query(query_delete_filters).result()
-            
-            self.audit_service.log_action(
-                action='DELETE_RLS_POLICY',
-                resource_type='RLS_POLICY',
-                resource_name=policy_name,
-                status='SUCCESS',
-                details={
-                    'policy_name': policy_name,
-                    'dataset': dataset,
-                    'table': table,
-                    'deleted_from': ['BigQuery', 'policies_table', 'policies_filters']
-                }
-            )
-            
-            return True
-            
-        except Exception as e:
-            self.audit_service.log_action(
-                action='DELETE_RLS_POLICY',
-                resource_type='RLS_POLICY',
-                resource_name=policy_name,
-                status='FAILED',
-                error_message=str(e),
-                details={
-                    'policy_name': policy_name,
-                    'dataset': dataset,
-                    'table': table
-                }
-            )
-            ui.notify(get_text('msg_error_deleting_policy_name', policy_name=policy_name, error=str(e)), type="negative")  # <- TRADUZIDO
-            return False
-
-    async def delete_selected_policies(self):
-        """Deleta políticas selecionadas no grid do Step 1"""
-        rows = await self.grid_step1.get_selected_rows()
-        if not rows:
-            ui.notify(get_text('msg_no_policies_selected_delete'), type="warning")  # <- TRADUZIDO
-            return
-        
-        policy_names = [row['Policy Name'] for row in rows]
-        
-        with ui.dialog() as confirm_dialog, ui.card():
-            ui.label(get_text('msg_delete_policies_confirm', count=len(policy_names))).classes('text-h6 mb-2')  # <- TRADUZIDO
-            with ui.column().classes('mb-4 max-h-64 overflow-auto'):
-                for name in policy_names[:10]:
-                    ui.label(f"• {name}").classes('text-sm')
-                if len(policy_names) > 10:
-                    ui.label(get_text('msg_and_more', count=len(policy_names) - 10)).classes('text-sm italic text-grey-7')  # <- TRADUZIDO
-            ui.label(get_text('msg_delete_warning_rls')).classes('text-negative font-bold mb-2')  # <- TRADUZIDO
-            ui.label(get_text('msg_action_cannot_undone')).classes('text-sm text-grey-7 mb-4')  # <- TRADUZIDO
-            with ui.row().classes('w-full justify-end gap-2'):
-                ui.button(get_text('btn_cancel'), on_click=confirm_dialog.close).props('flat')  # <- TRADUZIDO
-                ui.button(
-                    get_text('btn_delete_upper'),  # <- TRADUZIDO
-                    on_click=lambda: self.execute_policy_deletion(rows, confirm_dialog)
-                ).props('color=negative')
-        
-        confirm_dialog.open()
-
-    def execute_policy_deletion(self, rows, dialog):
-        """Executa a deleção das políticas"""
-        dialog.close()
-        
-        success_count = 0
-        fail_count = 0
-        
-        for row in rows:
-            policy_name = row['Policy Name']
-            dataset = row['Dataset ID']
-            table = row['Table Name']
-            
-            if self.delete_rls_policy_from_bigquery(policy_name, dataset, table):
-                success_count += 1
-            else:
-                fail_count += 1
-        
-        self.policy_list = self.get_policies()
-        self.grid_step1.options['rowData'] = self.policy_list
-        self.grid_step1.update()
-        
-        if fail_count == 0:
-            ui.notify(get_text('msg_deleted_success', count=success_count), type="positive")  # <- TRADUZIDO
-        else:
-            ui.notify(get_text('msg_deleted_partial', success=success_count, failed=fail_count), type="warning")  # <- TRADUZIDO
-
-    async def drop_all_from_selected_tables(self):
-        """Remove TODAS as políticas RLS das tabelas selecionadas (DROP ALL)"""
-        rows = await self.grid_step1.get_selected_rows()
-        if not rows:
-            ui.notify(get_text('msg_no_policies_selected'), type="warning")  # <- TRADUZIDO
-            return
-        
-        tables_map = {}
-        for policy in rows:
-            table_key = f"{policy['Dataset ID']}.{policy['Table Name']}"
-            if table_key not in tables_map:
-                tables_map[table_key] = {
-                    'dataset_id': policy['Dataset ID'],
-                    'table_name': policy['Table Name'],
-                    'policies': []
-                }
-            tables_map[table_key]['policies'].append(policy['Policy Name'])
-        
-        with ui.dialog() as confirm_dialog, ui.card().classes('w-full max-w-2xl'):
-            ui.label(get_text('msg_drop_all_title')).classes('text-h5 font-bold text-red-600 mb-4')  # <- TRADUZIDO
-            
-            with ui.card().classes('w-full bg-red-50 p-4 mb-4 border-2 border-red-500'):
-                ui.label(get_text('msg_critical_warning')).classes('text-red-700 font-bold mb-2')  # <- TRADUZIDO
-                ui.label(get_text('msg_drop_all_warning1')).classes('text-sm mb-2')  # <- TRADUZIDO
-                ui.label(get_text('msg_drop_all_warning2')).classes('text-sm font-bold text-red-600')  # <- TRADUZIDO
-            
-            ui.label(get_text('msg_affected_tables')).classes('font-bold mb-2')  # <- TRADUZIDO
-            
-            for table_key, table_info in tables_map.items():
-                with ui.card().classes('w-full bg-orange-50 p-3 mb-2'):
-                    ui.label(f"📋 {table_key}").classes('font-bold text-sm mb-1')
-                    ui.label(get_text('msg_policies_to_remove', count=len(table_info['policies']))).classes('text-xs text-grey-7')  # <- TRADUZIDO
-                    
-                    with ui.expansion(get_text('msg_show_policy_names'), icon='list').classes('w-full text-xs'):  # <- TRADUZIDO
-                        for policy_name in table_info['policies']:
-                            ui.label(f"  • {policy_name}").classes('text-xs')
-            
-            with ui.card().classes('w-full bg-yellow-50 p-3 mt-4'):
-                ui.label(get_text('msg_drop_all_alternative')).classes('text-xs')  # <- TRADUZIDO
-            
-            with ui.row().classes('w-full justify-end gap-2 mt-4'):
-                ui.button(get_text('btn_cancel_upper'), on_click=confirm_dialog.close).props('flat')  # <- TRADUZIDO
-                ui.button(
-                    get_text('btn_drop_all_policies'),  # <- TRADUZIDO
-                    icon='delete_forever',
-                    on_click=lambda: self.execute_drop_all(tables_map, confirm_dialog)
-                ).props('color=negative')
-        
-        confirm_dialog.open()
-
-    def execute_drop_all(self, tables_map, dialog):
-        """Executa DROP ALL ROW ACCESS POLICIES para cada tabela"""
-        total_policies = 0
-        success_tables = 0
-        failed_tables = 0
-        
-        for table_key, table_info in tables_map.items():
-            try:
-                dataset_id = table_info['dataset_id']
-                table_name = table_info['table_name']
-                policies_count = len(table_info['policies'])
-                
-                sql = f"""DROP ALL ROW ACCESS POLICIES ON `{self.project_id}.{dataset_id}.{table_name}`;"""
-                
-                query_job = client.query(sql)
-                query_job.result()
-                
-                query_delete_policies = f"""
-                DELETE FROM `{config.POLICY_TABLE}`
-                WHERE project_id = '{self.project_id}'
-                  AND dataset_id = '{dataset_id}'
-                  AND table_name = '{table_name}'
-                  AND policy_name IN ({','.join([f"'{p}'" for p in table_info['policies']])});
-                """
-                client.query(query_delete_policies).result()
-                
-                query_delete_filters = f"""
-                DELETE FROM `{config.FILTER_TABLE}`
-                WHERE project_id = '{self.project_id}'
-                  AND dataset_id = '{dataset_id}'
-                  AND table_id = '{table_name}'
-                  AND policy_name IN ({','.join([f"'{p}'" for p in table_info['policies']])});
-                """
-                client.query(query_delete_filters).result()
-                
-                self.audit_service.log_action(
-                    action='DROP_ALL_RLS_POLICIES',
-                    resource_type='TABLE',
-                    resource_name=f"{dataset_id}.{table_name}",
-                    status='SUCCESS',
-                    details={
-                        'policies_count': policies_count,
-                        'policies_removed': table_info['policies'],
-                        'warning': 'Table now accessible to all users with table permissions'
-                    }
-                )
-                
-                success_tables += 1
-                total_policies += policies_count
-                
-            except Exception as e:
-                self.audit_service.log_action(
-                    action='DROP_ALL_RLS_POLICIES',
-                    resource_type='TABLE',
-                    resource_name=f"{dataset_id}.{table_name}",
-                    status='FAILED',
-                    error_message=str(e)
-                )
-                
-                failed_tables += 1
-        
-        dialog.close()
-        
-        if success_tables > 0:
-            ui.notify(
-                get_text('msg_dropped_success', policies=total_policies, tables=success_tables),  # <- TRADUZIDO
-                type="positive",
-                timeout=5000
-            )
-        
-        if failed_tables > 0:
-            ui.notify(
-                get_text('msg_dropped_failed', tables=failed_tables),  # <- TRADUZIDO
-                type="negative",
-                timeout=5000
-            )
-        
-        self.policy_list = self.get_policies()
-        self.grid_step1.options['rowData'] = self.policy_list
-        self.grid_step1.update()
-
-    def refresh_existing_policies_grid(self):
-        """Atualiza o grid de políticas existentes"""
-        if self.existing_policies_grid:
-            existing_data = self.load_existing_policies_from_db()
-            self.existing_policies_grid.options['rowData'] = existing_data
-            self.existing_policies_grid.update()
-
-    def refresh_user_list(self):
-        """Atualiza a lista de usuários na UI com checkboxes"""
-        if self.user_container:
-            self.user_container.clear()
-            with self.user_container:
-                if not self.user_list:
-                    ui.label(get_text('msg_no_users_added')).classes('text-grey-5 italic')  # <- TRADUZIDO
-                else:
-                    for user_email in self.user_list:
-                        with ui.row().classes('w-full items-center justify-between p-2 border rounded hover:bg-grey-1'):
-                            ui.checkbox(
-                                text=user_email,
-                                value=user_email in self.selected_users,
-                                on_change=lambda e, u=user_email: self.toggle_user_selection(u, e.value)
-                            ).classes('flex-1')
-                            ui.button(
-                                icon='delete',
-                                on_click=lambda u=user_email: self.remove_user_from_list(u)
-                            ).props('flat dense color=negative').tooltip(get_text('tooltip_remove_from_list'))  # <- TRADUZIDO
-
-    def refresh_filter_list(self):
-        """Atualiza a lista de filtros na UI com checkboxes"""
-        if self.filter_container:
-            self.filter_container.clear()
-            with self.filter_container:
-                if not self.filter_values:
-                    ui.label(get_text('msg_no_filters_added')).classes('text-grey-5 italic')  # <- TRADUZIDO
-                else:
-                    for filter_value in self.filter_values:
-                        with ui.row().classes('w-full items-center justify-between p-2 border rounded hover:bg-grey-1'):
-                            ui.checkbox(
-                                text=filter_value,
-                                value=filter_value in self.selected_filters,
-                                on_change=lambda e, f=filter_value: self.toggle_filter_selection(f, e.value)
-                            ).classes('flex-1')
-                            ui.button(
-                                icon='delete',
-                                on_click=lambda f=filter_value: self.remove_filter_from_list(f)
-                            ).props('flat dense color=negative').tooltip(get_text('tooltip_remove_from_list'))  # <- TRADUZIDO
-
-    def toggle_user_selection(self, user_email, is_selected):
-        """Toggle seleção de usuário"""
-        if is_selected:
-            self.selected_users.add(user_email)
-        else:
-            self.selected_users.discard(user_email)
-
-    def toggle_filter_selection(self, filter_value, is_selected):
-        """Toggle seleção de filtro"""
-        if is_selected:
-            self.selected_filters.add(filter_value)
-        else:
-            self.selected_filters.discard(filter_value)
-
-    def remove_user_from_list(self, email):
-        """Remove usuário da lista (apenas UI)"""
-        if email in self.user_list:
-            self.user_list.remove(email)
-            self.selected_users.discard(email)
-            ui.notify(get_text('msg_user_removed', email=email), type="info")  # <- TRADUZIDO
-            self.refresh_user_list()
-
-    def remove_filter_from_list(self, filter_value):
-        """Remove filtro da lista (apenas UI)"""
-        if filter_value in self.filter_values:
-            self.filter_values.remove(filter_value)
-            self.selected_filters.discard(filter_value)
-            ui.notify(get_text('msg_filter_removed', filter_value=filter_value), type="info")  # <- TRADUZIDO
-            self.refresh_filter_list()
-
     def headers(self):
         ui.page_title(self.page_title)
-        ui.label(get_text('rls_assign_users_subtitle')).classes('text-primary text-center text-bold')  # <- TRADUZIDO
+        ui.label("Manage RLS Policy Assignments").classes('text-primary text-center text-bold')
 
     def stepper_setup(self):
         self.stepper = ui.stepper().props("vertical").classes("w-full")
-        self.step1_title = get_text('rls_assign_users_step1_title')  # <- TRADUZIDO
-        self.step2_title = get_text('rls_assign_users_step2_title')  # <- TRADUZIDO
+        self.step1_title = "Step 1: Select Policy"
+        self.step2_title = "Step 2: Manage Assignments"
 
         with self.stepper:
             self.step1()
             self.step2_with_tabs()
 
     def get_policies(self):
-        query_get_policies = f"""
-            SELECT
-              `policy_name` as `Policy Name`,
-              `project_id` as `Project ID`,
-              `dataset_id` as `Dataset ID`,
-              `table_name` as `Table Name`,
-              `field_id` as `Field ID`
-            FROM
-              `{config.POLICY_TABLE}` 
-            WHERE
-              `policy_type` = 'users';
+        """Load all RLS policies (both traditional and view-based)"""
+        query = f"""
+        SELECT
+          policy_name as `Policy Name`,
+          project_id as `Project ID`,
+          dataset_id as `Dataset ID`,
+          table_name as `Table Name`,
+          field_id as `Field ID`
+        FROM `{config.POLICY_TABLE}` 
+        WHERE policy_type = 'users'
+        ORDER BY policy_name
         """
         try:
-            query_job = client.query(query_get_policies)
+            query_job = client.query(query)
             results = [dict(row) for row in query_job]
             return results
-        except GoogleAPIError as e:
-            ui.notify(get_text('msg_error_fetch_policies', error=str(e)), type="negative")  # <- TRADUZIDO
-            return []
         except Exception as e:
-            ui.notify(get_text('msg_error_unexpected_fetch_policies', error=str(e)), type="negative")  # <- TRADUZIDO
+            ui.notify(f"Error loading policies: {e}", type="negative")
             return []
 
-    def run_insert_users_and_values(self):
-        """Insere apenas os usuários e filtros SELECIONADOS"""
-        if not self.selected_users:
-            ui.notify(get_text('msg_select_at_least_one_user'), type="warning")  # <- TRADUZIDO
-            return
-
-        if not self.selected_filters:
-            ui.notify(get_text('msg_select_at_least_one_filter'), type="warning")  # <- TRADUZIDO
-            return
-
+    def load_existing_assignments(self):
+        """Load ALL assignments (users, groups, service accounts)"""
+        if not self.selected_policy_dataset or not self.selected_policy_table:
+            return []
+        
+        query = f"""
+        SELECT 
+            rls_type,
+            COALESCE(username, rls_group, '') as identity,
+            filter_value,
+            field_id,
+            CAST(created_at AS STRING) as created_at
+        FROM `{config.FILTER_TABLE}`
+        WHERE project_id = '{self.project_id}'
+          AND dataset_id = '{self.selected_policy_dataset}'
+          AND table_id = '{self.selected_policy_table}'
+        ORDER BY rls_type, identity, filter_value
+        """
+        
         try:
-            insert_statements = []
-            for user in self.selected_users:
-                for filter_value in self.selected_filters:
-                    insert_statements.append(f"""
-                        INSERT INTO `{config.FILTER_TABLE}` 
-                        (rls_type, policy_name, project_id, dataset_id, table_id, field_id, filter_value, username)
-                        VALUES
-                        ('users', '{self.selected_policy_name}', '{self.project_id}', '{self.selected_policy_dataset}', '{self.selected_policy_table}', '{self.selected_policy_field}', '{filter_value}', '{user}')
-                    """)
+            query_job = client.query(query)
+            results = []
+            for row in query_job:
+                # Determine type label
+                if row.rls_type == 'users':
+                    type_icon = '👤 User'
+                elif row.rls_type == 'group':
+                    type_icon = '👥 Group'
+                else:
+                    type_icon = '🤖 SA'
+                
+                results.append({
+                    'type': type_icon,
+                    'rls_type': row.rls_type,
+                    'identity': row.identity,
+                    'filter_value': row.filter_value if row.filter_value else '(All data)',
+                    'field_id': row.field_id,
+                    'created_at': row.created_at
+                })
+            return results
+        except Exception as e:
+            ui.notify(f"Error loading assignments: {e}", type="negative")
+            return []
 
-            for insert_statement in insert_statements:
-                query_job = client.query(insert_statement)
-                query_job.result()
+    def get_filter_value_stats(self):
+        """Get statistics about filter value usage"""
+        if not self.selected_policy_dataset or not self.selected_policy_table:
+            return []
+        
+        query = f"""
+        SELECT 
+            filter_value,
+            COUNT(DISTINCT COALESCE(username, rls_group)) as user_count,
+            COUNT(*) as total_assignments
+        FROM `{config.FILTER_TABLE}`
+        WHERE project_id = '{self.project_id}'
+          AND dataset_id = '{self.selected_policy_dataset}'
+          AND table_id = '{self.selected_policy_table}'
+          AND filter_value IS NOT NULL
+          AND filter_value != ''
+        GROUP BY filter_value
+        ORDER BY user_count DESC, filter_value
+        """
+        
+        try:
+            query_job = client.query(query)
+            return [dict(row) for row in query_job]
+        except Exception as e:
+            print(f"Error getting filter stats: {e}")
+            return []
 
-            for user in self.selected_users:
-                self.audit_service.log_action(
-                    action='ASSIGN_USER_TO_POLICY',
-                    resource_type='USER_ASSIGNMENT',
-                    resource_name=f"{user} → {self.selected_policy_name}",
-                    status='SUCCESS',
-                    details={
-                        'user_email': user,
-                        'policy_name': self.selected_policy_name,
-                        'dataset': self.selected_policy_dataset,
-                        'table': self.selected_policy_table,
-                        'field': self.selected_policy_field,
-                        'filter_values': list(self.selected_filters),
-                        'filter_count': len(self.selected_filters)
-                    }
-                )
+    def get_table_fields(self):
+        """Get available fields from the source table"""
+        try:
+            table_ref = client.dataset(self.selected_policy_dataset).table(self.selected_policy_table)
+            table = client.get_table(table_ref)
+            return [field.name for field in table.schema]
+        except Exception as e:
+            print(f"Error getting fields: {e}")
+            return []
 
-            ui.notify(get_text('msg_inserted_success', users=len(self.selected_users), filters=len(self.selected_filters)), type="positive")  # <- TRADUZIDO
+    def delete_assignment(self, identity, filter_value, rls_type):
+        """Delete a single assignment"""
+        try:
+            # Handle empty filter_value
+            filter_condition = "AND filter_value = ''" if not filter_value or filter_value == '(All data)' else f"AND filter_value = '{filter_value}'"
             
-            self.selected_users.clear()
-            self.selected_filters.clear()
+            # Determine column to filter by
+            identity_column = 'username' if rls_type == 'users' else 'rls_group'
             
-            self.refresh_existing_policies_grid()
-            self.refresh_user_list()
-            self.refresh_filter_list()
-
-        except GoogleAPIError as error:
+            query = f"""
+            DELETE FROM `{config.FILTER_TABLE}`
+            WHERE rls_type = '{rls_type}'
+              AND project_id = '{self.project_id}'
+              AND dataset_id = '{self.selected_policy_dataset}'
+              AND table_id = '{self.selected_policy_table}'
+              AND {identity_column} = '{identity}'
+              {filter_condition}
+            """
+            
+            client.query(query).result()
+            
             self.audit_service.log_action(
-                action='ASSIGN_USER_TO_POLICY',
-                resource_type='USER_ASSIGNMENT',
-                resource_name=f"multiple_users → {self.selected_policy_name}",
-                status='FAILED',
-                error_message=str(error),
+                action='DELETE_ASSIGNMENT',
+                resource_type='RLS_ASSIGNMENT',
+                resource_name=f"{identity} → {filter_value}",
+                status='SUCCESS',
                 details={
-                    'user_count': len(self.selected_users),
-                    'policy_name': self.selected_policy_name,
-                    'dataset': self.selected_policy_dataset,
-                    'table': self.selected_policy_table
+                    'type': rls_type,
+                    'identity': identity,
+                    'filter_value': filter_value
                 }
             )
-            ui.notify(get_text('msg_error_inserting_data', error=str(error)), type="negative")  # <- TRADUZIDO
             
-        except Exception as error:
+            ui.notify(f"✅ Deleted: {identity}", type="positive")
+            self.refresh_assignments_grid()
+            
+        except Exception as e:
+            ui.notify(f"Error deleting assignment: {e}", type="negative")
+
+    def add_assignment(self, identity_type, email, filter_value):
+        """Add assignment (user, group, or SA)"""
+        try:
+            # Validate email
+            if not email or '@' not in email:
+                ui.notify("Invalid email/identity", type="warning")
+                return False
+            
+            # Handle empty filter (all data access)
+            if filter_value == '(No filter - All data)' or not filter_value:
+                filter_value = ''
+            
+            # Determine columns based on type
+            if identity_type == 'user':
+                rls_type = 'users'
+                identity_column = 'username'
+            elif identity_type == 'group':
+                rls_type = 'group'
+                identity_column = 'rls_group'
+            else:  # service account
+                rls_type = 'users'  # SAs are treated as users in the system
+                identity_column = 'username'
+            
+            # Insert query
+            query = f"""
+            INSERT INTO `{config.FILTER_TABLE}` 
+            (rls_type, policy_name, project_id, dataset_id, table_id, 
+             field_id, filter_value, {identity_column}, created_at)
+            VALUES
+            ('{rls_type}', '{self.selected_policy_name}', '{self.project_id}', 
+             '{self.selected_policy_dataset}', '{self.selected_policy_table}', 
+             '{self.selected_policy_field}', '{filter_value}', '{email}', CURRENT_TIMESTAMP())
+            """
+            
+            client.query(query).result()
+            
             self.audit_service.log_action(
-                action='ASSIGN_USER_TO_POLICY',
-                resource_type='USER_ASSIGNMENT',
-                resource_name=f"multiple_users → {self.selected_policy_name}",
-                status='FAILED',
-                error_message=str(error),
+                action='ADD_ASSIGNMENT',
+                resource_type='RLS_ASSIGNMENT',
+                resource_name=f"{email} → {filter_value if filter_value else 'All data'}",
+                status='SUCCESS',
                 details={
-                    'user_count': len(self.selected_users),
-                    'policy_name': self.selected_policy_name
+                    'type': identity_type,
+                    'identity': email,
+                    'filter_value': filter_value,
+                    'policy': self.selected_policy_name
                 }
             )
-            ui.notify(get_text('msg_error_unexpected', error=str(error)), type="negative")  # <- TRADUZIDO
+            
+            ui.notify(f"✅ Added: {email}", type="positive")
+            return True
+            
+        except Exception as e:
+            ui.notify(f"Error adding assignment: {e}", type="negative")
+            return False
+
+    def change_view_field(self, new_field):
+        """Change the filter field of the RLS view"""
+        try:
+            ui.notify("Updating view field...", type="info", timeout=2000)
+            
+            # Get current view SQL
+            view_ref = client.dataset(self.selected_views_dataset).table(self.selected_view_name)
+            view = client.get_table(view_ref)
+            
+            # Extract metadata
+            metadata_match = re.search(r'RLS_METADATA:(\{.*\})', view.description)
+            if metadata_match:
+                rls_metadata = json.loads(metadata_match.group(1))
+            else:
+                rls_metadata = {}
+            
+            # Get field type
+            table_ref = client.dataset(self.selected_policy_dataset).table(self.selected_policy_table)
+            table = client.get_table(table_ref)
+            field_type = None
+            for schema_field in table.schema:
+                if schema_field.name == new_field:
+                    field_type = schema_field.field_type
+                    break
+            
+            if not field_type:
+                ui.notify(f"Field {new_field} not found in table schema", type="negative")
+                return False
+            
+            # Create new view SQL with updated field
+            new_sql = f"""
+            CREATE OR REPLACE VIEW `{self.project_id}.{self.selected_views_dataset}.{self.selected_view_name}` AS
+            SELECT *
+            FROM `{self.project_id}.{self.selected_policy_dataset}.{self.selected_policy_table}`
+            WHERE {new_field} IN (
+              SELECT CAST(filter_value AS {field_type})
+              FROM `{config.FILTER_TABLE}`
+              WHERE rls_type = 'users'
+                AND project_id = '{self.project_id}'
+                AND dataset_id = '{self.selected_policy_dataset}'
+                AND table_id = '{self.selected_policy_table}'
+                AND field_id = '{new_field}'
+                AND username = SESSION_USER()
+            );
+            """
+            
+            # Execute
+            client.query(new_sql).result()
+            
+            # Update metadata
+            rls_metadata['filter_field'] = new_field
+            rls_metadata['filter_field_type'] = field_type
+            
+            view.description = (
+                f"RLS view for users - filters by {new_field}\n"
+                f"Base table: {self.selected_policy_dataset}.{self.selected_policy_table}\n\n"
+                f"RLS_METADATA:{json.dumps(rls_metadata)}"
+            )
+            client.update_table(view, ['description'])
+            
+            # Update policy table
+            query = f"""
+            UPDATE `{config.POLICY_TABLE}`
+            SET field_id = '{new_field}'
+            WHERE policy_name = '{self.selected_policy_name}'
+              AND project_id = '{self.project_id}'
+              AND dataset_id = '{self.selected_policy_dataset}'
+              AND table_name = '{self.selected_policy_table}'
+            """
+            client.query(query).result()
+            
+            # Update filter table
+            query = f"""
+            UPDATE `{config.FILTER_TABLE}`
+            SET field_id = '{new_field}'
+            WHERE policy_name = '{self.selected_policy_name}'
+              AND project_id = '{self.project_id}'
+              AND dataset_id = '{self.selected_policy_dataset}'
+              AND table_id = '{self.selected_policy_table}'
+            """
+            client.query(query).result()
+            
+            self.audit_service.log_action(
+                action='CHANGE_VIEW_FIELD',
+                resource_type='RLS_VIEW',
+                resource_name=self.selected_view_name,
+                status='SUCCESS',
+                details={
+                    'old_field': self.selected_policy_field,
+                    'new_field': new_field,
+                    'view': f"{self.selected_views_dataset}.{self.selected_view_name}"
+                }
+            )
+            
+            # Update local state
+            self.selected_policy_field = new_field
+            
+            ui.notify(f"✅ View field changed to: {new_field}", type="positive", timeout=3000)
+            return True
+            
+        except Exception as e:
+            ui.notify(f"Error changing field: {e}", type="negative")
+            return False
+
+    def refresh_assignments_grid(self):
+        """Refresh the assignments grid"""
+        if self.existing_policies_grid:
+            data = self.load_existing_assignments()
+            self.existing_policies_grid.options['rowData'] = data
+            self.existing_policies_grid.update()
+
+    async def delete_selected_assignments(self):
+        """Delete selected assignments"""
+        rows = await self.existing_policies_grid.get_selected_rows()
+        if not rows:
+            ui.notify("No assignments selected", type="warning")
+            return
+        
+        for row in rows:
+            self.delete_assignment(
+                row['identity'],
+                row['filter_value'],
+                row['rls_type']
+            )
 
     async def get_selected_row(self):
+        """Handle row selection in step 1"""
         rows = await self.grid_step1.get_selected_rows()
         if not rows:
-            ui.notify(get_text('msg_no_rows_selected'), type="warning")  # <- TRADUZIDO
             self.step1_next_button.set_visibility(False)
             return
 
@@ -566,8 +418,9 @@ class RLSAssignUserstoPolicy:
             self.step1_next_button.set_visibility(False)
 
     def update_policy_values(self):
+        """Load policy details and check if it's a view"""
         if not self.selected_policy:
-            ui.notify(get_text('msg_no_policy_selected'), type="warning")  # <- TRADUZIDO
+            ui.notify("No policy selected", type="warning")
             return
 
         self.selected_policy_name = self.selected_policy[0]['Policy Name']
@@ -575,154 +428,274 @@ class RLSAssignUserstoPolicy:
         self.selected_policy_table = self.selected_policy[0]['Table Name']
         self.selected_policy_field = self.selected_policy[0]['Field ID']
         
+        # Check if this is an RLS view
+        self.check_if_rls_view()
+        
         self.stepper.next()
 
-    def step1(self):
-        with ui.step(self.step1_title):
-            ui.label(get_text('rls_assign_users_step1_desc')).classes('text-caption text-grey-7 mb-2')  # <- TRADUZIDO
+    def check_if_rls_view(self):
+        """Check if the policy is for an RLS view"""
+        try:
+            # Try to find view in _views dataset
+            views_dataset = f"{self.selected_policy_dataset}_views"
             
-            self.policy_list = self.get_policies()
+            # List views in the views dataset
+            tables = client.list_tables(views_dataset)
+            
+            for table in tables:
+                if table.table_type == 'VIEW':
+                    # Get view details
+                    view_ref = client.dataset(views_dataset).table(table.table_id)
+                    view = client.get_table(view_ref)
+                    
+                    # Check if this view matches our policy
+                    if view.description and 'RLS_METADATA' in view.description:
+                        metadata_match = re.search(r'RLS_METADATA:(\{.*\})', view.description)
+                        if metadata_match:
+                            metadata = json.loads(metadata_match.group(1))
+                            if (metadata.get('policy_name') == self.selected_policy_name or
+                                (metadata.get('base_dataset') == self.selected_policy_dataset and
+                                 metadata.get('base_table') == self.selected_policy_table)):
+                                
+                                # This is an RLS view!
+                                self.is_rls_view = True
+                                self.selected_view_name = table.table_id
+                                self.selected_views_dataset = views_dataset
+                                self.selected_base_dataset = metadata.get('base_dataset')
+                                self.selected_base_table = metadata.get('base_table')
+                                return
+            
+            # Not an RLS view
+            self.is_rls_view = False
+            
+        except Exception as e:
+            print(f"Error checking for RLS view: {e}")
+            self.is_rls_view = False
+
+    def step1(self):
+        """Step 1: Select Policy"""
+        with ui.step(self.step1_title):
+            ui.label("Select an RLS policy to manage").classes('text-caption text-grey-7 mb-2')
+            
+            policy_list = self.get_policies()
 
             self.grid_step1 = ui.aggrid({
                 'columnDefs': [
                     {'field': 'Policy Name', 'checkboxSelection': True, 'filter': 'agTextColumnFilter', 'minWidth': 350},
-                    {'field': 'Project ID', 'filter': 'agTextColumnFilter'},
                     {'field': 'Dataset ID', 'filter': 'agTextColumnFilter'},
                     {'field': 'Table Name', 'filter': 'agTextColumnFilter'},
                     {'field': 'Field ID', 'filter': 'agTextColumnFilter'}
                 ],
-                'rowData': self.policy_list,
-                'rowSelection': 'multiple',
+                'rowData': policy_list,
+                'rowSelection': 'single',
             }).classes('max-h-160 ag-theme-quartz').on('rowSelected', self.get_selected_row)
 
             with ui.stepper_navigation():
-                with ui.row().classes('w-full justify-between'):
-                    with ui.row().classes('gap-2'):
-                        ui.button(
-                            get_text('btn_delete_selected'),  # <- TRADUZIDO
-                            icon="delete", 
-                            on_click=self.delete_selected_policies
-                        ).props('color=negative flat')
-                        
-                        ui.button(
-                            get_text('btn_drop_all_from_table'),  # <- TRADUZIDO
-                            icon="delete_forever",
-                            on_click=self.drop_all_from_selected_tables
-                        ).props('color=red outline').style('border: 2px solid red;').tooltip(get_text('tooltip_drop_all'))  # <- TRADUZIDO
-                    
-                    self.step1_next_button = ui.button(
-                        get_text('btn_next'),  # <- TRADUZIDO
-                        icon="arrow_forward_ios",
-                        on_click=self.update_policy_values
-                    )
-                    self.step1_next_button.set_visibility(False)
-
-    def add_user(self):
-        email = self.user_input.value.strip()
-        if "@" in email and "." in email:
-            if email not in self.user_list:
-                self.user_list.append(email)
-                self.selected_users.add(email)
-                self.user_input.value = ''
-                self.refresh_user_list()
-                ui.notify(get_text('msg_user_added', email=email), type="positive")  # <- TRADUZIDO
-            else:
-                ui.notify(get_text('msg_user_already_added'), type="warning")  # <- TRADUZIDO
-        else:
-            ui.notify(get_text('msg_invalid_email'), type="warning")  # <- TRADUZIDO
-
-    def add_filter(self):
-        filter_value = self.filter_input.value.strip()
-        if filter_value:
-            if filter_value not in self.filter_values:
-                self.filter_values.append(filter_value)
-                self.selected_filters.add(filter_value)
-                self.filter_input.value = ''
-                self.refresh_filter_list()
-                ui.notify(get_text('msg_filter_added', filter_value=filter_value), type="positive")  # <- TRADUZIDO
-            else:
-                ui.notify(get_text('msg_filter_already_added'), type="warning")  # <- TRADUZIDO
-        else:
-            ui.notify(get_text('msg_invalid_filter'), type="warning")  # <- TRADUZIDO
-
-    async def delete_selected_existing_policy(self):
-        """Deleta política selecionada no grid"""
-        rows = await self.existing_policies_grid.get_selected_rows()
-        if not rows:
-            ui.notify(get_text('msg_no_rows_selected_delete'), type="warning")  # <- TRADUZIDO
-            return
-        
-        for row in rows:
-            self.delete_policy_from_db(row['username'], row['filter_value'])
+                self.step1_next_button = ui.button(
+                    "NEXT",
+                    icon="arrow_forward_ios",
+                    on_click=self.update_policy_values
+                )
+                self.step1_next_button.set_visibility(False)
 
     def step2_with_tabs(self):
-        """Step 2 com duas abas: Existing Policies e Add New"""
+        """Step 2: Manage Assignments with 3 tabs"""
         with ui.step(self.step2_title):
-            with ui.tabs().classes('w-full') as tabs:
-                tab_existing = ui.tab(get_text('tab_existing_policies'), icon='list')  # <- TRADUZIDO
-                tab_new = ui.tab(get_text('tab_add_new_assignments'), icon='add_circle')  # <- TRADUZIDO
+            # Policy info card
+            with ui.card().classes('w-full bg-blue-50 p-4 mb-4'):
+                ui.label("📋 Selected Policy").classes('font-bold mb-2')
+                ui.label().bind_text_from(self, 'selected_policy_name', lambda x: f"Policy: {x if x else 'None'}").classes('text-sm')
+                ui.label().bind_text_from(self, 'selected_policy_dataset', lambda x: f"Dataset: {x if x else 'None'}").classes('text-sm')
+                ui.label().bind_text_from(self, 'selected_policy_table', lambda x: f"Table: {x if x else 'None'}").classes('text-sm')
+                ui.label().bind_text_from(self, 'selected_policy_field', lambda x: f"Filter Field: {x if x else 'None'}").classes('text-sm font-bold text-blue-700')
             
-            with ui.tab_panels(tabs, value=tab_existing).classes('w-full'):
-                with ui.tab_panel(tab_existing):
-                    ui.label(get_text('rls_assign_users_current_assignments')).classes('text-h6 font-bold mb-4')  # <- TRADUZIDO
-                    ui.label(get_text('rls_assign_users_select_delete_desc')).classes('text-caption text-grey-7 mb-2')  # <- TRADUZIDO
+            # Tabs
+            with ui.tabs().classes('w-full') as tabs:
+                tab_assignments = ui.tab("👥 Assignments", icon='people')
+                tab_add = ui.tab("➕ Add New", icon='add_circle')
+                tab_config = ui.tab("⚙️ Configuration", icon='settings')
+            
+            with ui.tab_panels(tabs, value=tab_assignments).classes('w-full'):
+                # ========================================
+                # TAB 1: CURRENT ASSIGNMENTS
+                # ========================================
+                with ui.tab_panel(tab_assignments):
+                    ui.label("Current Assignments").classes('text-h6 font-bold mb-2')
+                    ui.label("Select rows to delete").classes('text-caption text-grey-7 mb-4')
                     
-                    existing_data = self.load_existing_policies_from_db()
+                    existing_data = self.load_existing_assignments()
                     
                     self.existing_policies_grid = ui.aggrid({
                         'columnDefs': [
-                            {'field': 'username', 'headerName': get_text('col_user_email'), 'checkboxSelection': True, 'filter': 'agTextColumnFilter'},  # <- TRADUZIDO
-                            {'field': 'filter_value', 'headerName': get_text('col_filter_value'), 'filter': 'agTextColumnFilter'},  # <- TRADUZIDO
-                            {'field': 'policy_name', 'headerName': get_text('col_policy_name'), 'filter': 'agTextColumnFilter'},  # <- TRADUZIDO
-                            {'field': 'field_id', 'headerName': get_text('col_field'), 'filter': 'agTextColumnFilter'},  # <- TRADUZIDO
-                            {'field': 'created_at', 'headerName': get_text('col_created_at'), 'filter': 'agTextColumnFilter'},  # <- TRADUZIDO
+                            {'field': 'type', 'headerName': 'Type', 'width': 120},
+                            {'field': 'identity', 'headerName': 'Identity (Email)', 'checkboxSelection': True, 'filter': 'agTextColumnFilter', 'minWidth': 300},
+                            {'field': 'filter_value', 'headerName': 'Filter Value', 'filter': 'agTextColumnFilter'},
+                            {'field': 'created_at', 'headerName': 'Created', 'filter': 'agTextColumnFilter'},
                         ],
                         'rowData': existing_data,
                         'rowSelection': 'multiple',
                     }).classes('w-full max-h-96 ag-theme-quartz')
                     
-                    with ui.row().classes('mt-4'):
-                        ui.button(get_text('btn_delete_selected'), icon="delete", on_click=self.delete_selected_existing_policy).props('color=negative')  # <- TRADUZIDO
-                        ui.button(get_text('btn_refresh'), icon="refresh", on_click=self.refresh_existing_policies_grid).props('flat')  # <- TRADUZIDO
+                    with ui.row().classes('mt-4 gap-2'):
+                        ui.button("DELETE SELECTED", icon="delete", on_click=self.delete_selected_assignments).props('color=negative')
+                        ui.button("REFRESH", icon="refresh", on_click=self.refresh_assignments_grid).props('flat')
                 
-                with ui.tab_panel(tab_new):
-                    ui.label(get_text('rls_assign_users_add_new_title')).classes('text-h6 font-bold mb-4')  # <- TRADUZIDO
-                    ui.label(get_text('rls_assign_users_add_new_desc')).classes('text-caption text-grey-7 mb-2')  # <- TRADUZIDO
+                # ========================================
+                # TAB 2: ADD NEW (UNIFIED INTERFACE)
+                # ========================================
+                with ui.tab_panel(tab_add):
+                    ui.label("Add New Assignment").classes('text-h6 font-bold mb-2')
+                    ui.label("Unified interface for Users, Groups, and Service Accounts").classes('text-caption text-grey-7 mb-4')
                     
-                    with ui.row().classes('w-full justify-center'):
-                        with ui.grid(columns=2).classes('gap-8 w-full justify-center'):
-                            with ui.column().classes('items-left text-left w-full'):
-                                ui.label(get_text('rls_assign_users_add_emails')).classes('font-bold')  # <- TRADUZIDO
+                    with ui.card().classes('w-full bg-green-50 p-6'):
+                        # Type selector
+                        with ui.row().classes('w-full gap-4 items-center mb-4'):
+                            ui.label("Type:").classes('font-bold')
+                            identity_type_select = ui.select(
+                                options=[
+                                    {'label': '👤 User', 'value': 'user'},
+                                    {'label': '👥 Group', 'value': 'group'},
+                                    {'label': '🤖 Service Account', 'value': 'service_account'}
+                                ],
+                                value='user'
+                            ).classes('flex-1').props('emit-value map-options')
+                        
+                        # Email input
+                        with ui.row().classes('w-full gap-4 items-center mb-4'):
+                            ui.label("Email:").classes('font-bold w-24')
+                            email_input = ui.input(
+                                placeholder="user@example.com or group@example.com or sa@project.iam.gserviceaccount.com"
+                            ).classes('flex-1')
+                        
+                        # Filter value selector
+                        with ui.row().classes('w-full gap-4 items-center mb-4'):
+                            ui.label("Filter:").classes('font-bold w-24')
+                            
+                            # Get existing filter values
+                            stats = self.get_filter_value_stats()
+                            filter_options = ['(No filter - All data)'] + [s['filter_value'] for s in stats]
+                            
+                            filter_value_select = ui.select(
+                                options=filter_options,
+                                value=filter_options[0]
+                            ).classes('flex-1')
+                        
+                        # Add button
+                        async def add_new_assignment():
+                            success = await run.io_bound(
+                                self.add_assignment,
+                                identity_type_select.value,
+                                email_input.value,
+                                filter_value_select.value
+                            )
+                            if success:
+                                email_input.value = ''
+                                self.refresh_assignments_grid()
+                        
+                        with ui.row().classes('w-full justify-end'):
+                            ui.button("ADD ASSIGNMENT", icon="add", on_click=add_new_assignment).props('color=primary')
+                    
+                    # Info card
+                    with ui.card().classes('w-full bg-blue-50 p-4 mt-4'):
+                        ui.label("💡 How it works:").classes('font-bold mb-2')
+                        ui.label("• Users: Individual user accounts").classes('text-xs')
+                        ui.label("• Groups: Email groups (e.g., ti-team@company.com)").classes('text-xs')
+                        ui.label("• Service Accounts: System identities (e.g., app@project.iam.gserviceaccount.com)").classes('text-xs')
+                        ui.label("• Filter: Restrict data access (or 'No filter' for all data)").classes('text-xs')
+                
+                # ========================================
+                # TAB 3: CONFIGURATION
+                # ========================================
+                with ui.tab_panel(tab_config):
+                    ui.label("Policy Configuration").classes('text-h6 font-bold mb-2')
+                    
+                    # ========== SECTION 1: EDIT FIELD ==========
+                    with ui.card().classes('w-full bg-purple-50 p-6 mb-4'):
+                        ui.label("🔧 Edit Filter Field").classes('font-bold text-lg mb-4')
+                        
+                        if self.is_rls_view:
+                            ui.label(f"Current field: {self.selected_policy_field}").classes('text-sm mb-4')
+                            
+                            # Get available fields
+                            available_fields = self.get_table_fields()
+                            
+                            with ui.row().classes('w-full gap-4 items-center'):
+                                ui.label("New field:").classes('font-bold')
+                                new_field_select = ui.select(
+                                    options=available_fields,
+                                    value=self.selected_policy_field
+                                ).classes('flex-1')
                                 
-                                with ui.row().classes('w-full gap-2'):
-                                    self.user_input = ui.input(placeholder=get_text('placeholder_user_email')).classes('flex-1')  # <- TRADUZIDO
-                                    ui.button(get_text('btn_add_user'), on_click=self.add_user).props('color=primary')  # <- TRADUZIDO
+                                async def change_field():
+                                    if new_field_select.value == self.selected_policy_field:
+                                        ui.notify("Field is already set to this value", type="info")
+                                        return
+                                    
+                                    success = await run.io_bound(
+                                        self.change_view_field,
+                                        new_field_select.value
+                                    )
+                                    if success:
+                                        # Refresh page to show new field
+                                        ui.navigate.reload()
                                 
-                                ui.separator()
-                                ui.label(get_text('rls_assign_users_user_list_label')).classes('font-bold text-sm text-grey-7')  # <- TRADUZIDO
-                                
-                                with ui.card().classes('w-full min-h-48 max-h-96 overflow-auto'):
-                                    self.user_container = ui.column().classes('w-full gap-1')
-                                    self.refresh_user_list()
+                                ui.button("CHANGE FIELD", icon="edit", on_click=change_field).props('color=primary')
+                            
+                            with ui.card().classes('w-full bg-yellow-50 p-3 mt-4'):
+                                ui.label("⚠️ Changing the field will:").classes('text-xs font-bold mb-2')
+                                ui.label("• Update the RLS view SQL").classes('text-xs')
+                                ui.label("• Change how data is filtered").classes('text-xs')
+                                ui.label("• Existing assignments remain but use new field").classes('text-xs')
+                        else:
+                            with ui.card().classes('w-full bg-yellow-50 p-4'):
+                                ui.label("ℹ️ Field editing is only available for RLS views").classes('text-sm')
+                                ui.label(f"This policy uses traditional RLS (not view-based)").classes('text-xs')
+                    
+                    # ========== SECTION 2: MANAGE FILTERS ==========
+                    with ui.card().classes('w-full bg-orange-50 p-6'):
+                        ui.label("🔍 Manage Filter Values").classes('font-bold text-lg mb-4')
+                        
+                        # Get filter statistics
+                        stats = self.get_filter_value_stats()
+                        
+                        if stats:
+                            ui.label(f"Current filter values: {len(stats)}").classes('text-sm font-bold mb-2')
+                            
+                            # Display filter stats
+                            for stat in stats:
+                                with ui.row().classes('w-full items-center justify-between p-2 border rounded bg-white'):
+                                    with ui.column():
+                                        ui.label(stat['filter_value']).classes('font-bold')
+                                        ui.label(f"{stat['user_count']} identities, {stat['total_assignments']} assignments").classes('text-xs text-grey-7')
+                        else:
+                            ui.label("No filter values defined yet").classes('text-sm text-grey-7 italic')
+                        
+                        # Add new filter value
+                        ui.separator().classes('my-4')
+                        ui.label("Add new filter value:").classes('font-bold mb-2')
+                        
+                        with ui.row().classes('w-full gap-2'):
+                            new_filter_input = ui.input(placeholder="e.g., TI, RH, Operações").classes('flex-1')
+                            
+                            def add_filter_info():
+                                value = new_filter_input.value.strip()
+                                if value:
+                                    ui.notify(f"ℹ️ Filter value '{value}' added to dropdown in 'Add New' tab", type="info")
+                                    new_filter_input.value = ''
+                                    # In reality, this just informs the user - they add it via Add New tab
+                                else:
+                                    ui.notify("Enter a filter value", type="warning")
+                            
+                            ui.button("ADD TO DROPDOWN", on_click=add_filter_info).props('color=primary outline')
+                        
+                        with ui.card().classes('w-full bg-blue-50 p-3 mt-4'):
+                            ui.label("💡 Note: Filter values are added when you assign users").classes('text-xs')
+                            ui.label("Use the 'Add New' tab to create assignments with filter values").classes('text-xs')
 
-                            with ui.column().classes('items-left text-left w-full'):
-                                ui.label(get_text('rls_assign_users_add_filters')).classes('font-bold')  # <- TRADUZIDO
-                                
-                                with ui.row().classes('w-full gap-2'):
-                                    self.filter_input = ui.input(placeholder=get_text('placeholder_filter_value')).classes('flex-1')  # <- TRADUZIDO
-                                    ui.button(get_text('btn_add_filter'), on_click=self.add_filter).props('color=primary')  # <- TRADUZIDO
-                                
-                                ui.separator()
-                                ui.label(get_text('rls_assign_users_filter_list_label')).classes('font-bold text-sm text-grey-7')  # <- TRADUZIDO
-                                
-                                with ui.card().classes('w-full min-h-48 max-h-96 overflow-auto'):
-                                    self.filter_container = ui.column().classes('w-full gap-1')
-                                    self.refresh_filter_list()
-
+            # Navigation
             with ui.stepper_navigation():
-                ui.button(get_text('btn_back'), icon="arrow_back_ios", on_click=self.stepper.previous)  # <- TRADUZIDO
-                ui.button(get_text('btn_insert_selected'), icon="enhanced_encryption", on_click=self.run_insert_users_and_values).props('color=primary')  # <- TRADUZIDO
+                ui.button("BACK", icon="arrow_back_ios", on_click=self.stepper.previous)
 
     def run(self):
-        with theme.frame(get_text('rls_assign_users_frame_title')):  # <- TRADUZIDO
+        with theme.frame("Assign to Policy - Unified"):
             pass
