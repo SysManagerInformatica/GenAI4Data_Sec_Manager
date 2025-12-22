@@ -187,6 +187,7 @@ class RLSAssignUserstoPolicy:
     def get_distinct_field_values(self):
         """Get distinct values from the filter field"""
         if not self.selected_policy_field or not self.selected_policy_dataset or not self.selected_policy_table:
+            print(f"DEBUG: Missing values - field:{self.selected_policy_field} dataset:{self.selected_policy_dataset} table:{self.selected_policy_table}")
             return []
         
         try:
@@ -197,8 +198,11 @@ class RLSAssignUserstoPolicy:
             ORDER BY value
             LIMIT 100
             """
+            print(f"DEBUG: Executing query to get distinct values from {self.selected_policy_field}")
             results = client.query(query).result()
-            return [row.value for row in results]
+            values = [row.value for row in results]
+            print(f"DEBUG: Found {len(values)} distinct values")
+            return values
         except Exception as e:
             print(f"Error getting distinct values: {e}")
             return []
@@ -586,19 +590,39 @@ class RLSAssignUserstoPolicy:
                         with ui.row().classes('w-full gap-4 items-center mb-4'):
                             ui.label("Filter:").classes('font-bold w-24')
                             
-                            # Get distinct values from field + existing filter values
-                            field_values = self.get_distinct_field_values()
-                            stats = self.get_filter_value_stats()
-                            used_values = [s['filter_value'] for s in stats]
-                            
-                            # Combine and remove duplicates
-                            all_values = sorted(set(field_values + used_values))
-                            filter_options = ['(No filter - All data)'] + all_values
-                            
+                            # Create select initially
                             filter_value_select = ui.select(
-                                options=filter_options,
-                                value=filter_options[0] if filter_options else '(No filter - All data)'
+                                options=['(No filter - All data)'],
+                                value='(No filter - All data)'
                             ).classes('flex-1')
+                            
+                            # Function to load filter values
+                            def load_filter_values():
+                                try:
+                                    # Get distinct values from field + existing filter values
+                                    field_values = self.get_distinct_field_values()
+                                    stats = self.get_filter_value_stats()
+                                    used_values = [s['filter_value'] for s in stats]
+                                    
+                                    # Combine and remove duplicates
+                                    all_values = sorted(set(field_values + used_values))
+                                    filter_options = ['(No filter - All data)'] + all_values
+                                    
+                                    # Update dropdown
+                                    filter_value_select.options = filter_options
+                                    filter_value_select.update()
+                                    
+                                    ui.notify(f"✅ Loaded {len(all_values)} filter values", type="positive", timeout=2000)
+                                except Exception as e:
+                                    ui.notify(f"Error loading values: {e}", type="negative")
+                            
+                            # Load values when tab is opened
+                            # DON'T load automatically - user should click Refresh button
+                            # load_filter_values()
+                        
+                        # Refresh button
+                        with ui.row().classes('w-full justify-start mb-4'):
+                            ui.button("🔄 LOAD FILTER VALUES", on_click=load_filter_values).props('color=primary size=sm')
                         
                         # Add button
                         async def add_new_assignment():
