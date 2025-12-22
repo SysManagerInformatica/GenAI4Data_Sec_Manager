@@ -3,8 +3,8 @@
   GenAI4Data Security Manager
   Module: Page Router & Registration System
 ================================================================================
-  Version:      2.2.0
-  Release Date: 2024-12-14
+  Version:      3.0.0
+  Release Date: 2024-12-22
   Author:       Lucas Carvalhal - Sys Manager
   Company:      Sys Manager Informática
   
@@ -56,28 +56,6 @@ except:
             from theme import frame
             with frame('Assign Values to Group'):
                 ui.label('Assign Values to Groups').classes('text-2xl font-bold mb-4')
-                ui.label('This feature is under development').classes('text-orange-600')
-
-# ✨ NEW: Custom RLS View Creation
-try:
-    from pages.create_rls_view import CreateRLSView
-except:
-    class CreateRLSView:
-        def run(self):
-            from theme import frame
-            with frame('Create Custom RLS View'):
-                ui.label('Create Custom RLS View').classes('text-2xl font-bold mb-4')
-                ui.label('This feature is under development').classes('text-orange-600')
-
-# ✨ NEW: Manage RLS Views
-try:
-    from pages.manage_rls_views import ManageRLSViews
-except:
-    class ManageRLSViews:
-        def run(self):
-            from theme import frame
-            with frame('Manage RLS Views'):
-                ui.label('Manage RLS Views').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
 try:
@@ -229,17 +207,6 @@ def create() -> None:
         rls_instance = RLSAssignValuestoGroup()
         rls_instance.run()
     ui.page('/assignvaluestogroup/')(assign_values_to_group)
-
-    # ✨ NEW: Custom RLS View Pages
-    def create_rls_view_page():
-        rls_instance = CreateRLSView()
-        rls_instance.run()
-    ui.page('/rls/create-view')(create_rls_view_page)
-
-    def manage_rls_views_page():
-        rls_instance = ManageRLSViews()
-        rls_instance.run()
-    ui.page('/rls/manage-views')(manage_rls_views_page)
 
     # CLS Pages
     def cls_taxonomies_page():
