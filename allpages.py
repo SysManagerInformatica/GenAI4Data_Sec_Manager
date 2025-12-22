@@ -19,7 +19,7 @@ from nicegui import ui
 
 # Tentar importar as páginas originais, criar placeholders se não existirem
 try:
-    from pages.create_rls_users import RLSCreateforUsers
+    from pages.create_views import RLSCreateforUsers
 except:
     class RLSCreateforUsers:
         def run(self):
