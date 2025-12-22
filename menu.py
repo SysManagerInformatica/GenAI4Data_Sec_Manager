@@ -3,14 +3,15 @@
   GenAI4Data Security Manager
   Module: Navigation Menu System
 ================================================================================
-  Version:      2.2.0
-  Release Date: 2024-12-14
+  Version:      3.0.0
+  Release Date: 2024-12-22
   Author:       Lucas Carvalhal - Sys Manager
   Company:      Sys Manager Informática
   
   Description:
-  Multi-language navigation menu with color-coded security sections (RLS,
-  CLS, IAM, Audit) and role-based access control integration.
+  Simplified navigation menu with unified RLS interface. Removed Create Custom
+  RLS View and Manage RLS Views, renamed Create for Users to Create Views and
+  Assign Users to Policy to Assign to Policy.
 ================================================================================
 """
 
@@ -23,7 +24,7 @@ def menu() -> None:
     """
     Create navigation menu with color-coded sections
     - HOME: Cyan (#00f3ff)
-    - RLS: Green (#10b981)
+    - RLS: Green (#10b981) - SIMPLIFIED
     - CLS: Yellow (#f59e0b)
     - IAM: Red (#ef4444)
     - AUDIT: Purple (#a855f7)
@@ -43,7 +44,7 @@ def menu() -> None:
                 ).style('font-size: 16px; color: #ffffff;')
         
         # ========================================
-        # ROW LEVEL SECURITY - VERDE
+        # ROW LEVEL SECURITY - VERDE (SIMPLIFIED)
         # ========================================
         with ui.expansion(
             get_text('nav_rls'),
@@ -53,68 +54,52 @@ def menu() -> None:
             # Adicionar estilo ao ícone do expansion
             ui.query('.q-expansion-item__toggle-icon').style('color: #10b981 !important;')
             
-            # ========== NEW ARCHITECTURE (Views-based RLS) ==========
+            # ========== UNIFIED RLS SYSTEM ==========
             
-            # ✨ NEW: Create Custom RLS View
-            with ui.item(on_click=lambda: ui.navigate.to('/rls/create-view')):
+            # 1. Create Views (formerly "Create RLS for Users")
+            with ui.item(on_click=lambda: ui.navigate.to('/createrlsusers/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('add_box').style('color: #10b981;')
                 with ui.item_section():
-                    ui.item_label('Create Custom RLS View').classes(
+                    ui.item_label('Create Views').classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
-                    ui.item_label('New: View-based architecture').props('caption').style('font-size: 11px; color: #10b981;')
+                    ui.item_label('5-step wizard to create RLS views').props('caption').style('font-size: 11px; color: #10b981;')
             
-            # ✨ NEW: Manage RLS Views
-            with ui.item(on_click=lambda: ui.navigate.to('/rls/manage-views')):
-                with ui.item_section().props('avatar'):
-                    ui.icon('view_list').style('color: #10b981;')
-                with ui.item_section():
-                    ui.item_label('Manage RLS Views').classes(
-                        replace='text-bold'
-                    ).style('font-size: 14px; color: #94a3b8;')
-                    ui.item_label('Edit users, filters & CLS').props('caption').style('font-size: 11px; color: #10b981;')
-            
-            # Separador visual
-            ui.separator().classes('my-2').style('background-color: #334155;')
-            
-            # ========== LEGACY SYSTEM (Table-based RLS) ==========
-            
-            # 1. Create RLS for Users
-            with ui.item(on_click=lambda: ui.navigate.to('/createrlsusers/')):
-                with ui.item_section().props('avatar'):
-                    ui.icon('person').style('color: #10b981;')
-                with ui.item_section():
-                    ui.item_label(get_text('menu_rls_users')).classes(
-                        replace='text-bold'
-                    ).style('font-size: 14px; color: #94a3b8;')
-            
-            # 2. Create RLS for Groups
-            with ui.item(on_click=lambda: ui.navigate.to('/createrlsgroups/')):
-                with ui.item_section().props('avatar'):
-                    ui.icon('groups').style('color: #10b981;')
-                with ui.item_section():
-                    ui.item_label(get_text('menu_rls_groups')).classes(
-                        replace='text-bold'
-                    ).style('font-size: 14px; color: #94a3b8;')
-            
-            # 3. Assign Users to Policy
+            # 2. Assign to Policy (formerly "Assign Users to Policy")
             with ui.item(on_click=lambda: ui.navigate.to('/assignuserstopolicy/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('assignment_ind').style('color: #10b981;')
                 with ui.item_section():
-                    ui.item_label(get_text('menu_rls_assign_users')).classes(
+                    ui.item_label('Assign to Policy').classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
+                    ui.item_label('Users, Groups & Service Accounts').props('caption').style('font-size: 11px; color: #10b981;')
             
-            # 4. Assign Values to Groups
+            # Separador visual
+            ui.separator().classes('my-2').style('background-color: #334155;')
+            
+            # ========== LEGACY OPTIONS (Optional - can be deleted) ==========
+            
+            # 3. Create RLS for Groups (legacy)
+            with ui.item(on_click=lambda: ui.navigate.to('/createrlsgroups/')):
+                with ui.item_section().props('avatar'):
+                    ui.icon('groups').style('color: #10b981; opacity: 0.5;')
+                with ui.item_section():
+                    ui.item_label(get_text('menu_rls_groups')).classes(
+                        replace='text-bold'
+                    ).style('font-size: 14px; color: #64748b;')
+                    ui.item_label('Legacy - Group policies').props('caption').style('font-size: 11px; color: #64748b;')
+            
+            # 4. Assign Values to Groups (legacy)
             with ui.item(on_click=lambda: ui.navigate.to('/assignvaluestogroup/')):
                 with ui.item_section().props('avatar'):
-                    ui.icon('assignment').style('color: #10b981;')
+                    ui.icon('assignment').style('color: #10b981; opacity: 0.5;')
                 with ui.item_section():
                     ui.item_label(get_text('menu_rls_assign_values')).classes(
                         replace='text-bold'
-                    ).style('font-size: 14px; color: #94a3b8;')
+                    ).style('font-size: 14px; color: #64748b;')
+                    ui.item_label('Legacy - Group values').props('caption').style('font-size: 11px; color: #64748b;')
         
         # ========================================
         # COLUMN LEVEL SECURITY - AMARELO
