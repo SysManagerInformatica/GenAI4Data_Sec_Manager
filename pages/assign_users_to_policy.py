@@ -1,24 +1,9 @@
-# Copyright 2024 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""
 ================================================================================
   GenAI4Data Security Manager
   Module: RLS Policy Assignment - Unified Interface
 ================================================================================
   Version:      3.0.0
-  Release Date: 2024-12-22
+  Release Date: 2024-12-23
   Author:       Lucas Carvalhal - Sys Manager
   Company:      Sys Manager Informática
   
@@ -206,6 +191,90 @@ class RLSAssignUserstoPolicy:
         except Exception as e:
             print(f"Error getting distinct values: {e}")
             return []
+    
+    async def show_edit_field_dialog(self):
+        """Show dialog to edit filter field"""
+        with ui.dialog() as dialog, ui.card().classes('w-full max-w-2xl'):
+            ui.label("Edit Filter Field").classes('text-h6 font-bold mb-4')
+            
+            # Current field info
+            with ui.card().classes('w-full bg-blue-50 p-4 mb-4'):
+                ui.label(f"📋 Current Field: {self.selected_policy_field}").classes('font-bold text-blue-700')
+                ui.label(f"Dataset: {self.selected_policy_dataset}").classes('text-sm')
+                ui.label(f"Table: {self.selected_policy_table}").classes('text-sm')
+            
+            # Check if RLS view
+            if not self.is_rls_view:
+                with ui.card().classes('w-full bg-yellow-50 p-4'):
+                    ui.label("⚠️ Field editing is only available for RLS views").classes('font-bold mb-2')
+                    ui.label("This policy uses traditional RLS (not view-based)").classes('text-sm')
+                
+                with ui.row().classes('w-full justify-end mt-4'):
+                    ui.button("CLOSE", on_click=dialog.close).props('flat')
+                
+                dialog.open()
+                return
+            
+            # Field selector (initially empty)
+            with ui.row().classes('w-full gap-4 items-center mb-4'):
+                ui.label("New Field:").classes('font-bold w-32')
+                new_field_select = ui.select(
+                    options=[],
+                    value=None
+                ).classes('flex-1')
+            
+            # Load schema button
+            def load_schema():
+                try:
+                    fields = self.get_table_fields()
+                    if fields:
+                        new_field_select.options = fields
+                        new_field_select.value = self.selected_policy_field
+                        new_field_select.update()
+                        ui.notify(f"✅ Loaded {len(fields)} fields from table schema", type="positive", timeout=2000)
+                    else:
+                        ui.notify("No fields found in table", type="warning")
+                except Exception as e:
+                    ui.notify(f"Error loading schema: {e}", type="negative")
+            
+            with ui.row().classes('w-full justify-start mb-4'):
+                ui.button("📊 LOAD SCHEMA", on_click=load_schema).props('color=primary')
+            
+            # Warning card
+            with ui.card().classes('w-full bg-yellow-50 p-4 mb-4'):
+                ui.label("⚠️ Changing the field will:").classes('text-xs font-bold mb-2')
+                ui.label("• Update the RLS view SQL").classes('text-xs')
+                ui.label("• Change how data is filtered for all users").classes('text-xs')
+                ui.label("• Existing assignments remain but will use the new field").classes('text-xs')
+                ui.label("• The page will reload after the change").classes('text-xs')
+            
+            # Buttons
+            with ui.row().classes('w-full justify-end gap-2'):
+                ui.button("CANCEL", on_click=dialog.close).props('flat')
+                
+                async def confirm_change():
+                    if not new_field_select.value:
+                        ui.notify("Please select a field", type="warning")
+                        return
+                    
+                    if new_field_select.value == self.selected_policy_field:
+                        ui.notify("Field is already set to this value", type="info")
+                        return
+                    
+                    dialog.close()
+                    
+                    success = await run.io_bound(
+                        self.change_view_field,
+                        new_field_select.value
+                    )
+                    
+                    if success:
+                        # Refresh page to show new field
+                        ui.navigate.reload()
+                
+                ui.button("CHANGE FIELD", icon="edit", on_click=confirm_change).props('color=primary')
+        
+        dialog.open()
 
     def delete_assignment(self, identity, filter_value, rls_type):
         """Delete a single assignment"""
@@ -532,11 +601,10 @@ class RLSAssignUserstoPolicy:
                 ui.label().bind_text_from(self, 'selected_policy_table', lambda x: f"Table: {x if x else 'None'}").classes('text-sm')
                 ui.label().bind_text_from(self, 'selected_policy_field', lambda x: f"Filter Field: {x if x else 'None'}").classes('text-sm font-bold text-blue-700')
             
-            # Tabs
+            # Tabs (ONLY 2 now)
             with ui.tabs().classes('w-full') as tabs:
                 tab_assignments = ui.tab("👥 Assignments", icon='people')
                 tab_add = ui.tab("➕ Add New", icon='add_circle')
-                tab_config = ui.tab("⚙️ Configuration", icon='settings')
             
             with ui.tab_panels(tabs, value=tab_assignments).classes('w-full'):
                 # ========================================
@@ -562,6 +630,12 @@ class RLSAssignUserstoPolicy:
                     with ui.row().classes('mt-4 gap-2'):
                         ui.button("DELETE SELECTED", icon="delete", on_click=self.delete_selected_assignments).props('color=negative')
                         ui.button("REFRESH", icon="refresh", on_click=self.refresh_assignments_grid).props('flat')
+                        
+                        # NEW: EDIT FIELD BUTTON
+                        async def open_edit_field_dialog():
+                            await self.show_edit_field_dialog()
+                        
+                        ui.button("EDIT FIELD", icon="edit", on_click=open_edit_field_dialog).props('color=primary outline')
                 
                 # ========================================
                 # TAB 2: ADD NEW (UNIFIED INTERFACE)
@@ -653,95 +727,6 @@ class RLSAssignUserstoPolicy:
                         ui.label("• Groups: Email groups (e.g., ti-team@company.com)").classes('text-xs')
                         ui.label("• Service Accounts: System identities (e.g., app@project.iam.gserviceaccount.com)").classes('text-xs')
                         ui.label("• Filter: Restrict data access (or 'No filter' for all data)").classes('text-xs')
-                
-                # ========================================
-                # TAB 3: CONFIGURATION
-                # ========================================
-                with ui.tab_panel(tab_config):
-                    ui.label("Policy Configuration").classes('text-h6 font-bold mb-2')
-                    
-                    # ========== SECTION 1: EDIT FIELD ==========
-                    with ui.card().classes('w-full bg-purple-50 p-6 mb-4'):
-                        ui.label("🔧 Edit Filter Field").classes('font-bold text-lg mb-4')
-                        
-                        if self.is_rls_view:
-                            ui.label(f"Current field: {self.selected_policy_field}").classes('text-sm mb-4')
-                            
-                            # Get available fields
-                            available_fields = self.get_table_fields()
-                            
-                            with ui.row().classes('w-full gap-4 items-center'):
-                                ui.label("New field:").classes('font-bold')
-                                new_field_select = ui.select(
-                                    options=available_fields,
-                                    value=self.selected_policy_field
-                                ).classes('flex-1')
-                                
-                                async def change_field():
-                                    if new_field_select.value == self.selected_policy_field:
-                                        ui.notify("Field is already set to this value", type="info")
-                                        return
-                                    
-                                    success = await run.io_bound(
-                                        self.change_view_field,
-                                        new_field_select.value
-                                    )
-                                    if success:
-                                        # Refresh page to show new field
-                                        ui.navigate.reload()
-                                
-                                ui.button("CHANGE FIELD", icon="edit", on_click=change_field).props('color=primary')
-                            
-                            with ui.card().classes('w-full bg-yellow-50 p-3 mt-4'):
-                                ui.label("⚠️ Changing the field will:").classes('text-xs font-bold mb-2')
-                                ui.label("• Update the RLS view SQL").classes('text-xs')
-                                ui.label("• Change how data is filtered").classes('text-xs')
-                                ui.label("• Existing assignments remain but use new field").classes('text-xs')
-                        else:
-                            with ui.card().classes('w-full bg-yellow-50 p-4'):
-                                ui.label("ℹ️ Field editing is only available for RLS views").classes('text-sm')
-                                ui.label(f"This policy uses traditional RLS (not view-based)").classes('text-xs')
-                    
-                    # ========== SECTION 2: MANAGE FILTERS ==========
-                    with ui.card().classes('w-full bg-orange-50 p-6'):
-                        ui.label("🔍 Manage Filter Values").classes('font-bold text-lg mb-4')
-                        
-                        # Get filter statistics
-                        stats = self.get_filter_value_stats()
-                        
-                        if stats:
-                            ui.label(f"Current filter values: {len(stats)}").classes('text-sm font-bold mb-2')
-                            
-                            # Display filter stats
-                            for stat in stats:
-                                with ui.row().classes('w-full items-center justify-between p-2 border rounded bg-white'):
-                                    with ui.column():
-                                        ui.label(stat['filter_value']).classes('font-bold')
-                                        ui.label(f"{stat['user_count']} identities, {stat['total_assignments']} assignments").classes('text-xs text-grey-7')
-                        else:
-                            ui.label("No filter values defined yet").classes('text-sm text-grey-7 italic')
-                        
-                        # Add new filter value
-                        ui.separator().classes('my-4')
-                        ui.label("Add new filter value:").classes('font-bold mb-2')
-                        
-                        with ui.row().classes('w-full gap-2'):
-                            new_filter_input = ui.input(placeholder="e.g., TI, RH, Operações").classes('flex-1')
-                            
-                            def add_filter_info():
-                                value = new_filter_input.value.strip()
-                                if value:
-                                    ui.notify(f"ℹ️ Filter value '{value}' added to dropdown in 'Add New' tab", type="info")
-                                    new_filter_input.value = ''
-                                    # In reality, this just informs the user - they add it via Add New tab
-                                else:
-                                    ui.notify("Enter a filter value", type="warning")
-                            
-                            ui.button("ADD TO DROPDOWN", on_click=add_filter_info).props('color=primary outline')
-                        
-                        with ui.card().classes('w-full bg-blue-50 p-3 mt-4'):
-                            ui.label("💡 Note: Filter values are added when you assign users").classes('text-xs')
-                            ui.label("Use the 'Add New' tab to create assignments with filter values").classes('text-xs')
 
             # Navigation
             with ui.stepper_navigation():
