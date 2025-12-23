@@ -1,3 +1,17 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """
 ================================================================================
   GenAI4Data Security Manager
@@ -241,12 +255,51 @@ class RLSAssignUserstoPolicy:
             with ui.row().classes('w-full justify-start mb-4'):
                 ui.button("📊 LOAD SCHEMA", on_click=load_schema).props('color=primary')
             
+            # Value selector (initially empty)
+            with ui.row().classes('w-full gap-4 items-center mb-4'):
+                ui.label("New Value:").classes('font-bold w-32')
+                new_value_select = ui.select(
+                    options=[],
+                    value=None
+                ).classes('flex-1')
+            
+            # Load field values button
+            def load_field_values():
+                try:
+                    if not new_field_select.value:
+                        ui.notify("Please select a field first", type="warning")
+                        return
+                    
+                    # Get distinct values from the selected field
+                    query = f"""
+                    SELECT DISTINCT CAST({new_field_select.value} AS STRING) as value
+                    FROM `{self.project_id}.{self.selected_policy_dataset}.{self.selected_policy_table}`
+                    WHERE {new_field_select.value} IS NOT NULL
+                    ORDER BY value
+                    LIMIT 100
+                    """
+                    results = client.query(query).result()
+                    values = [row.value for row in results]
+                    
+                    if values:
+                        new_value_select.options = values
+                        new_value_select.value = values[0] if values else None
+                        new_value_select.update()
+                        ui.notify(f"✅ Loaded {len(values)} values from field '{new_field_select.value}'", type="positive", timeout=2000)
+                    else:
+                        ui.notify(f"No values found in field '{new_field_select.value}'", type="warning")
+                except Exception as e:
+                    ui.notify(f"Error loading field values: {e}", type="negative")
+            
+            with ui.row().classes('w-full justify-start mb-4'):
+                ui.button("🔄 LOAD FIELD VALUES", on_click=load_field_values).props('color=primary')
+            
             # Warning card
             with ui.card().classes('w-full bg-yellow-50 p-4 mb-4'):
                 ui.label("⚠️ Changing the field will:").classes('text-xs font-bold mb-2')
                 ui.label("• Update the RLS view SQL").classes('text-xs')
                 ui.label("• Change how data is filtered for all users").classes('text-xs')
-                ui.label("• Existing assignments remain but will use the new field").classes('text-xs')
+                ui.label("• Update all existing assignments to use the new field and value").classes('text-xs')
                 ui.label("• The page will reload after the change").classes('text-xs')
             
             # Buttons
@@ -258,6 +311,10 @@ class RLSAssignUserstoPolicy:
                         ui.notify("Please select a field", type="warning")
                         return
                     
+                    if not new_value_select.value:
+                        ui.notify("Please select a value for the new field", type="warning")
+                        return
+                    
                     if new_field_select.value == self.selected_policy_field:
                         ui.notify("Field is already set to this value", type="info")
                         return
@@ -266,7 +323,8 @@ class RLSAssignUserstoPolicy:
                     
                     success = await run.io_bound(
                         self.change_view_field,
-                        new_field_select.value
+                        new_field_select.value,
+                        new_value_select.value
                     )
                     
                     if success:
@@ -372,7 +430,7 @@ class RLSAssignUserstoPolicy:
             ui.notify(f"Error adding assignment: {e}", type="negative")
             return False
 
-    def change_view_field(self, new_field):
+    def change_view_field(self, new_field, new_value):
         """Change the filter field of the RLS view"""
         try:
             ui.notify("Updating view field...", type="info", timeout=2000)
@@ -443,10 +501,11 @@ class RLSAssignUserstoPolicy:
             """
             client.query(query).result()
             
-            # Update filter table
+            # Update ALL filter assignments with new field AND new value
             query = f"""
             UPDATE `{config.FILTER_TABLE}`
-            SET field_id = '{new_field}'
+            SET field_id = '{new_field}',
+                filter_value = '{new_value}'
             WHERE policy_name = '{self.selected_policy_name}'
               AND project_id = '{self.project_id}'
               AND dataset_id = '{self.selected_policy_dataset}'
@@ -462,6 +521,7 @@ class RLSAssignUserstoPolicy:
                 details={
                     'old_field': self.selected_policy_field,
                     'new_field': new_field,
+                    'new_value': new_value,
                     'view': f"{self.selected_views_dataset}.{self.selected_view_name}"
                 }
             )
@@ -469,7 +529,7 @@ class RLSAssignUserstoPolicy:
             # Update local state
             self.selected_policy_field = new_field
             
-            ui.notify(f"✅ View field changed to: {new_field}", type="positive", timeout=3000)
+            ui.notify(f"✅ View field changed to: {new_field} = {new_value}", type="positive", timeout=3000)
             return True
             
         except Exception as e:
@@ -592,7 +652,7 @@ class RLSAssignUserstoPolicy:
                 self.step1_next_button.set_visibility(False)
 
     def step2_with_tabs(self):
-        """Step 2: Manage Assignments with 3 tabs"""
+        """Step 2: Manage Assignments with 2 tabs"""
         with ui.step(self.step2_title):
             # Policy info card
             with ui.card().classes('w-full bg-blue-50 p-4 mb-4'):
