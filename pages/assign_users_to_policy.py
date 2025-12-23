@@ -307,29 +307,49 @@ class RLSAssignUserstoPolicy:
                 ui.button("CANCEL", on_click=dialog.close).props('flat')
                 
                 async def confirm_change():
+                    print("=== CONFIRM CHANGE CLICKED ===")
+                    print(f"New field value: {new_field_select.value}")
+                    print(f"New value value: {new_value_select.value}")
+                    
                     if not new_field_select.value:
+                        print("ERROR: No field selected")
                         ui.notify("Please select a field", type="warning")
                         return
                     
                     if not new_value_select.value:
+                        print("ERROR: No value selected")
                         ui.notify("Please select a value for the new field", type="warning")
                         return
                     
                     if new_field_select.value == self.selected_policy_field:
+                        print("INFO: Field is the same")
                         ui.notify("Field is already set to this value", type="info")
                         return
                     
+                    print("Closing dialog...")
                     dialog.close()
                     
+                    # Show loading notification
+                    ui.notify("Updating view field...", type="info", timeout=2000)
+                    
+                    print("Calling change_view_field...")
                     success = await run.io_bound(
                         self.change_view_field,
                         new_field_select.value,
                         new_value_select.value
                     )
                     
+                    print(f"Result: {success}")
+                    
                     if success:
-                        # Refresh page to show new field
+                        print("Success! Reloading page...")
+                        ui.notify(f"✅ View field changed to: {new_field_select.value} = {new_value_select.value}", type="positive", timeout=3000)
+                        # Give time for notification to show before reload
+                        await run.io_bound(lambda: __import__('time').sleep(1))
                         ui.navigate.reload()
+                    else:
+                        print("Failed to change field")
+                        ui.notify("❌ Failed to change field. Check if this is an RLS view.", type="negative")
                 
                 ui.button("CHANGE FIELD", icon="edit", on_click=confirm_change).props('color=primary')
         
@@ -433,11 +453,26 @@ class RLSAssignUserstoPolicy:
     def change_view_field(self, new_field, new_value):
         """Change the filter field of the RLS view"""
         try:
-            ui.notify("Updating view field...", type="info", timeout=2000)
+            print(f"=== CHANGE VIEW FIELD DEBUG ===")
+            print(f"New field: {new_field}")
+            print(f"New value: {new_value}")
+            print(f"Is RLS view: {self.is_rls_view}")
+            print(f"Views dataset: {self.selected_views_dataset}")
+            print(f"View name: {self.selected_view_name}")
+            
+            if not self.is_rls_view:
+                print("❌ This is not an RLS view! Cannot edit field.")
+                return False
+            
+            if not self.selected_views_dataset or not self.selected_view_name:
+                print("❌ View information missing!")
+                return False
             
             # Get current view SQL
+            print(f"Getting view: {self.selected_views_dataset}.{self.selected_view_name}")
             view_ref = client.dataset(self.selected_views_dataset).table(self.selected_view_name)
             view = client.get_table(view_ref)
+            print(f"View retrieved successfully")
             
             # Extract metadata
             metadata_match = re.search(r'RLS_METADATA:(\{.*\})', view.description)
@@ -445,6 +480,7 @@ class RLSAssignUserstoPolicy:
                 rls_metadata = json.loads(metadata_match.group(1))
             else:
                 rls_metadata = {}
+            print(f"Metadata: {rls_metadata}")
             
             # Get field type
             table_ref = client.dataset(self.selected_policy_dataset).table(self.selected_policy_table)
@@ -456,8 +492,10 @@ class RLSAssignUserstoPolicy:
                     break
             
             if not field_type:
-                ui.notify(f"Field {new_field} not found in table schema", type="negative")
+                print(f"Field {new_field} not found in table schema")
                 return False
+            
+            print(f"Field type: {field_type}")
             
             # Create new view SQL with updated field
             new_sql = f"""
@@ -476,8 +514,12 @@ class RLSAssignUserstoPolicy:
             );
             """
             
+            print(f"Executing SQL to update view...")
+            print(f"SQL: {new_sql}")
+            
             # Execute
             client.query(new_sql).result()
+            print(f"View SQL updated successfully")
             
             # Update metadata
             rls_metadata['filter_field'] = new_field
@@ -489,6 +531,7 @@ class RLSAssignUserstoPolicy:
                 f"RLS_METADATA:{json.dumps(rls_metadata)}"
             )
             client.update_table(view, ['description'])
+            print(f"View metadata updated")
             
             # Update policy table
             query = f"""
@@ -499,7 +542,9 @@ class RLSAssignUserstoPolicy:
               AND dataset_id = '{self.selected_policy_dataset}'
               AND table_name = '{self.selected_policy_table}'
             """
+            print(f"Updating policy table...")
             client.query(query).result()
+            print(f"Policy table updated")
             
             # Update ALL filter assignments with new field AND new value
             query = f"""
@@ -511,7 +556,9 @@ class RLSAssignUserstoPolicy:
               AND dataset_id = '{self.selected_policy_dataset}'
               AND table_id = '{self.selected_policy_table}'
             """
+            print(f"Updating filter table...")
             client.query(query).result()
+            print(f"Filter table updated")
             
             self.audit_service.log_action(
                 action='CHANGE_VIEW_FIELD',
@@ -525,15 +572,19 @@ class RLSAssignUserstoPolicy:
                     'view': f"{self.selected_views_dataset}.{self.selected_view_name}"
                 }
             )
+            print(f"Audit logged")
             
             # Update local state
             self.selected_policy_field = new_field
             
-            ui.notify(f"✅ View field changed to: {new_field} = {new_value}", type="positive", timeout=3000)
+            print(f"=== CHANGE VIEW FIELD SUCCESS ===")
             return True
             
         except Exception as e:
-            ui.notify(f"Error changing field: {e}", type="negative")
+            print(f"=== CHANGE VIEW FIELD ERROR ===")
+            print(f"Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def refresh_assignments_grid(self):
@@ -589,28 +640,47 @@ class RLSAssignUserstoPolicy:
     def check_if_rls_view(self):
         """Check if the policy is for an RLS view"""
         try:
+            print(f"=== CHECK IF RLS VIEW DEBUG ===")
+            print(f"Selected policy dataset: {self.selected_policy_dataset}")
+            print(f"Selected policy table: {self.selected_policy_table}")
+            print(f"Selected policy name: {self.selected_policy_name}")
+            
             # Try to find view in _views dataset
             views_dataset = f"{self.selected_policy_dataset}_views"
+            print(f"Looking for views in: {views_dataset}")
             
             # List views in the views dataset
-            tables = client.list_tables(views_dataset)
+            try:
+                tables = client.list_tables(views_dataset)
+                print(f"Dataset {views_dataset} exists")
+            except Exception as e:
+                print(f"Dataset {views_dataset} does NOT exist: {e}")
+                self.is_rls_view = False
+                return
             
             for table in tables:
+                print(f"Found table: {table.table_id}, type: {table.table_type}")
+                
                 if table.table_type == 'VIEW':
                     # Get view details
                     view_ref = client.dataset(views_dataset).table(table.table_id)
                     view = client.get_table(view_ref)
+                    
+                    print(f"View description: {view.description[:200] if view.description else 'None'}...")
                     
                     # Check if this view matches our policy
                     if view.description and 'RLS_METADATA' in view.description:
                         metadata_match = re.search(r'RLS_METADATA:(\{.*\})', view.description)
                         if metadata_match:
                             metadata = json.loads(metadata_match.group(1))
+                            print(f"View metadata: {metadata}")
+                            
                             if (metadata.get('policy_name') == self.selected_policy_name or
                                 (metadata.get('base_dataset') == self.selected_policy_dataset and
                                  metadata.get('base_table') == self.selected_policy_table)):
                                 
                                 # This is an RLS view!
+                                print(f"✅ FOUND RLS VIEW: {table.table_id}")
                                 self.is_rls_view = True
                                 self.selected_view_name = table.table_id
                                 self.selected_views_dataset = views_dataset
@@ -619,10 +689,13 @@ class RLSAssignUserstoPolicy:
                                 return
             
             # Not an RLS view
+            print(f"❌ NOT AN RLS VIEW - Traditional RLS policy")
             self.is_rls_view = False
             
         except Exception as e:
             print(f"Error checking for RLS view: {e}")
+            import traceback
+            traceback.print_exc()
             self.is_rls_view = False
 
     def step1(self):
