@@ -17,8 +17,8 @@
   GenAI4Data Security Manager
   Module: RLS Policy Assignment - Unified Interface
 ================================================================================
-  Version:      3.0.0
-  Release Date: 2024-12-23
+  Version:      3.0.1
+  Release Date: 2024-12-26
   Author:       Lucas Carvalhal - Sys Manager
   Company:      Sys Manager Informática
   
@@ -31,6 +31,10 @@
   - Edit view filter field dynamically
   - Manage filter values with usage statistics
   - Improved UX with tabs and real-time updates
+  
+  Fix (v3.0.1):
+  - Fixed validation to check if VIEW exists (not just base table)
+  - Views are stored in {dataset}_views dataset with policy_name as view name
 ================================================================================
 """
 
@@ -39,7 +43,7 @@ from theme import get_text
 from config import Config
 from nicegui import ui, run
 from google.cloud import bigquery
-from google.api_core.exceptions import GoogleAPIError
+from google.api_core.exceptions import GoogleAPIError, NotFound
 from services.audit_service import AuditService
 import json
 import re
@@ -83,7 +87,13 @@ class RLSAssignUserstoPolicy:
             self.step2_with_tabs()
 
     def get_policies(self):
-        """Load all RLS policies (both traditional and view-based) and validate they still exist"""
+        """
+        Load all RLS policies and validate they still exist.
+        
+        IMPORTANT: For RLS views, the policy stores the BASE table info,
+        but the actual VIEW is in {dataset}_views with the policy_name as view name.
+        We need to check if the VIEW exists, not just the base table.
+        """
         query = f"""
         SELECT
           policy_name as `Policy Name`,
@@ -99,25 +109,64 @@ class RLSAssignUserstoPolicy:
             query_job = client.query(query)
             all_policies = [dict(row) for row in query_job]
             
-            # Validate each policy - check if table still exists
+            print(f"📋 Found {len(all_policies)} policies in database")
+            
+            # Validate each policy
             valid_policies = []
             for policy in all_policies:
-                try:
-                    dataset_id = policy['Dataset ID']
-                    table_name = policy['Table Name']
+                policy_name = policy['Policy Name']
+                dataset_id = policy['Dataset ID']
+                table_name = policy['Table Name']
+                
+                print(f"\n🔍 Validating policy: {policy_name}")
+                print(f"   Dataset: {dataset_id}, Table: {table_name}")
+                
+                # Check if this is an RLS view policy (name starts with common patterns)
+                is_view_policy = (
+                    policy_name.startswith('rls_vw_') or 
+                    policy_name.startswith('rls_view_') or
+                    policy_name.startswith('vw_rls_') or
+                    '_vw_' in policy_name
+                )
+                
+                if is_view_policy:
+                    # For RLS views: check if VIEW exists in {dataset}_views
+                    views_dataset = f"{dataset_id}_views"
+                    view_name = policy_name  # The view name is the same as policy name
                     
-                    # Try to get the table/view
-                    table_ref = client.dataset(dataset_id).table(table_name)
-                    client.get_table(table_ref)
+                    print(f"   📺 RLS View detected - checking: {views_dataset}.{view_name}")
                     
-                    # Table exists, add to valid list
-                    valid_policies.append(policy)
-                except Exception:
-                    # Table doesn't exist anymore, skip it
-                    print(f"⚠️ Policy '{policy['Policy Name']}' references non-existent table {dataset_id}.{table_name} - skipping")
-                    continue
+                    try:
+                        view_ref = client.dataset(views_dataset).table(view_name)
+                        client.get_table(view_ref)
+                        print(f"   ✅ View EXISTS: {views_dataset}.{view_name}")
+                        valid_policies.append(policy)
+                    except NotFound:
+                        print(f"   ❌ View NOT FOUND: {views_dataset}.{view_name} - SKIPPING")
+                        continue
+                    except Exception as e:
+                        # Dataset might not exist
+                        print(f"   ⚠️ Error checking view: {e} - SKIPPING")
+                        continue
+                else:
+                    # For traditional RLS: check if TABLE exists
+                    print(f"   📊 Traditional RLS - checking: {dataset_id}.{table_name}")
+                    
+                    try:
+                        table_ref = client.dataset(dataset_id).table(table_name)
+                        client.get_table(table_ref)
+                        print(f"   ✅ Table EXISTS: {dataset_id}.{table_name}")
+                        valid_policies.append(policy)
+                    except NotFound:
+                        print(f"   ❌ Table NOT FOUND: {dataset_id}.{table_name} - SKIPPING")
+                        continue
+                    except Exception as e:
+                        print(f"   ⚠️ Error checking table: {e} - SKIPPING")
+                        continue
             
-            print(f"✅ Loaded {len(valid_policies)} valid policies (filtered {len(all_policies) - len(valid_policies)} deleted)")
+            filtered_count = len(all_policies) - len(valid_policies)
+            print(f"\n✅ Loaded {len(valid_policies)} valid policies (filtered {filtered_count} deleted)")
+            
             return valid_policies
             
         except Exception as e:
@@ -735,29 +784,11 @@ class RLSAssignUserstoPolicy:
         try:
             policy_list = self.get_policies()
             
-            # Validate each policy - check if view/table still exists
-            valid_policies = []
-            for policy in policy_list:
-                try:
-                    dataset_id = policy['Dataset ID']
-                    table_name = policy['Table Name']
-                    
-                    # Try to get the table
-                    table_ref = client.dataset(dataset_id).table(table_name)
-                    client.get_table(table_ref)
-                    
-                    # Table exists, add to valid list
-                    valid_policies.append(policy)
-                except Exception:
-                    # Table doesn't exist, skip it
-                    print(f"Policy {policy['Policy Name']} references non-existent table {dataset_id}.{table_name}")
-                    continue
-            
             # Update grid
-            self.grid_step1.options['rowData'] = valid_policies
+            self.grid_step1.options['rowData'] = policy_list
             self.grid_step1.update()
             
-            ui.notify(f"✅ Loaded {len(valid_policies)} active policies", type="positive", timeout=2000)
+            ui.notify(f"✅ Loaded {len(policy_list)} active policies", type="positive", timeout=2000)
             
         except Exception as e:
             ui.notify(f"Error refreshing policies: {e}", type="negative")
