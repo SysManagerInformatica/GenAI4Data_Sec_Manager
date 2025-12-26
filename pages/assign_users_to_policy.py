@@ -745,16 +745,16 @@ class RLSAssignUserstoPolicy:
         self.stepper.next()
 
     def refresh_views_list(self):
-        """Refresh the views list based on selected datasets"""
+        """Refresh the views list based on selected dataset"""
         try:
-            # Get selected datasets from filter
-            selected_datasets = self.dataset_filter_select.value if self.dataset_filter_select else []
+            # Get selected dataset from filter
+            selected_dataset = self.dataset_filter_select.value if self.dataset_filter_select else 'All Datasets'
             
-            # If "All Datasets" or nothing selected, show all
-            if not selected_datasets or 'all' in selected_datasets:
+            # If "All Datasets" selected, show all
+            if selected_dataset == 'All Datasets':
                 views_list = self.get_all_rls_views()
             else:
-                views_list = self.get_all_rls_views(dataset_filter=selected_datasets)
+                views_list = self.get_all_rls_views(dataset_filter=[selected_dataset])
             
             # Update grid
             self.grid_step1.options['rowData'] = views_list
@@ -776,14 +776,12 @@ class RLSAssignUserstoPolicy:
                     # Dataset filter dropdown
                     self.available_views_datasets = self.get_views_datasets()
                     
-                    filter_options = [{'label': '📁 All Datasets', 'value': 'all'}]
-                    for ds in self.available_views_datasets:
-                        filter_options.append({'label': f'📁 {ds}', 'value': ds})
+                    # Simple list format for ui.select
+                    filter_options = ['All Datasets'] + self.available_views_datasets
                     
                     self.dataset_filter_select = ui.select(
                         options=filter_options,
-                        value=['all'],
-                        multiple=True,
+                        value='All Datasets',
                         label="Filter by Dataset"
                     ).classes('min-w-64').props('dense outlined')
                     
