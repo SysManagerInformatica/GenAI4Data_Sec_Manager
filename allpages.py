@@ -3,8 +3,8 @@
   GenAI4Data Security Manager
   Module: Page Router & Registration System
 ================================================================================
-  Version:      3.0.0
-  Release Date: 2024-12-22
+  Version:      3.1.0
+  Release Date: 2024-12-26
   Author:       Lucas Carvalhal - Sys Manager
   Company:      Sys Manager Informática
   
@@ -12,12 +12,19 @@
   Central page routing and registration system for all application pages
   including RLS, CLS, IAM, and Audit modules with fallback support for
   missing page implementations.
+  
+  Changes (v3.1.0):
+  - Removed Policy Tags and Taxonomies routes (deprecated)
+  - CLS now uses only Protected Views approach
 ================================================================================
 """
 
 from nicegui import ui
 
-# Tentar importar as páginas originais, criar placeholders se não existirem
+# ============================================
+# RLS PAGES
+# ============================================
+
 try:
     from pages.create_views import RLSCreateforUsers
 except:
@@ -58,36 +65,11 @@ except:
                 ui.label('Assign Values to Groups').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
-try:
-    from pages.cls_taxonomies import CLSTaxonomies
-except:
-    class CLSTaxonomies:
-        def run(self):
-            from theme import frame
-            with frame('Manage Taxonomies'):
-                ui.label('Data Classification Taxonomies').classes('text-2xl font-bold mb-4')
-                ui.label('This feature is under development').classes('text-orange-600')
+# ============================================
+# CLS PAGES (Protected Views Only)
+# ============================================
 
-try:
-    from pages.cls_policy_tags import CLSPolicyTags
-except:
-    class CLSPolicyTags:
-        def run(self):
-            from theme import frame
-            with frame('Manage Policy Tags'):
-                ui.label('Column-Level Security Policy Tags').classes('text-2xl font-bold mb-4')
-                ui.label('This feature is under development').classes('text-orange-600')
-
-try:
-    from pages.cls_apply_tags import CLSApplyTags
-except:
-    class CLSApplyTags:
-        def run(self):
-            from theme import frame
-            with frame('Apply Tags to Columns'):
-                ui.label('Apply Security Tags to BigQuery Columns').classes('text-2xl font-bold mb-4')
-                ui.label('This feature is under development').classes('text-orange-600')
-
+# Schema Browser
 try:
     from pages.cls_schema_browser import CLSSchemaBrowser
 except:
@@ -98,18 +80,7 @@ except:
                 ui.label('BigQuery Schema Browser').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
-# Policy Tag Permissions
-try:
-    from pages.cls_apply_iam import CLSPermissionsManager
-except:
-    class CLSPermissionsManager:
-        def run(self):
-            from theme import frame
-            with frame('Policy Tag Permissions'):
-                ui.label('Policy Tag IAM Permissions Manager').classes('text-2xl font-bold mb-4')
-                ui.label('This feature is under development').classes('text-orange-600')
-
-# Dynamic Column Security (Create Protected View)
+# Create Protected View (CLS + Masking)
 try:
     from pages.cls_dynamic_columns import DynamicColumnSecurity
 except:
@@ -120,7 +91,7 @@ except:
                 ui.label('Create Protected View').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
-# Manage Protected Views
+# Manage Protected Views (RLS + CLS Integrated)
 try:
     from pages.cls_dynamic_manage import DynamicColumnManage
 except:
@@ -131,7 +102,11 @@ except:
                 ui.label('Manage Protected Views').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
-# ✅ Dataset IAM Manager
+# ============================================
+# IAM PAGES
+# ============================================
+
+# Dataset IAM Manager
 try:
     from pages.dataset_iam_manager import DatasetIAMManager
 except:
@@ -142,7 +117,7 @@ except:
                 ui.label('Dataset IAM Manager').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
 
-# ✅ NOVO: Project IAM Manager
+# Project IAM Manager
 try:
     from pages.project_iam_manager import ProjectIAMManager
 except:
@@ -152,6 +127,10 @@ except:
             with frame('Project IAM Manager'):
                 ui.label('Project IAM Manager').classes('text-2xl font-bold mb-4')
                 ui.label('This feature is under development').classes('text-orange-600')
+
+# ============================================
+# AUDIT & ACCESS CONTROL
+# ============================================
 
 # Audit Logs
 try:
@@ -186,8 +165,15 @@ except:
                 ui.label('This feature is under development').classes('text-orange-600')
 
 
+# ============================================
+# ROUTE REGISTRATION
+# ============================================
+
 def create() -> None:
-    # RLS Pages
+    """Register all application routes"""
+    
+    # ========== RLS Pages ==========
+    
     def create_rls_page_for_users():
         rls_instance = RLSCreateforUsers()
         rls_instance.run()
@@ -208,64 +194,42 @@ def create() -> None:
         rls_instance.run()
     ui.page('/assignvaluestogroup/')(assign_values_to_group)
 
-    # CLS Pages
-    def cls_taxonomies_page():
-        cls_instance = CLSTaxonomies()
-        cls_instance.run()
-    ui.page('/clstaxonomies/')(cls_taxonomies_page)
-
-    def cls_policy_tags_page():
-        cls_instance = CLSPolicyTags()
-        cls_instance.run()
-    ui.page('/clspolicytags/')(cls_policy_tags_page)
-
-    def cls_apply_tags_page():
-        cls_instance = CLSApplyTags()
-        cls_instance.run()
-    ui.page('/clsapplytags/')(cls_apply_tags_page)
+    # ========== CLS Pages (Protected Views Only) ==========
 
     def cls_schema_browser_page():
         cls_instance = CLSSchemaBrowser()
         cls_instance.run()
     ui.page('/clsschemabrowser/')(cls_schema_browser_page)
 
-    # Policy Tag Permissions Page
-    def cls_apply_iam_page():
-        cls_instance = CLSPermissionsManager()
-        cls_instance.run()
-    ui.page('/clsapplyiam/')(cls_apply_iam_page)
-
-    # Create Protected View (CLS + Masking Unified)
     def cls_dynamic_columns_page():
         cls_instance = DynamicColumnSecurity()
         cls_instance.run()
     ui.page('/clsdynamiccolumns/')(cls_dynamic_columns_page)
 
-    # Manage Protected Views
     def cls_dynamic_manage_page():
         cls_instance = DynamicColumnManage()
         cls_instance.run()
     ui.page('/clsdynamicmanage/')(cls_dynamic_manage_page)
 
-    # ✅ Dataset IAM Manager
+    # ========== IAM Pages ==========
+
     def dataset_iam_manager_page():
         iam_instance = DatasetIAMManager()
         iam_instance.run()
     ui.page('/datasetiammanager/')(dataset_iam_manager_page)
 
-    # ✅ NOVO: Project IAM Manager
     def project_iam_manager_page():
         iam_instance = ProjectIAMManager()
         iam_instance.run()
     ui.page('/projectiammanager/')(project_iam_manager_page)
 
-    # Audit Logs Page
+    # ========== Audit & Access ==========
+
     def audit_logs_page():
         audit_instance = AuditLogs()
         audit_instance.run()
     ui.page('/auditlogs/')(audit_logs_page)
 
-    # Control Access Page
     def control_access_page():
         control_instance = ControlAccess()
         control_instance.run()
