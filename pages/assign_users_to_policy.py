@@ -17,7 +17,7 @@
   GenAI4Data Security Manager
   Module: RLS Policy Assignment - Unified Interface
 ================================================================================
-  Version:      3.0.1
+  Version:      3.1.0
   Release Date: 2024-12-26
   Author:       Lucas Carvalhal - Sys Manager
   Company:      Sys Manager Informática
@@ -26,15 +26,11 @@
   Unified interface for managing RLS policies with support for users, groups,
   and service accounts. Includes view field editing and filter management.
   
-  New Features (v3.0):
-  - Unified interface for Users/Groups/Service Accounts
-  - Edit view filter field dynamically
-  - Manage filter values with usage statistics
-  - Improved UX with tabs and real-time updates
-  
-  Fix (v3.0.1):
-  - Fixed validation to check if VIEW exists (not just base table)
-  - Views are stored in {dataset}_views dataset with policy_name as view name
+  New Features (v3.1):
+  - Lists ALL RLS views from GCP (not just registered policies)
+  - Dataset filter to select which datasets to show
+  - Auto-discovers views in *_views datasets
+  - Creates policy record if view exists but policy doesn't
 ================================================================================
 """
 
@@ -69,7 +65,13 @@ class RLSAssignUserstoPolicy:
         self.selected_base_table = None
         self.is_rls_view = False
         
+        # Dataset filter
+        self.available_views_datasets = []
+        self.selected_datasets_filter = []
+        self.dataset_filter_select = None
+        
         self.existing_policies_grid = None
+        self.grid_step1 = None
         self.headers()
         self.stepper_setup()
 
@@ -79,105 +81,129 @@ class RLSAssignUserstoPolicy:
 
     def stepper_setup(self):
         self.stepper = ui.stepper().props("vertical").classes("w-full")
-        self.step1_title = "Step 1: Select Policy"
+        self.step1_title = "Step 1: Select View"
         self.step2_title = "Step 2: Manage Assignments"
 
         with self.stepper:
             self.step1()
             self.step2_with_tabs()
 
-    def get_policies(self):
+    def get_views_datasets(self):
         """
-        Load all RLS policies and validate they still exist.
-        
-        IMPORTANT: For RLS views, the policy stores the BASE table info,
-        but the actual VIEW is in {dataset}_views with the policy_name as view name.
-        We need to check if the VIEW exists, not just the base table.
-        """
-        query = f"""
-        SELECT
-          policy_name as `Policy Name`,
-          project_id as `Project ID`,
-          dataset_id as `Dataset ID`,
-          table_name as `Table Name`,
-          field_id as `Field ID`
-        FROM `{config.POLICY_TABLE}` 
-        WHERE policy_type = 'users'
-        ORDER BY policy_name
+        Get all datasets that end with '_views' (RLS views datasets)
         """
         try:
-            query_job = client.query(query)
-            all_policies = [dict(row) for row in query_job]
+            datasets = list(client.list_datasets())
+            views_datasets = []
             
-            print(f"📋 Found {len(all_policies)} policies in database")
+            for dataset in datasets:
+                dataset_id = dataset.dataset_id
+                # Check if it's a views dataset
+                if dataset_id.endswith('_views'):
+                    views_datasets.append(dataset_id)
+                    print(f"📁 Found views dataset: {dataset_id}")
             
-            # Validate each policy
-            valid_policies = []
-            for policy in all_policies:
-                policy_name = policy['Policy Name']
-                dataset_id = policy['Dataset ID']
-                table_name = policy['Table Name']
-                
-                print(f"\n🔍 Validating policy: {policy_name}")
-                print(f"   Dataset: {dataset_id}, Table: {table_name}")
-                
-                # Check if this is an RLS view policy (name starts with common patterns)
-                is_view_policy = (
-                    policy_name.startswith('rls_vw_') or 
-                    policy_name.startswith('rls_view_') or
-                    policy_name.startswith('vw_rls_') or
-                    '_vw_' in policy_name
-                )
-                
-                if is_view_policy:
-                    # For RLS views: check if VIEW exists in {dataset}_views
-                    views_dataset = f"{dataset_id}_views"
-                    view_name = policy_name  # The view name is the same as policy name
-                    
-                    print(f"   📺 RLS View detected - checking: {views_dataset}.{view_name}")
-                    
-                    try:
-                        view_ref = client.dataset(views_dataset).table(view_name)
-                        client.get_table(view_ref)
-                        print(f"   ✅ View EXISTS: {views_dataset}.{view_name}")
-                        valid_policies.append(policy)
-                    except NotFound:
-                        print(f"   ❌ View NOT FOUND: {views_dataset}.{view_name} - SKIPPING")
-                        continue
-                    except Exception as e:
-                        # Dataset might not exist
-                        print(f"   ⚠️ Error checking view: {e} - SKIPPING")
-                        continue
-                else:
-                    # For traditional RLS: check if TABLE exists
-                    print(f"   📊 Traditional RLS - checking: {dataset_id}.{table_name}")
-                    
-                    try:
-                        table_ref = client.dataset(dataset_id).table(table_name)
-                        client.get_table(table_ref)
-                        print(f"   ✅ Table EXISTS: {dataset_id}.{table_name}")
-                        valid_policies.append(policy)
-                    except NotFound:
-                        print(f"   ❌ Table NOT FOUND: {dataset_id}.{table_name} - SKIPPING")
-                        continue
-                    except Exception as e:
-                        print(f"   ⚠️ Error checking table: {e} - SKIPPING")
-                        continue
-            
-            filtered_count = len(all_policies) - len(valid_policies)
-            print(f"\n✅ Loaded {len(valid_policies)} valid policies (filtered {filtered_count} deleted)")
-            
-            return valid_policies
+            print(f"✅ Found {len(views_datasets)} views datasets")
+            return sorted(views_datasets)
             
         except Exception as e:
-            ui.notify(f"Error loading policies: {e}", type="negative")
+            print(f"Error listing datasets: {e}")
+            return []
+
+    def get_all_rls_views(self, dataset_filter=None):
+        """
+        Get ALL RLS views from GCP, optionally filtered by dataset.
+        
+        This scans actual GCP datasets (ending in _views) and lists all views found.
+        """
+        try:
+            all_views = []
+            
+            # Get datasets to scan
+            if dataset_filter and len(dataset_filter) > 0:
+                datasets_to_scan = dataset_filter
+            else:
+                datasets_to_scan = self.get_views_datasets()
+            
+            print(f"🔍 Scanning {len(datasets_to_scan)} datasets for views...")
+            
+            for views_dataset in datasets_to_scan:
+                try:
+                    tables = list(client.list_tables(views_dataset))
+                    
+                    for table in tables:
+                        if table.table_type == 'VIEW':
+                            # Get view details
+                            view_ref = client.dataset(views_dataset).table(table.table_id)
+                            view = client.get_table(view_ref)
+                            
+                            # Extract metadata from description
+                            base_dataset = None
+                            base_table = None
+                            filter_field = None
+                            
+                            if view.description and 'RLS_METADATA' in view.description:
+                                try:
+                                    metadata_match = re.search(r'RLS_METADATA:(\{.*\})', view.description)
+                                    if metadata_match:
+                                        metadata = json.loads(metadata_match.group(1))
+                                        base_dataset = metadata.get('base_dataset')
+                                        base_table = metadata.get('base_table')
+                                        filter_field = metadata.get('filter_field')
+                                except:
+                                    pass
+                            
+                            # If no metadata, try to infer from view SQL
+                            if not base_dataset:
+                                # The base dataset is usually the views dataset without "_views"
+                                base_dataset = views_dataset.replace('_views', '')
+                            
+                            if not base_table:
+                                # Try to extract from view SQL
+                                if view.view_query:
+                                    # Look for FROM `project.dataset.table`
+                                    match = re.search(r'FROM\s+`[^`]+\.([^`]+)\.([^`]+)`', view.view_query, re.IGNORECASE)
+                                    if match:
+                                        base_dataset = match.group(1)
+                                        base_table = match.group(2)
+                            
+                            if not filter_field:
+                                # Try to extract from WHERE clause
+                                if view.view_query:
+                                    match = re.search(r'WHERE\s+(\w+)\s+IN', view.view_query, re.IGNORECASE)
+                                    if match:
+                                        filter_field = match.group(1)
+                            
+                            view_info = {
+                                'View Name': table.table_id,
+                                'Views Dataset': views_dataset,
+                                'Base Dataset': base_dataset or 'Unknown',
+                                'Base Table': base_table or 'Unknown',
+                                'Filter Field': filter_field or 'Unknown',
+                                'Created': str(view.created)[:19] if view.created else 'Unknown'
+                            }
+                            
+                            all_views.append(view_info)
+                            print(f"   📺 Found view: {table.table_id} in {views_dataset}")
+                            
+                except NotFound:
+                    print(f"   ⚠️ Dataset {views_dataset} not found")
+                except Exception as e:
+                    print(f"   ⚠️ Error scanning {views_dataset}: {e}")
+            
+            print(f"✅ Found {len(all_views)} total RLS views")
+            return all_views
+            
+        except Exception as e:
+            ui.notify(f"Error loading views: {e}", type="negative")
             return []
 
     def load_existing_assignments(self):
-        """Load ALL assignments (users, groups, service accounts)"""
-        if not self.selected_policy_dataset or not self.selected_policy_table:
+        """Load ALL assignments (users, groups, service accounts) for selected view"""
+        if not self.selected_views_dataset or not self.selected_view_name:
             return []
         
+        # For views, we query by the base table info stored in policies_filters
         query = f"""
         SELECT 
             rls_type,
@@ -187,8 +213,13 @@ class RLSAssignUserstoPolicy:
             CAST(created_at AS STRING) as created_at
         FROM `{config.FILTER_TABLE}`
         WHERE project_id = '{self.project_id}'
-          AND dataset_id = '{self.selected_policy_dataset}'
-          AND table_id = '{self.selected_policy_table}'
+          AND (
+            -- Match by policy name (view name)
+            policy_name = '{self.selected_view_name}'
+            OR
+            -- Match by base table info
+            (dataset_id = '{self.selected_base_dataset}' AND table_id = '{self.selected_base_table}')
+          )
         ORDER BY rls_type, identity, filter_value
         """
         
@@ -219,7 +250,7 @@ class RLSAssignUserstoPolicy:
 
     def get_filter_value_stats(self):
         """Get statistics about filter value usage"""
-        if not self.selected_policy_dataset or not self.selected_policy_table:
+        if not self.selected_base_dataset or not self.selected_base_table:
             return []
         
         query = f"""
@@ -229,8 +260,10 @@ class RLSAssignUserstoPolicy:
             COUNT(*) as total_assignments
         FROM `{config.FILTER_TABLE}`
         WHERE project_id = '{self.project_id}'
-          AND dataset_id = '{self.selected_policy_dataset}'
-          AND table_id = '{self.selected_policy_table}'
+          AND (
+            policy_name = '{self.selected_view_name}'
+            OR (dataset_id = '{self.selected_base_dataset}' AND table_id = '{self.selected_base_table}')
+          )
           AND filter_value IS NOT NULL
           AND filter_value != ''
         GROUP BY filter_value
@@ -245,9 +278,11 @@ class RLSAssignUserstoPolicy:
             return []
 
     def get_table_fields(self):
-        """Get available fields from the source table"""
+        """Get available fields from the BASE table"""
         try:
-            table_ref = client.dataset(self.selected_policy_dataset).table(self.selected_policy_table)
+            if not self.selected_base_dataset or not self.selected_base_table:
+                return []
+            table_ref = client.dataset(self.selected_base_dataset).table(self.selected_base_table)
             table = client.get_table(table_ref)
             return [field.name for field in table.schema]
         except Exception as e:
@@ -256,14 +291,14 @@ class RLSAssignUserstoPolicy:
     
     def get_distinct_field_values(self):
         """Get distinct values from the filter field"""
-        if not self.selected_policy_field or not self.selected_policy_dataset or not self.selected_policy_table:
-            print(f"DEBUG: Missing values - field:{self.selected_policy_field} dataset:{self.selected_policy_dataset} table:{self.selected_policy_table}")
+        if not self.selected_policy_field or not self.selected_base_dataset or not self.selected_base_table:
+            print(f"DEBUG: Missing values - field:{self.selected_policy_field} dataset:{self.selected_base_dataset} table:{self.selected_base_table}")
             return []
         
         try:
             query = f"""
             SELECT DISTINCT CAST({self.selected_policy_field} AS STRING) as value
-            FROM `{self.project_id}.{self.selected_policy_dataset}.{self.selected_policy_table}`
+            FROM `{self.project_id}.{self.selected_base_dataset}.{self.selected_base_table}`
             WHERE {self.selected_policy_field} IS NOT NULL
             ORDER BY value
             LIMIT 100
@@ -285,20 +320,8 @@ class RLSAssignUserstoPolicy:
             # Current field info
             with ui.card().classes('w-full bg-blue-50 p-4 mb-4'):
                 ui.label(f"📋 Current Field: {self.selected_policy_field}").classes('font-bold text-blue-700')
-                ui.label(f"Dataset: {self.selected_policy_dataset}").classes('text-sm')
-                ui.label(f"Table: {self.selected_policy_table}").classes('text-sm')
-            
-            # Check if RLS view
-            if not self.is_rls_view:
-                with ui.card().classes('w-full bg-yellow-50 p-4'):
-                    ui.label("⚠️ Field editing is only available for RLS views").classes('font-bold mb-2')
-                    ui.label("This policy uses traditional RLS (not view-based)").classes('text-sm')
-                
-                with ui.row().classes('w-full justify-end mt-4'):
-                    ui.button("CLOSE", on_click=dialog.close).props('flat')
-                
-                dialog.open()
-                return
+                ui.label(f"View: {self.selected_views_dataset}.{self.selected_view_name}").classes('text-sm')
+                ui.label(f"Base Table: {self.selected_base_dataset}.{self.selected_base_table}").classes('text-sm')
             
             # Field selector (initially empty)
             with ui.row().classes('w-full gap-4 items-center mb-4'):
@@ -343,7 +366,7 @@ class RLSAssignUserstoPolicy:
                     # Get distinct values from the selected field
                     query = f"""
                     SELECT DISTINCT CAST({new_field_select.value} AS STRING) as value
-                    FROM `{self.project_id}.{self.selected_policy_dataset}.{self.selected_policy_table}`
+                    FROM `{self.project_id}.{self.selected_base_dataset}.{self.selected_base_table}`
                     WHERE {new_field_select.value} IS NOT NULL
                     ORDER BY value
                     LIMIT 100
@@ -421,7 +444,7 @@ class RLSAssignUserstoPolicy:
                             ui.navigate.reload()
                         else:
                             print("Failed to change field")
-                            ui.notify("❌ Failed to change field. Check if this is an RLS view.", type="negative")
+                            ui.notify("❌ Failed to change field.", type="negative")
                             # Re-enable button
                             change_button.props(remove='loading')
                             change_button.enable()
@@ -449,8 +472,10 @@ class RLSAssignUserstoPolicy:
             DELETE FROM `{config.FILTER_TABLE}`
             WHERE rls_type = '{rls_type}'
               AND project_id = '{self.project_id}'
-              AND dataset_id = '{self.selected_policy_dataset}'
-              AND table_id = '{self.selected_policy_table}'
+              AND (
+                policy_name = '{self.selected_view_name}'
+                OR (dataset_id = '{self.selected_base_dataset}' AND table_id = '{self.selected_base_table}')
+              )
               AND {identity_column} = '{identity}'
               {filter_condition}
             """
@@ -465,7 +490,8 @@ class RLSAssignUserstoPolicy:
                 details={
                     'type': rls_type,
                     'identity': identity,
-                    'filter_value': filter_value
+                    'filter_value': filter_value,
+                    'view': self.selected_view_name
                 }
             )
             
@@ -498,14 +524,14 @@ class RLSAssignUserstoPolicy:
                 rls_type = 'users'  # SAs are treated as users in the system
                 identity_column = 'username'
             
-            # Insert query
+            # Insert query - use view name as policy_name
             query = f"""
             INSERT INTO `{config.FILTER_TABLE}` 
             (rls_type, policy_name, project_id, dataset_id, table_id, 
              field_id, filter_value, {identity_column}, created_at)
             VALUES
-            ('{rls_type}', '{self.selected_policy_name}', '{self.project_id}', 
-             '{self.selected_policy_dataset}', '{self.selected_policy_table}', 
+            ('{rls_type}', '{self.selected_view_name}', '{self.project_id}', 
+             '{self.selected_base_dataset}', '{self.selected_base_table}', 
              '{self.selected_policy_field}', '{filter_value}', '{email}', CURRENT_TIMESTAMP())
             """
             
@@ -520,7 +546,7 @@ class RLSAssignUserstoPolicy:
                     'type': identity_type,
                     'identity': email,
                     'filter_value': filter_value,
-                    'policy': self.selected_policy_name
+                    'view': self.selected_view_name
                 }
             )
             
@@ -537,13 +563,8 @@ class RLSAssignUserstoPolicy:
             print(f"=== CHANGE VIEW FIELD DEBUG ===")
             print(f"New field: {new_field}")
             print(f"New value: {new_value}")
-            print(f"Is RLS view: {self.is_rls_view}")
             print(f"Views dataset: {self.selected_views_dataset}")
             print(f"View name: {self.selected_view_name}")
-            
-            if not self.is_rls_view:
-                print("❌ This is not an RLS view! Cannot edit field.")
-                return False
             
             if not self.selected_views_dataset or not self.selected_view_name:
                 print("❌ View information missing!")
@@ -556,15 +577,15 @@ class RLSAssignUserstoPolicy:
             print(f"View retrieved successfully")
             
             # Extract metadata
-            metadata_match = re.search(r'RLS_METADATA:(\{.*\})', view.description)
-            if metadata_match:
-                rls_metadata = json.loads(metadata_match.group(1))
-            else:
-                rls_metadata = {}
+            rls_metadata = {}
+            if view.description:
+                metadata_match = re.search(r'RLS_METADATA:(\{.*\})', view.description)
+                if metadata_match:
+                    rls_metadata = json.loads(metadata_match.group(1))
             print(f"Metadata: {rls_metadata}")
             
-            # Get field type
-            table_ref = client.dataset(self.selected_policy_dataset).table(self.selected_policy_table)
+            # Get field type from base table
+            table_ref = client.dataset(self.selected_base_dataset).table(self.selected_base_table)
             table = client.get_table(table_ref)
             field_type = None
             for schema_field in table.schema:
@@ -582,60 +603,54 @@ class RLSAssignUserstoPolicy:
             new_sql = f"""
             CREATE OR REPLACE VIEW `{self.project_id}.{self.selected_views_dataset}.{self.selected_view_name}` AS
             SELECT *
-            FROM `{self.project_id}.{self.selected_policy_dataset}.{self.selected_policy_table}`
+            FROM `{self.project_id}.{self.selected_base_dataset}.{self.selected_base_table}`
             WHERE {new_field} IN (
               SELECT CAST(filter_value AS {field_type})
               FROM `{config.FILTER_TABLE}`
               WHERE rls_type = 'users'
                 AND project_id = '{self.project_id}'
-                AND dataset_id = '{self.selected_policy_dataset}'
-                AND table_id = '{self.selected_policy_table}'
+                AND dataset_id = '{self.selected_base_dataset}'
+                AND table_id = '{self.selected_base_table}'
                 AND field_id = '{new_field}'
                 AND username = SESSION_USER()
             );
             """
             
             print(f"Executing SQL to update view...")
-            print(f"SQL: {new_sql}")
-            
-            # Execute
             client.query(new_sql).result()
             print(f"View SQL updated successfully")
             
             # Update metadata
             rls_metadata['filter_field'] = new_field
             rls_metadata['filter_field_type'] = field_type
+            rls_metadata['base_dataset'] = self.selected_base_dataset
+            rls_metadata['base_table'] = self.selected_base_table
             
             view.description = (
                 f"RLS view for users - filters by {new_field}\n"
-                f"Base table: {self.selected_policy_dataset}.{self.selected_policy_table}\n\n"
+                f"Base table: {self.selected_base_dataset}.{self.selected_base_table}\n\n"
                 f"RLS_METADATA:{json.dumps(rls_metadata)}"
             )
             client.update_table(view, ['description'])
             print(f"View metadata updated")
             
-            # Update policy table
+            # Update policy table if exists
             query = f"""
             UPDATE `{config.POLICY_TABLE}`
             SET field_id = '{new_field}'
-            WHERE policy_name = '{self.selected_policy_name}'
+            WHERE policy_name = '{self.selected_view_name}'
               AND project_id = '{self.project_id}'
-              AND dataset_id = '{self.selected_policy_dataset}'
-              AND table_name = '{self.selected_policy_table}'
             """
             print(f"Updating policy table...")
             client.query(query).result()
-            print(f"Policy table updated")
             
             # Update ALL filter assignments with new field AND new value
             query = f"""
             UPDATE `{config.FILTER_TABLE}`
             SET field_id = '{new_field}',
                 filter_value = '{new_value}'
-            WHERE policy_name = '{self.selected_policy_name}'
+            WHERE policy_name = '{self.selected_view_name}'
               AND project_id = '{self.project_id}'
-              AND dataset_id = '{self.selected_policy_dataset}'
-              AND table_id = '{self.selected_policy_table}'
             """
             print(f"Updating filter table...")
             client.query(query).result()
@@ -653,7 +668,6 @@ class RLSAssignUserstoPolicy:
                     'view': f"{self.selected_views_dataset}.{self.selected_view_name}"
                 }
             )
-            print(f"Audit logged")
             
             # Update local state
             self.selected_policy_field = new_field
@@ -703,113 +717,96 @@ class RLSAssignUserstoPolicy:
             self.step1_next_button.set_visibility(False)
 
     def update_policy_values(self):
-        """Load policy details and check if it's a view"""
+        """Load view details when moving to step 2"""
         if not self.selected_policy:
-            ui.notify("No policy selected", type="warning")
+            ui.notify("No view selected", type="warning")
             return
 
-        self.selected_policy_name = self.selected_policy[0]['Policy Name']
-        self.selected_policy_dataset = self.selected_policy[0]['Dataset ID']
-        self.selected_policy_table = self.selected_policy[0]['Table Name']
-        self.selected_policy_field = self.selected_policy[0]['Field ID']
+        selected = self.selected_policy[0]
         
-        # Check if this is an RLS view
-        self.check_if_rls_view()
+        # Set view info
+        self.selected_view_name = selected['View Name']
+        self.selected_views_dataset = selected['Views Dataset']
+        self.selected_base_dataset = selected['Base Dataset']
+        self.selected_base_table = selected['Base Table']
+        self.selected_policy_field = selected['Filter Field']
+        
+        # For compatibility with other methods
+        self.selected_policy_name = self.selected_view_name
+        self.selected_policy_dataset = self.selected_base_dataset
+        self.selected_policy_table = self.selected_base_table
+        self.is_rls_view = True
+        
+        print(f"Selected view: {self.selected_view_name}")
+        print(f"Views dataset: {self.selected_views_dataset}")
+        print(f"Base: {self.selected_base_dataset}.{self.selected_base_table}")
+        print(f"Filter field: {self.selected_policy_field}")
         
         self.stepper.next()
 
-    def check_if_rls_view(self):
-        """Check if the policy is for an RLS view"""
+    def refresh_views_list(self):
+        """Refresh the views list based on selected datasets"""
         try:
-            print(f"=== CHECK IF RLS VIEW DEBUG ===")
-            print(f"Selected policy dataset: {self.selected_policy_dataset}")
-            print(f"Selected policy table: {self.selected_policy_table}")
-            print(f"Selected policy name: {self.selected_policy_name}")
+            # Get selected datasets from filter
+            selected_datasets = self.dataset_filter_select.value if self.dataset_filter_select else []
             
-            # Try to find view in _views dataset
-            views_dataset = f"{self.selected_policy_dataset}_views"
-            print(f"Looking for views in: {views_dataset}")
-            
-            # List views in the views dataset
-            try:
-                tables = client.list_tables(views_dataset)
-                print(f"Dataset {views_dataset} exists")
-            except Exception as e:
-                print(f"Dataset {views_dataset} does NOT exist: {e}")
-                self.is_rls_view = False
-                return
-            
-            for table in tables:
-                print(f"Found table: {table.table_id}, type: {table.table_type}")
-                
-                if table.table_type == 'VIEW':
-                    # Get view details
-                    view_ref = client.dataset(views_dataset).table(table.table_id)
-                    view = client.get_table(view_ref)
-                    
-                    print(f"View description: {view.description[:200] if view.description else 'None'}...")
-                    
-                    # Check if this view matches our policy
-                    if view.description and 'RLS_METADATA' in view.description:
-                        metadata_match = re.search(r'RLS_METADATA:(\{.*\})', view.description)
-                        if metadata_match:
-                            metadata = json.loads(metadata_match.group(1))
-                            print(f"View metadata: {metadata}")
-                            
-                            if (metadata.get('policy_name') == self.selected_policy_name or
-                                (metadata.get('base_dataset') == self.selected_policy_dataset and
-                                 metadata.get('base_table') == self.selected_policy_table)):
-                                
-                                # This is an RLS view!
-                                print(f"✅ FOUND RLS VIEW: {table.table_id}")
-                                self.is_rls_view = True
-                                self.selected_view_name = table.table_id
-                                self.selected_views_dataset = views_dataset
-                                self.selected_base_dataset = metadata.get('base_dataset')
-                                self.selected_base_table = metadata.get('base_table')
-                                return
-            
-            # Not an RLS view
-            print(f"❌ NOT AN RLS VIEW - Traditional RLS policy")
-            self.is_rls_view = False
-            
-        except Exception as e:
-            print(f"Error checking for RLS view: {e}")
-            import traceback
-            traceback.print_exc()
-            self.is_rls_view = False
-
-    def refresh_policies_list(self):
-        """Refresh the policies list and validate views"""
-        try:
-            policy_list = self.get_policies()
+            # If "All Datasets" or nothing selected, show all
+            if not selected_datasets or 'all' in selected_datasets:
+                views_list = self.get_all_rls_views()
+            else:
+                views_list = self.get_all_rls_views(dataset_filter=selected_datasets)
             
             # Update grid
-            self.grid_step1.options['rowData'] = policy_list
+            self.grid_step1.options['rowData'] = views_list
             self.grid_step1.update()
             
-            ui.notify(f"✅ Loaded {len(policy_list)} active policies", type="positive", timeout=2000)
+            ui.notify(f"✅ Found {len(views_list)} RLS views", type="positive", timeout=2000)
             
         except Exception as e:
-            ui.notify(f"Error refreshing policies: {e}", type="negative")
+            ui.notify(f"Error refreshing views: {e}", type="negative")
 
     def step1(self):
-        """Step 1: Select Policy"""
+        """Step 1: Select View from GCP"""
         with ui.step(self.step1_title):
-            with ui.row().classes('w-full items-center justify-between mb-2'):
-                ui.label("Select an RLS policy to manage").classes('text-caption text-grey-7')
-                ui.button("🔄 REFRESH", on_click=self.refresh_policies_list).props('flat size=sm')
+            # Header with filter
+            with ui.row().classes('w-full items-center justify-between mb-4'):
+                ui.label("Select an RLS view to manage").classes('text-caption text-grey-7')
+                
+                with ui.row().classes('gap-2 items-center'):
+                    # Dataset filter dropdown
+                    self.available_views_datasets = self.get_views_datasets()
+                    
+                    filter_options = [{'label': '📁 All Datasets', 'value': 'all'}]
+                    for ds in self.available_views_datasets:
+                        filter_options.append({'label': f'📁 {ds}', 'value': ds})
+                    
+                    self.dataset_filter_select = ui.select(
+                        options=filter_options,
+                        value=['all'],
+                        multiple=True,
+                        label="Filter by Dataset"
+                    ).classes('min-w-64').props('dense outlined')
+                    
+                    ui.button("🔄 REFRESH", on_click=self.refresh_views_list).props('flat size=sm')
             
-            policy_list = self.get_policies()
+            # Info card
+            with ui.card().classes('w-full bg-blue-50 p-3 mb-4'):
+                ui.label("💡 This list shows ALL RLS views found in your GCP project").classes('text-xs')
+                ui.label(f"   Looking in datasets ending with '_views'").classes('text-xs text-grey-7')
+            
+            # Load initial views
+            views_list = self.get_all_rls_views()
 
             self.grid_step1 = ui.aggrid({
                 'columnDefs': [
-                    {'field': 'Policy Name', 'checkboxSelection': True, 'filter': 'agTextColumnFilter', 'minWidth': 350},
-                    {'field': 'Dataset ID', 'filter': 'agTextColumnFilter'},
-                    {'field': 'Table Name', 'filter': 'agTextColumnFilter'},
-                    {'field': 'Field ID', 'filter': 'agTextColumnFilter'}
+                    {'field': 'View Name', 'checkboxSelection': True, 'filter': 'agTextColumnFilter', 'minWidth': 250},
+                    {'field': 'Views Dataset', 'filter': 'agTextColumnFilter', 'minWidth': 200},
+                    {'field': 'Base Dataset', 'filter': 'agTextColumnFilter'},
+                    {'field': 'Base Table', 'filter': 'agTextColumnFilter'},
+                    {'field': 'Filter Field', 'filter': 'agTextColumnFilter'},
+                    {'field': 'Created', 'filter': 'agTextColumnFilter', 'width': 180}
                 ],
-                'rowData': policy_list,
+                'rowData': views_list,
                 'rowSelection': 'single',
             }).classes('max-h-160 ag-theme-quartz').on('rowSelected', self.get_selected_row)
 
@@ -824,15 +821,19 @@ class RLSAssignUserstoPolicy:
     def step2_with_tabs(self):
         """Step 2: Manage Assignments with 2 tabs"""
         with ui.step(self.step2_title):
-            # Policy info card
+            # View info card
             with ui.card().classes('w-full bg-blue-50 p-4 mb-4'):
-                ui.label("📋 Selected Policy").classes('font-bold mb-2')
-                ui.label().bind_text_from(self, 'selected_policy_name', lambda x: f"Policy: {x if x else 'None'}").classes('text-sm')
-                ui.label().bind_text_from(self, 'selected_policy_dataset', lambda x: f"Dataset: {x if x else 'None'}").classes('text-sm')
-                ui.label().bind_text_from(self, 'selected_policy_table', lambda x: f"Table: {x if x else 'None'}").classes('text-sm')
+                ui.label("📺 Selected View").classes('font-bold mb-2')
+                ui.label().bind_text_from(self, 'selected_view_name', lambda x: f"View: {x if x else 'None'}").classes('text-sm')
+                ui.label().bind_text_from(self, 'selected_views_dataset', lambda x: f"Views Dataset: {x if x else 'None'}").classes('text-sm')
+                
+                with ui.row().classes('gap-4'):
+                    ui.label().bind_text_from(self, 'selected_base_dataset', lambda x: f"Base Dataset: {x if x else 'None'}").classes('text-sm')
+                    ui.label().bind_text_from(self, 'selected_base_table', lambda x: f"Base Table: {x if x else 'None'}").classes('text-sm')
+                
                 ui.label().bind_text_from(self, 'selected_policy_field', lambda x: f"Filter Field: {x if x else 'None'}").classes('text-sm font-bold text-blue-700')
             
-            # Tabs (ONLY 2 now)
+            # Tabs
             with ui.tabs().classes('w-full') as tabs:
                 tab_assignments = ui.tab("👥 Assignments", icon='people')
                 tab_add = ui.tab("➕ Add New", icon='add_circle')
@@ -862,7 +863,7 @@ class RLSAssignUserstoPolicy:
                         ui.button("DELETE SELECTED", icon="delete", on_click=self.delete_selected_assignments).props('color=negative')
                         ui.button("REFRESH", icon="refresh", on_click=self.refresh_assignments_grid).props('flat')
                         
-                        # NEW: EDIT FIELD BUTTON
+                        # EDIT FIELD BUTTON
                         async def open_edit_field_dialog():
                             await self.show_edit_field_dialog()
                         
@@ -895,43 +896,31 @@ class RLSAssignUserstoPolicy:
                         with ui.row().classes('w-full gap-4 items-center mb-4'):
                             ui.label("Filter:").classes('font-bold w-24')
                             
-                            # Create select initially
                             filter_value_select = ui.select(
                                 options=['(No filter - All data)'],
                                 value='(No filter - All data)'
                             ).classes('flex-1')
                             
-                            # Function to load filter values
                             def load_filter_values():
                                 try:
-                                    # Get distinct values from field + existing filter values
                                     field_values = self.get_distinct_field_values()
                                     stats = self.get_filter_value_stats()
                                     used_values = [s['filter_value'] for s in stats]
                                     
-                                    # Combine and remove duplicates
                                     all_values = sorted(set(field_values + used_values))
                                     filter_options = ['(No filter - All data)'] + all_values
                                     
-                                    # Update dropdown
                                     filter_value_select.options = filter_options
                                     filter_value_select.update()
                                     
                                     ui.notify(f"✅ Loaded {len(all_values)} filter values", type="positive", timeout=2000)
                                 except Exception as e:
                                     ui.notify(f"Error loading values: {e}", type="negative")
-                            
-                            # Load values when tab is opened
-                            # DON'T load automatically - user should click Refresh button
-                            # load_filter_values()
                         
-                        # Refresh button
                         with ui.row().classes('w-full justify-start mb-4'):
                             ui.button("🔄 LOAD FILTER VALUES", on_click=load_filter_values).props('color=primary size=sm')
                         
-                        # Add button
                         async def add_new_assignment():
-                            # Convert display string to type
                             type_map = {
                                 '👤 User': 'user',
                                 '👥 Group': 'group',
@@ -951,7 +940,6 @@ class RLSAssignUserstoPolicy:
                         with ui.row().classes('w-full justify-end'):
                             ui.button("ADD ASSIGNMENT", icon="add", on_click=add_new_assignment).props('color=primary')
                     
-                    # Info card
                     with ui.card().classes('w-full bg-blue-50 p-4 mt-4'):
                         ui.label("💡 How it works:").classes('font-bold mb-2')
                         ui.label("• Users: Individual user accounts").classes('text-xs')
