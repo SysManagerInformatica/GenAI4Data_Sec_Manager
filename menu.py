@@ -3,15 +3,18 @@
   GenAI4Data Security Manager
   Module: Navigation Menu System
 ================================================================================
-  Version:      3.0.0
-  Release Date: 2024-12-22
+  Version:      3.1.0
+  Release Date: 2024-12-26
   Author:       Lucas Carvalhal - Sys Manager
   Company:      Sys Manager Informática
   
   Description:
-  Simplified navigation menu with unified RLS interface. Removed Create Custom
-  RLS View and Manage RLS Views, renamed Create for Users to Create Views and
-  Assign Users to Policy to Assign to Policy.
+  Simplified navigation menu with unified RLS and CLS interfaces.
+  
+  Changes (v3.1.0):
+  - Removed Policy Tags and Taxonomies menu items (deprecated)
+  - CLS menu now shows only Protected Views options
+  - Cleaner, more focused navigation
 ================================================================================
 """
 
@@ -24,12 +27,12 @@ def menu() -> None:
     """
     Create navigation menu with color-coded sections
     - HOME: Cyan (#00f3ff)
-    - RLS: Green (#10b981) - SIMPLIFIED
+    - RLS: Green (#10b981)
     - CLS: Yellow (#f59e0b)
     - IAM: Red (#ef4444)
     - AUDIT: Purple (#a855f7)
     """
-    user = get_current_user()  # Obter usuário atual para verificar role
+    user = get_current_user()
     
     with ui.list():
         # ========================================
@@ -44,19 +47,16 @@ def menu() -> None:
                 ).style('font-size: 16px; color: #ffffff;')
         
         # ========================================
-        # ROW LEVEL SECURITY - VERDE (SIMPLIFIED)
+        # ROW LEVEL SECURITY - VERDE
         # ========================================
         with ui.expansion(
             get_text('nav_rls'),
             caption='Click to Expand',
             icon='policy'
         ).classes('w-full text-bold').style('font-size: 16px; color: #ffffff;'):
-            # Adicionar estilo ao ícone do expansion
             ui.query('.q-expansion-item__toggle-icon').style('color: #10b981 !important;')
             
-            # ========== UNIFIED RLS SYSTEM ==========
-            
-            # 1. Create Views (formerly "Create RLS for Users")
+            # 1. Create Views
             with ui.item(on_click=lambda: ui.navigate.to('/createrlsusers/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('add_box').style('color: #10b981;')
@@ -66,7 +66,7 @@ def menu() -> None:
                     ).style('font-size: 14px; color: #94a3b8;')
                     ui.item_label('5-step wizard to create RLS views').props('caption').style('font-size: 11px; color: #10b981;')
             
-            # 2. Assign to Policy (formerly "Assign Users to Policy")
+            # 2. Assign to Policy
             with ui.item(on_click=lambda: ui.navigate.to('/assignuserstopolicy/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('assignment_ind').style('color: #10b981;')
@@ -76,10 +76,7 @@ def menu() -> None:
                     ).style('font-size: 14px; color: #94a3b8;')
                     ui.item_label('Users, Groups & Service Accounts').props('caption').style('font-size: 11px; color: #10b981;')
             
-            # Separador visual
             ui.separator().classes('my-2').style('background-color: #334155;')
-            
-            # ========== LEGACY OPTIONS (Optional - can be deleted) ==========
             
             # 3. Create RLS for Groups (legacy)
             with ui.item(on_click=lambda: ui.navigate.to('/createrlsgroups/')):
@@ -102,7 +99,7 @@ def menu() -> None:
                     ui.item_label('Legacy - Group values').props('caption').style('font-size: 11px; color: #64748b;')
         
         # ========================================
-        # COLUMN LEVEL SECURITY - AMARELO
+        # COLUMN LEVEL SECURITY - AMARELO (SIMPLIFIED)
         # ========================================
         with ui.expansion(
             get_text('nav_cls'),
@@ -110,43 +107,7 @@ def menu() -> None:
             icon='security'
         ).classes('w-full text-bold').style('font-size: 16px; color: #ffffff;'):
             
-            # 1. Manage Taxonomies
-            with ui.item(on_click=lambda: ui.navigate.to('/clstaxonomies/')):
-                with ui.item_section().props('avatar'):
-                    ui.icon('folder').style('color: #f59e0b;')
-                with ui.item_section():
-                    ui.item_label(get_text('menu_cls_taxonomies')).classes(
-                        replace='text-bold'
-                    ).style('font-size: 14px; color: #94a3b8;')
-            
-            # 2. Manage Policy Tags
-            with ui.item(on_click=lambda: ui.navigate.to('/clspolicytags/')):
-                with ui.item_section().props('avatar'):
-                    ui.icon('label').style('color: #f59e0b;')
-                with ui.item_section():
-                    ui.item_label(get_text('menu_cls_tags')).classes(
-                        replace='text-bold'
-                    ).style('font-size: 14px; color: #94a3b8;')
-            
-            # 3. Apply Tags to Columns
-            with ui.item(on_click=lambda: ui.navigate.to('/clsapplytags/')):
-                with ui.item_section().props('avatar'):
-                    ui.icon('build').style('color: #f59e0b;')
-                with ui.item_section():
-                    ui.item_label(get_text('menu_cls_apply')).classes(
-                        replace='text-bold'
-                    ).style('font-size: 14px; color: #94a3b8;')
-            
-            # 4. Policy Tag Permissions
-            with ui.item(on_click=lambda: ui.navigate.to('/clsapplyiam/')):
-                with ui.item_section().props('avatar'):
-                    ui.icon('admin_panel_settings').style('color: #f59e0b;')
-                with ui.item_section():
-                    ui.item_label(get_text('menu_cls_iam')).classes(
-                        replace='text-bold'
-                    ).style('font-size: 14px; color: #94a3b8;')
-            
-            # 5. Create Protected View (CLS + Masking Unified)
+            # 1. Create Protected View (CLS + Masking)
             with ui.item(on_click=lambda: ui.navigate.to('/clsdynamiccolumns/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('add_circle').style('color: #f59e0b;')
@@ -154,8 +115,9 @@ def menu() -> None:
                     ui.item_label(get_text('menu_cls_create_view')).classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
+                    ui.item_label('CLS + Masking wizard').props('caption').style('font-size: 11px; color: #f59e0b;')
             
-            # 6. Manage Protected Views (✨ UPDATED: Now shows RLS + CLS)
+            # 2. Manage Protected Views (RLS + CLS Integrated)
             with ui.item(on_click=lambda: ui.navigate.to('/clsdynamicmanage/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('settings').style('color: #f59e0b;')
@@ -165,7 +127,9 @@ def menu() -> None:
                     ).style('font-size: 14px; color: #94a3b8;')
                     ui.item_label('RLS + CLS integrated').props('caption').style('font-size: 11px; color: #10b981;')
             
-            # 7. Schema Browser
+            ui.separator().classes('my-2').style('background-color: #334155;')
+            
+            # 3. Schema Browser
             with ui.item(on_click=lambda: ui.navigate.to('/clsschemabrowser/')):
                 with ui.item_section().props('avatar'):
                     ui.icon('search').style('color: #f59e0b;')
@@ -173,6 +137,7 @@ def menu() -> None:
                     ui.item_label(get_text('menu_cls_schema')).classes(
                         replace='text-bold'
                     ).style('font-size: 14px; color: #94a3b8;')
+                    ui.item_label('Browse BigQuery schemas').props('caption').style('font-size: 11px; color: #64748b;')
         
         # ========================================
         # IAM & SECURITY - VERMELHO
