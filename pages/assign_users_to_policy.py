@@ -83,7 +83,7 @@ class RLSAssignUserstoPolicy:
             self.step2_with_tabs()
 
     def get_policies(self):
-        """Load all RLS policies (both traditional and view-based)"""
+        """Load all RLS policies (both traditional and view-based) and validate they still exist"""
         query = f"""
         SELECT
           policy_name as `Policy Name`,
@@ -97,8 +97,29 @@ class RLSAssignUserstoPolicy:
         """
         try:
             query_job = client.query(query)
-            results = [dict(row) for row in query_job]
-            return results
+            all_policies = [dict(row) for row in query_job]
+            
+            # Validate each policy - check if table still exists
+            valid_policies = []
+            for policy in all_policies:
+                try:
+                    dataset_id = policy['Dataset ID']
+                    table_name = policy['Table Name']
+                    
+                    # Try to get the table/view
+                    table_ref = client.dataset(dataset_id).table(table_name)
+                    client.get_table(table_ref)
+                    
+                    # Table exists, add to valid list
+                    valid_policies.append(policy)
+                except Exception:
+                    # Table doesn't exist anymore, skip it
+                    print(f"⚠️ Policy '{policy['Policy Name']}' references non-existent table {dataset_id}.{table_name} - skipping")
+                    continue
+            
+            print(f"✅ Loaded {len(valid_policies)} valid policies (filtered {len(all_policies) - len(valid_policies)} deleted)")
+            return valid_policies
+            
         except Exception as e:
             ui.notify(f"Error loading policies: {e}", type="negative")
             return []
@@ -306,6 +327,8 @@ class RLSAssignUserstoPolicy:
             with ui.row().classes('w-full justify-end gap-2'):
                 ui.button("CANCEL", on_click=dialog.close).props('flat')
                 
+                change_button = ui.button("CHANGE FIELD", icon="edit").props('color=primary')
+                
                 async def confirm_change():
                     print("=== CONFIRM CHANGE CLICKED ===")
                     print(f"New field value: {new_field_select.value}")
@@ -326,32 +349,41 @@ class RLSAssignUserstoPolicy:
                         ui.notify("Field is already set to this value", type="info")
                         return
                     
-                    print("Closing dialog...")
-                    dialog.close()
+                    # Disable button and show loading
+                    change_button.props('loading')
+                    change_button.disable()
                     
-                    # Show loading notification
-                    ui.notify("Updating view field...", type="info", timeout=2000)
-                    
-                    print("Calling change_view_field...")
-                    success = await run.io_bound(
-                        self.change_view_field,
-                        new_field_select.value,
-                        new_value_select.value
-                    )
-                    
-                    print(f"Result: {success}")
-                    
-                    if success:
-                        print("Success! Reloading page...")
-                        ui.notify(f"✅ View field changed to: {new_field_select.value} = {new_value_select.value}", type="positive", timeout=3000)
-                        # Give time for notification to show before reload
-                        await run.io_bound(lambda: __import__('time').sleep(1))
-                        ui.navigate.reload()
-                    else:
-                        print("Failed to change field")
-                        ui.notify("❌ Failed to change field. Check if this is an RLS view.", type="negative")
+                    try:
+                        print("Calling change_view_field...")
+                        success = await run.io_bound(
+                            self.change_view_field,
+                            new_field_select.value,
+                            new_value_select.value
+                        )
+                        
+                        print(f"Result: {success}")
+                        
+                        if success:
+                            print("Success! Closing dialog and reloading page...")
+                            dialog.close()
+                            ui.notify(f"✅ View field changed to: {new_field_select.value} = {new_value_select.value}", type="positive", timeout=3000)
+                            # Give time for notification to show before reload
+                            await run.io_bound(lambda: __import__('time').sleep(1))
+                            ui.navigate.reload()
+                        else:
+                            print("Failed to change field")
+                            ui.notify("❌ Failed to change field. Check if this is an RLS view.", type="negative")
+                            # Re-enable button
+                            change_button.props(remove='loading')
+                            change_button.enable()
+                    except Exception as e:
+                        print(f"Exception during change: {e}")
+                        ui.notify(f"❌ Error: {e}", type="negative")
+                        # Re-enable button
+                        change_button.props(remove='loading')
+                        change_button.enable()
                 
-                ui.button("CHANGE FIELD", icon="edit", on_click=confirm_change).props('color=primary')
+                change_button.on('click', confirm_change)
         
         dialog.open()
 
@@ -698,10 +730,44 @@ class RLSAssignUserstoPolicy:
             traceback.print_exc()
             self.is_rls_view = False
 
+    def refresh_policies_list(self):
+        """Refresh the policies list and validate views"""
+        try:
+            policy_list = self.get_policies()
+            
+            # Validate each policy - check if view/table still exists
+            valid_policies = []
+            for policy in policy_list:
+                try:
+                    dataset_id = policy['Dataset ID']
+                    table_name = policy['Table Name']
+                    
+                    # Try to get the table
+                    table_ref = client.dataset(dataset_id).table(table_name)
+                    client.get_table(table_ref)
+                    
+                    # Table exists, add to valid list
+                    valid_policies.append(policy)
+                except Exception:
+                    # Table doesn't exist, skip it
+                    print(f"Policy {policy['Policy Name']} references non-existent table {dataset_id}.{table_name}")
+                    continue
+            
+            # Update grid
+            self.grid_step1.options['rowData'] = valid_policies
+            self.grid_step1.update()
+            
+            ui.notify(f"✅ Loaded {len(valid_policies)} active policies", type="positive", timeout=2000)
+            
+        except Exception as e:
+            ui.notify(f"Error refreshing policies: {e}", type="negative")
+
     def step1(self):
         """Step 1: Select Policy"""
         with ui.step(self.step1_title):
-            ui.label("Select an RLS policy to manage").classes('text-caption text-grey-7 mb-2')
+            with ui.row().classes('w-full items-center justify-between mb-2'):
+                ui.label("Select an RLS policy to manage").classes('text-caption text-grey-7')
+                ui.button("🔄 REFRESH", on_click=self.refresh_policies_list).props('flat size=sm')
             
             policy_list = self.get_policies()
 
